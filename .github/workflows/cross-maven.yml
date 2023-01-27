@@ -1,0 +1,71 @@
+#
+# Copyright Debezium Authors
+#
+# Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Cross CI workflow is triggered on a `pull_request` event.
+# It builds the Debezium core before building the Debezium Server basing on either the `main` branch or the `pull_request` branch.
+# If a `pull_request` with same branch name is present in the Debezium's upstream core repository, then the core build of this `pull_request`
+# will be based on `pull_request` branch of user's Debezium core repository.
+# Otherwise the core build of this `pull_request` will be based on the `main` branch of Debezium's upstream core repository.
+
+name: Cross Maven CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 1.*
+      - 2.*
+    paths-ignore:
+      - '*.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Debezium Server repository
+        uses: actions/checkout@v3
+        with:
+          path: server
+      - name: Check if pull request branch exists in debezium main repository
+        id: branch
+        env:
+          branch_name: ${{ github.head_ref }}
+        run: |
+          curl --silent -X "GET" https://api.github.com/repos/debezium/debezium/pulls | jq '.[] | {branch: .head.ref}' | jq -r '.branch' >> SORTED_PULLS.txt
+
+          while IFS=" " read -r BRANCH;
+          do
+            if grep -q "$branch_name" <<< "$BRANCH"; then
+              echo "name=BRANCH_FOUND::true" >> $GITHUB_OUTPUT
+            fi
+          done < SORTED_PULLS.txt
+      - name: Checkout core repository with pull request branch
+        if: ${{ steps.branch.outputs.BRANCH_FOUND == 'true' }}
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.event.pull_request.user.login }}/debezium
+          ref: ${{ github.head_ref }}
+          path: core
+      - name: Checkout core repository with default base branch
+        if: ${{ steps.branch.outputs.BRANCH_FOUND != 'true' }}
+        uses: actions/checkout@v3
+        with:
+          repository: debezium/debezium
+          ref: ${{ github.base_ref }}
+          path: core
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        with:
+          java-version: 17
+      - name: Cache Maven packages
+        uses: actions/cache@v1
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      - name: Maven build core
+        run: ./server/mvnw clean install -f core/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+      - name: Maven build Debezium Server
+        run: ./server/mvnw clean install -f server/pom.xml -Passembly -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
