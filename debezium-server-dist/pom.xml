@@ -54,7 +54,6 @@
                 <dependency>
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-connector-postgres</artifactId>
-                    <scope>runtime</scope>
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>
@@ -67,6 +66,26 @@
                 <dependency>
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-connector-oracle</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-cassandra-3</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-cassandra-4</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-db2</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-spanner</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-vitess</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>
