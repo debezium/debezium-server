@@ -25,6 +25,10 @@ public class PubSubLiteTestConfigSource extends TestConfigSource {
         pubsubLiteTest.put("debezium.source.topic.prefix", "testc");
         pubsubLiteTest.put("debezium.source.schema.include.list", "inventory");
         pubsubLiteTest.put("debezium.source.table.include.list", "inventory.customers");
+        pubsubLiteTest.put("debezium.transforms", "addheader");
+        pubsubLiteTest.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
+        pubsubLiteTest.put("debezium.transforms.addheader.header", "headerKey");
+        pubsubLiteTest.put("debezium.transforms.addheader.value.literal", "headerValue");
 
         config = pubsubLiteTest;
     }

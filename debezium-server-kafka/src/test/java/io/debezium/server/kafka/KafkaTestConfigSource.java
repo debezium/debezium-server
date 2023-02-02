@@ -34,7 +34,9 @@ public class KafkaTestConfigSource extends TestConfigSource {
         kafkaConfig.put("debezium.sink.kafka.producer.ssl.endpoint.identification.algorithm", "");
 
         kafkaConfig.put("debezium.transforms", "addheader");
-        kafkaConfig.put("debezium.transforms.addheader.type", "io.debezium.server.kafka.AddHeaderTransform");
+        kafkaConfig.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
+        kafkaConfig.put("debezium.transforms.addheader.header", "headerKey");
+        kafkaConfig.put("debezium.transforms.addheader.value.literal", "headerValue");
 
         config = kafkaConfig;
     }

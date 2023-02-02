@@ -25,6 +25,10 @@ public class PulsarTestConfigSource extends TestConfigSource {
         pulsarTest.put("debezium.source.topic.prefix", "testc");
         pulsarTest.put("debezium.source.schema.include.list", "inventory");
         pulsarTest.put("debezium.source.table.include.list", "inventory.customers,inventory.nokey");
+        pulsarTest.put("debezium.transforms", "addheader");
+        pulsarTest.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
+        pulsarTest.put("debezium.transforms.addheader.header", "headerKey");
+        pulsarTest.put("debezium.transforms.addheader.value.literal", "headerValue");
 
         config = pulsarTest;
     }

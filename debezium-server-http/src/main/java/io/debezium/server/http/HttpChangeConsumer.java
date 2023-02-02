@@ -15,8 +15,12 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.Dependent;
@@ -28,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.annotation.VisibleForTesting;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.server.BaseChangeConsumer;
@@ -44,19 +49,24 @@ import io.debezium.util.Metronome;
 public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpChangeConsumer.class);
 
-    private static final String PROP_PREFIX = "debezium.sink.http.";
-    private static final String PROP_WEBHOOK_URL = "url";
-    private static final String PROP_CLIENT_TIMEOUT = "timeout.ms";
-    private static final String PROP_RETRIES = "retries";
-    private static final String PROP_RETRY_INTERVAL = "retry.interval.ms";
+    public static final String PROP_PREFIX = "debezium.sink.http.";
+    public static final String PROP_WEBHOOK_URL = "url";
+    public static final String PROP_CLIENT_TIMEOUT = "timeout.ms";
+    public static final String PROP_RETRIES = "retries";
+    public static final String PROP_RETRY_INTERVAL = "retry.interval.ms";
+    public static final String PROP_HEADERS_ENCODE_BASE64 = "headers.encode.base64";
+    public static final String PROP_HEADERS_PREFIX = "headers.prefix";
 
     private static final Long HTTP_TIMEOUT = Integer.toUnsignedLong(60000); // Default to 60s
     private static final int DEFAULT_RETRIES = 5;
     private static final Long RETRY_INTERVAL = Integer.toUnsignedLong(1_000); // Default to 1s
+    private static final String DEFAULT_HEADERS_PREFIX = "X-DEBEZIUM-";
 
     private static Duration timeoutDuration;
     private static int retries;
     private static Duration retryInterval;
+    private boolean base64EncodeHeaders = true;
+    private String headersPrefix = DEFAULT_HEADERS_PREFIX;
 
     private HttpClient client;
     private HttpRequest.Builder requestBuilder;
@@ -65,11 +75,16 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     // as per https://knative.dev/development/eventing/custom-event-source/sinkbinding/
     @PostConstruct
     void connect() throws URISyntaxException {
+        final Config config = ConfigProvider.getConfig();
+        initWithConfig(config);
+    }
+
+    @VisibleForTesting
+    void initWithConfig(Config config) throws URISyntaxException {
         String sinkUrl;
         String contentType;
 
         client = HttpClient.newHttpClient();
-        final Config config = ConfigProvider.getConfig();
         String sink = System.getenv("K_SINK");
         timeoutDuration = Duration.ofMillis(HTTP_TIMEOUT);
         retries = DEFAULT_RETRIES;
@@ -90,6 +105,12 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
         config.getOptionalValue(PROP_PREFIX + PROP_RETRY_INTERVAL, String.class)
                 .ifPresent(t -> retryInterval = Duration.ofMillis(Long.parseLong(t)));
+
+        config.getOptionalValue(PROP_PREFIX + PROP_HEADERS_PREFIX, String.class)
+                .ifPresent(p -> headersPrefix = p);
+
+        config.getOptionalValue(PROP_PREFIX + PROP_HEADERS_ENCODE_BASE64, Boolean.class)
+                .ifPresent(b -> base64EncodeHeaders = b);
 
         switch (config.getValue("debezium.format.value", String.class)) {
             case "avro":
@@ -133,10 +154,9 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
     private boolean recordSent(ChangeEvent<Object, Object> record) throws InterruptedException {
         boolean sent = false;
-        String value = (String) record.value();
-        HttpResponse r;
+        HttpResponse<String> r;
 
-        HttpRequest request = requestBuilder.POST(HttpRequest.BodyPublishers.ofString(value)).build();
+        HttpRequest request = generateRequest(record);
 
         try {
             r = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -153,5 +173,23 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         }
 
         return sent;
+    }
+
+    @VisibleForTesting
+    HttpRequest generateRequest(ChangeEvent<Object, Object> record) {
+        String value = (String) record.value();
+        HttpRequest.Builder builder = requestBuilder.POST(HttpRequest.BodyPublishers.ofString(value));
+
+        Map<String, String> headers = convertHeaders(record);
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String headerValue = entry.getValue();
+            if (base64EncodeHeaders) {
+                headerValue = Base64.getEncoder().encodeToString(headerValue.getBytes(StandardCharsets.UTF_8));
+            }
+            builder.header(headersPrefix + entry.getKey().toUpperCase(Locale.ROOT), headerValue);
+        }
+
+        return builder.build();
     }
 }

@@ -45,6 +45,10 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
         params.put("debezium.source.topic.prefix", "testc");
         params.put("debezium.source.schema.include.list", "inventory");
         params.put("debezium.source.table.include.list", "inventory.customers,inventory.redis_test,inventory.redis_test2");
+        params.put("debezium.transforms", "addheader");
+        params.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
+        params.put("debezium.transforms.addheader.header", "headerKey");
+        params.put("debezium.transforms.addheader.value.literal", "headerValue");
 
         return params;
     }

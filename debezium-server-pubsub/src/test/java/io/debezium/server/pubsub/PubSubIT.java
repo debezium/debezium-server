@@ -6,6 +6,7 @@
 package io.debezium.server.pubsub;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -106,6 +107,7 @@ public class PubSubIT {
         @Override
         public void receiveMessage(PubsubMessage message, AckReplyConsumer consumer) {
             Testing.print("Message arrived: " + message);
+            assertTrue(message.getAttributesMap().containsKey("headerKey"));
             messages.add(message);
             consumer.ack();
         }

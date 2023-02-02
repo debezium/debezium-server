@@ -69,10 +69,14 @@ public class TestConfigSource implements ConfigSource {
         unitTest.put("debezium.format.schemas.enable", "true");
         unitTest.put("debezium.format.header.schemas.enable", "false");
         unitTest.put("debezium.format.value.schemas.enable", "false");
-        unitTest.put("debezium.transforms", "hoist");
+        unitTest.put("debezium.transforms", "hoist,addheader");
         unitTest.put("debezium.transforms.hoist.type", "org.apache.kafka.connect.transforms.HoistField$Value");
         unitTest.put("debezium.transforms.hoist.field", "line");
         unitTest.put("debezium.transforms.hoist.predicate", "topicNameMatch");
+        unitTest.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
+        unitTest.put("debezium.transforms.addheader.header", "headerKey");
+        unitTest.put("debezium.transforms.addheader.value.literal", "headerValue");
+
         unitTest.put("debezium.predicates", "topicNameMatch");
         unitTest.put("debezium.predicates.topicNameMatch.type", "org.apache.kafka.connect.transforms.predicates.TopicNameMatches");
         unitTest.put("debezium.predicates.topicNameMatch.pattern", ".*");

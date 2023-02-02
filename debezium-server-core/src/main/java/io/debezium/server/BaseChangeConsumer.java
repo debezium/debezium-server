@@ -5,7 +5,9 @@
  */
 package io.debezium.server;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.annotation.PostConstruct;
@@ -17,6 +19,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.engine.ChangeEvent;
+import io.debezium.engine.Header;
 
 /**
  * Basic services provided to all change consumers.
@@ -68,7 +72,7 @@ public class BaseChangeConsumer {
             return (byte[]) object;
         }
         else if (object instanceof String) {
-            return ((String) object).getBytes();
+            return ((String) object).getBytes(StandardCharsets.UTF_8);
         }
         throw new DebeziumException(unsupportedTypeMessage(object));
     }
@@ -83,5 +87,14 @@ public class BaseChangeConsumer {
     protected String unsupportedTypeMessage(Object object) {
         final String type = (object == null) ? "null" : object.getClass().getName();
         return "Unexpected data type '" + type + "'";
+    }
+
+    protected Map<String, String> convertHeaders(ChangeEvent<Object, Object> record) {
+        List<Header<Object>> headers = record.headers();
+        Map<String, String> result = new HashMap<>();
+        for (Header<Object> header : headers) {
+            result.put(header.getKey(), getString(header.getValue()));
+        }
+        return result;
     }
 }

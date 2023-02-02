@@ -145,6 +145,8 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
                 pubsubMessage.setData(ByteString.copyFrom((byte[]) record.value()));
             }
 
+            pubsubMessage.putAllAttributes(convertHeaders(record));
+
             deliveries.add(publisher.publish(pubsubMessage.build()));
             committer.markProcessed(record);
         }
