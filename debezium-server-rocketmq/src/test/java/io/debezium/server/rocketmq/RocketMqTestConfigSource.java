@@ -26,10 +26,13 @@ public class RocketMqTestConfigSource extends TestConfigSource {
         rocketmqConfig.put("debezium.source.topic.prefix", "testc");
         rocketmqConfig.put("debezium.source.schema.include.list", "inventory");
         rocketmqConfig.put("debezium.source.table.include.list", "inventory.customers");
-        rocketmqConfig.put("debezium.transforms", "Reroute");
+        rocketmqConfig.put("debezium.transforms", "Reroute,addheader");
         rocketmqConfig.put("debezium.transforms.Reroute.type", "io.debezium.transforms.ByLogicalTableRouter");
         rocketmqConfig.put("debezium.transforms.Reroute.topic.regex", "(.*)");
         rocketmqConfig.put("debezium.transforms.Reroute.topic.replacement", TOPIC_NAME);
+        rocketmqConfig.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
+        rocketmqConfig.put("debezium.transforms.addheader.header", "headerKey");
+        rocketmqConfig.put("debezium.transforms.addheader.value.literal", "headerValue");
         config = rocketmqConfig;
     }
 

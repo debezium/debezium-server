@@ -5,6 +5,8 @@
  */
 package io.debezium.server.pulsar;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -93,7 +95,9 @@ public class PulsarIT {
                 .subscribe();
         final List<Message<String>> records = new ArrayList<>();
         Awaitility.await().atMost(Duration.ofSeconds(PulsarTestConfigSource.waitForSeconds())).until(() -> {
-            records.add(consumer.receive());
+            Message<String> message = consumer.receive();
+            assertTrue(message.getProperties().containsKey("headerKey"));
+            records.add(message);
             return records.size() >= MESSAGE_COUNT;
         });
         final JdbcConfiguration config = JdbcConfiguration.create()

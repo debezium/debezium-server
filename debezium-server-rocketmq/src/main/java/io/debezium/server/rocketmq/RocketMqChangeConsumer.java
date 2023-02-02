@@ -6,6 +6,7 @@
 package io.debezium.server.rocketmq;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -135,7 +136,15 @@ public class RocketMqChangeConsumer extends BaseChangeConsumer implements Debezi
             try {
                 final String topicName = streamNameMapper.map(record.destination());
                 String key = getString(record.key());
-                mqProducer.send(new Message(topicName, null, key, getBytes(record.value())), new SelectMessageQueueByHash(), key, new SendCallback() {
+
+                Message message = new Message(topicName, null, key, getBytes(record.value()));
+
+                Map<String, String> headers = convertHeaders(record);
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    message.putUserProperty(entry.getKey(), entry.getValue());
+                }
+
+                mqProducer.send(message, new SelectMessageQueueByHash(), key, new SendCallback() {
                     @Override
                     public void onSuccess(SendResult sendResult) {
                         LOGGER.debug("Sent message with offset: {}", sendResult.getQueueOffset());

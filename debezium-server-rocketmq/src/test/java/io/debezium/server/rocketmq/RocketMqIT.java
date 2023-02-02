@@ -67,6 +67,11 @@ public class RocketMqIT {
         final List<MessageExt> records = new ArrayList<>();
         Awaitility.await().atMost(Duration.ofSeconds(RocketMqTestConfigSource.waitForSeconds())).until(() -> {
             records.addAll(this.consumer.poll(5000));
+
+            for (MessageExt record : records) {
+                assertThat(record.getUserProperty("headerKey")).isNotNull();
+            }
+
             return records.size() >= MESSAGE_COUNT;
         });
         assertThat(records.size()).isGreaterThanOrEqualTo(MESSAGE_COUNT);

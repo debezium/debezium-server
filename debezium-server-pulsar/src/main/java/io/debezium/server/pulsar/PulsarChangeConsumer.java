@@ -137,6 +137,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                 message = producer.newMessage();
             }
             message
+                    .properties(convertHeaders(record))
                     .key(key)
                     .value(record.value());
 

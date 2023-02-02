@@ -86,7 +86,7 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
             try {
                 LOGGER.trace("Received event '{}'", record);
 
-                Headers headers = convertHeaders(record);
+                Headers headers = convertKafkaHeaders(record);
 
                 producer.send(new ProducerRecord<>(record.destination(), null, null, record.key(), record.value(), headers), (metadata, exception) -> {
                     if (exception != null) {
@@ -109,7 +109,7 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
         committer.markBatchFinished();
     }
 
-    private Headers convertHeaders(ChangeEvent<Object, Object> record) {
+    private Headers convertKafkaHeaders(ChangeEvent<Object, Object> record) {
         List<Header<Object>> headers = record.headers();
         Headers kafkaHeaders = new RecordHeaders();
         for (Header<Object> header : headers) {

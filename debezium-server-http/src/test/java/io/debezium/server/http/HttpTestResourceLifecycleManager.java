@@ -13,7 +13,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -42,7 +41,8 @@ public class HttpTestResourceLifecycleManager implements QuarkusTestResourceLife
     public Map<String, String> start() {
         init();
 
-        return Collections.singletonMap("debezium.sink.http.url", getURL());
+        return Map.of(
+                "debezium.sink.http.url", getURL());
     }
 
     @Override

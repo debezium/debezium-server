@@ -11,11 +11,11 @@ import static io.debezium.server.redis.RedisStreamChangeConsumerConfig.MESSAGE_F
 import java.time.Duration;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -60,7 +60,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
 
     private RedisClient client;
 
-    private BiFunction<String, String, Map<String, String>> recordMapFunction;
+    private Function<ChangeEvent<Object, Object>, Map<String, String>> recordMapFunction;
 
     private RedisMemoryThreshold isMemoryOk;
 
@@ -70,17 +70,29 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
     void connect() {
         Configuration configuration = Configuration.from(getConfigSubset(ConfigProvider.getConfig(), ""));
         config = new RedisStreamChangeConsumerConfig(configuration);
+
         String messageFormat = config.getMessageFormat();
         if (MESSAGE_FORMAT_EXTENDED.equals(messageFormat)) {
-            recordMapFunction = (key, value) -> {
-                Map<String, String> recordMap = new LinkedHashMap<>(2);
+            recordMapFunction = record -> {
+                Map<String, String> recordMap = new LinkedHashMap<>();
+                String key = (record.key() != null) ? getString(record.key()) : config.getNullKey();
+                String value = (record.value() != null) ? getString(record.value()) : config.getNullValue();
+                Map<String, String> headers = convertHeaders(record);
+
                 recordMap.put(EXTENDED_MESSAGE_KEY_KEY, key);
                 recordMap.put(EXTENDED_MESSAGE_VALUE_KEY, value);
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    recordMap.put(entry.getKey().toUpperCase(Locale.ROOT), entry.getValue());
+                }
                 return recordMap;
             };
         }
         else if (MESSAGE_FORMAT_COMPACT.equals(messageFormat)) {
-            recordMapFunction = Collections::singletonMap;
+            recordMapFunction = record -> {
+                String key = (record.key() != null) ? getString(record.key()) : config.getNullKey();
+                String value = (record.value() != null) ? getString(record.value()) : config.getNullValue();
+                return Map.of(key, value);
+            };
         }
 
         RedisConnection redisConnection = new RedisConnection(config.getAddress(), config.getUser(), config.getPassword(), config.getConnectionTimeout(),
@@ -155,9 +167,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         List<SimpleEntry<String, Map<String, String>>> recordsMap = new ArrayList<>(clonedBatch.size());
                         for (ChangeEvent<Object, Object> record : clonedBatch) {
                             String destination = streamNameMapper.map(record.destination());
-                            String key = (record.key() != null) ? getString(record.key()) : config.getNullKey();
-                            String value = (record.value() != null) ? getString(record.value()) : config.getNullValue();
-                            Map<String, String> recordMap = recordMapFunction.apply(key, value);
+                            Map<String, String> recordMap = recordMapFunction.apply(record);
                             recordsMap.add(new SimpleEntry<>(destination, recordMap));
                         }
                         List<String> responses = client.xadd(recordsMap);
