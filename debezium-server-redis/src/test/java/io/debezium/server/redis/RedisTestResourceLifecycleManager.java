@@ -71,6 +71,6 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
     public static String getRedisContainerAddress() {
         start(true);
 
-        return String.format("%s:%d", container.getContainerIpAddress(), container.getFirstMappedPort());
+        return String.format("%s:%d", container.getContainerIpAddress(), container.getMappedPort(REDIS_PORT));
     }
 }
