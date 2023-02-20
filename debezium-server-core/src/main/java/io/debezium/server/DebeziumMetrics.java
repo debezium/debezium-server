@@ -9,7 +9,8 @@ package io.debezium.server;
 import java.lang.management.ManagementFactory;
 import java.util.Objects;
 
-import javax.enterprise.context.Dependent;
+import jakarta.enterprise.context.Dependent;
+
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
