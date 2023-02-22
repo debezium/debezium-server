@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.FixedHostPortGenericContainer;
 import org.testcontainers.containers.GenericContainer;
 
 import io.debezium.server.TestConfigSource;
@@ -18,15 +19,16 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class RedisSSLTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
+    public static final int EXPOSED_REDIS_PORT = 16380;
     public static final int REDIS_PORT = 6379;
     public static final String REDIS_IMAGE = "redis";
 
     private static final AtomicBoolean running = new AtomicBoolean(false);
-    private static final GenericContainer<?> container = new GenericContainer<>(REDIS_IMAGE)
+    private static final GenericContainer<?> container = new FixedHostPortGenericContainer<>(REDIS_IMAGE)
             .withClasspathResourceMapping("ssl", "/etc/certificates", BindMode.READ_ONLY)
             .withCommand(
                     "redis-server --tls-port 6379 --port 0 --tls-cert-file /etc/certificates/redis.crt --tls-key-file /etc/certificates/redis.key --tls-ca-cert-file /etc/certificates/ca.crt")
-            .withExposedPorts(REDIS_PORT);
+            .withFixedExposedPort(EXPOSED_REDIS_PORT, REDIS_PORT);
 
     private static synchronized void start(boolean ignored) {
         if (!running.get()) {
