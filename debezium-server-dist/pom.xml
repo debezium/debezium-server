@@ -126,6 +126,10 @@
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>
+                    <artifactId>debezium-server-rabbitmq</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
                     <artifactId>debezium-server-rocketmq</artifactId>
                 </dependency>
                 <dependency>
