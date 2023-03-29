@@ -9,6 +9,13 @@ It is thus recommended to execute integration tests per-module and set-up necess
 Note: running these tests against external infrastructure may incur cost with your cloud provider.
 We're not going to pay your AWS/GCP/Azure bill.
 
+## Table of Contents
+
+* [Amazon Kinesis](#amazon-kinesis)
+* [Google Cloud Pub/Sub](#google-cloud-pubsub)
+* [Azure Event Hubs](#azure-event-hubs)
+* [Pravega](#pravega)
+
 ## Amazon Kinesis
 
 * Execute `aws configure` as described in AWS CLI [getting started](https://github.com/aws/aws-cli#getting-started) guide and setup the account.
@@ -93,3 +100,28 @@ Delete the Event Hubs namespace and log out, e.g. on the CLI:
 az group delete -n eventhubstest
 az logout
 ```
+
+## Pravega
+
+[Pravega](https://pravega.io/) is a cloud-native storage system for event streams and data streams. This sink offers two modes: non-transactional and transactional. The non-transactional mode individually writes each event in a Debezium batch to Pravega. The transactional mode writes the Debezium batch to a Pravega transaction that commits when the batch is completed.
+
+The Pravega sink expects destination scope and streams to already be created.
+
+The Pravega sink uses Pravega 0.13.0 Client API and supports Pravega versions 0.11.0 and above.
+
+### `conf/application.properties` Configuration
+
+|Property|Default|Description|
+|--------|-------|-----------|
+|`debezium.sink.type`||Must be set to `pravega`.|
+|`debezium.sink.pravega.controller.uri`|`tcp://localhost:9090`|The connection string to a Controller in the Pravega cluster.|
+|`debezium.sink.pravega.scope`||The name of the scope in which to find the destination streams.|
+|`debezium.sink.pravega.transaction`|`false`|Set to `true` to have the sink use Pravega transactions for each Debezium batch.|
+
+### CDI Injection Points
+
+Pravega sink behavior can be modified by custom logic providing alternative implementations for specific functionalities. When the alternative implementations are not available then the default ones are used.
+
+|Interface|Description|
+|---------|-----------|
+|`io.debezium.server.StreamNameMapper`|A custom implementation maps the planned destination stream name into a physical Pravega stream name. By default the same name is used.|
