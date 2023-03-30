@@ -45,9 +45,9 @@ import io.debezium.server.BaseChangeConsumer;
  */
 @Named("rabbitmq")
 @Dependent
-public class RabbitmqStreamChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(RabbitmqStreamChangeConsumer.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmq.";
 
@@ -67,7 +67,8 @@ public class RabbitmqStreamChangeConsumer extends BaseChangeConsumer implements 
 
         ConnectionFactory factory = new ConnectionFactory();
         Map<String, String> configProperties = getConfigSubset(config, PROP_PREFIX).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> (String) entry.getValue()));
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                        entry -> (entry.getValue() == null) ? null : entry.getValue().toString()));
         ConnectionFactoryConfigurator.load(factory, configProperties, "");
 
         LOGGER.info("Using connection to {}:{}", factory.getHost(), factory.getPort());

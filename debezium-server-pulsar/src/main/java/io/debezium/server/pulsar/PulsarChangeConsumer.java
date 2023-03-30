@@ -76,7 +76,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
         catch (PulsarClientException e) {
             throw new DebeziumException(e);
         }
-        producerConfig = new HashMap<>(getConfigSubset(config, PROP_PRODUCER_PREFIX));
+        producerConfig = getConfigSubset(config, PROP_PRODUCER_PREFIX);
     }
 
     @PreDestroy
