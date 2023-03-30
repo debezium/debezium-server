@@ -14,7 +14,7 @@ import io.debezium.server.TestConfigSource;
 
 public class RabbitMqTestConfigSource extends TestConfigSource {
 
-    public static final String TOPIC_NAME = "inventory-customers";
+    public static final String TOPIC_NAME = "testc.inventory.customers";
 
     public RabbitMqTestConfigSource() {
 
@@ -26,13 +26,6 @@ public class RabbitMqTestConfigSource extends TestConfigSource {
         rabbitmqConfig.put("debezium.source.topic.prefix", "testc");
         rabbitmqConfig.put("debezium.source.schema.include.list", "inventory");
         rabbitmqConfig.put("debezium.source.table.include.list", "inventory.customers");
-        rabbitmqConfig.put("debezium.transforms", "Reroute,addheader");
-        rabbitmqConfig.put("debezium.transforms.Reroute.type", "io.debezium.transforms.ByLogicalTableRouter");
-        rabbitmqConfig.put("debezium.transforms.Reroute.topic.regex", "(.*)");
-        rabbitmqConfig.put("debezium.transforms.Reroute.topic.replacement", TOPIC_NAME);
-        rabbitmqConfig.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
-        rabbitmqConfig.put("debezium.transforms.addheader.header", "headerKey");
-        rabbitmqConfig.put("debezium.transforms.addheader.value.literal", "headerValue");
         config = rabbitmqConfig;
     }
 

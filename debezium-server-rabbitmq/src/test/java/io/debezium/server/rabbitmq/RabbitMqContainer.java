@@ -9,7 +9,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * rabbitmq container
+ * RabbitMQ container
  */
 public class RabbitMqContainer extends GenericContainer<RabbitMqContainer> {
 
