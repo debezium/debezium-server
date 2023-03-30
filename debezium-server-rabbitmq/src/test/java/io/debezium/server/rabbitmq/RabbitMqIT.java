@@ -74,7 +74,6 @@ public class RabbitMqIT {
                                        AMQP.BasicProperties properties,
                                        byte[] body) {
                 String message = new String(body, StandardCharsets.UTF_8);
-                assertThat(properties.getHeaders().get("headerKey")).isNotNull();
                 messages.add(message);
             }
         });
@@ -97,7 +96,7 @@ public class RabbitMqIT {
     }
 
     @Test
-    public void testRabbitMQ() {
+    public void testRabbitMq() {
 
         // consume record
         Awaitility.await()

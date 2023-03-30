@@ -50,6 +50,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmq.";
+    private static final String PROP_CONNECTION_PREFIX = "debezium.sink.rabbitmq.connection.";
 
     @ConfigProperty(name = PROP_PREFIX + "routingKey", defaultValue = "")
     Optional<String> routingKey;
@@ -66,7 +67,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         final Config config = ConfigProvider.getConfig();
 
         ConnectionFactory factory = new ConnectionFactory();
-        Map<String, String> configProperties = getConfigSubset(config, PROP_PREFIX).entrySet().stream()
+        Map<String, String> configProperties = getConfigSubset(config, PROP_CONNECTION_PREFIX).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey,
                         entry -> (entry.getValue() == null) ? null : entry.getValue().toString()));
         ConnectionFactoryConfigurator.load(factory, configProperties, "");
@@ -108,7 +109,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             final String exchange = streamNameMapper.map(record.destination());
 
             try {
-                channel.basicPublish(exchange, routingKey.orElse(record.destination()),
+                channel.basicPublish(exchange, routingKey.orElse(""),
                         new AMQP.BasicProperties.Builder()
                                 .headers(convertRabbitMqHeaders(record))
                                 .build(),
