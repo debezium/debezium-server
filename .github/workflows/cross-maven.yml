@@ -38,7 +38,7 @@ jobs:
           while IFS=" " read -r BRANCH;
           do
             if grep -q "$branch_name" <<< "$BRANCH"; then
-              echo "name=BRANCH_FOUND::true" >> $GITHUB_OUTPUT
+              echo "BRANCH_FOUND=true" >> $GITHUB_OUTPUT
             fi
           done < SORTED_PULLS.txt
       - name: Checkout core repository with pull request branch
