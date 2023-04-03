@@ -28,7 +28,7 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
  */
 public class PravegaTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private static final String PRAVEGA_VERSION = "0.9.0";
+    private static final String PRAVEGA_VERSION = ConfigProvider.getConfig().getValue("pravega.docker.version", String.class);
     public static final int CONTROLLER_PORT = 9090;
     public static final int SEGMENT_STORE_PORT = 12345;
     public static final String PRAVEGA_IMAGE = "pravega/pravega:" + PRAVEGA_VERSION;
@@ -38,7 +38,7 @@ public class PravegaTestResource implements QuarkusTestResourceLifecycleManager 
             .withFixedExposedPort(CONTROLLER_PORT, CONTROLLER_PORT)
             .withFixedExposedPort(SEGMENT_STORE_PORT, SEGMENT_STORE_PORT)
             .withStartupTimeout(Duration.ofSeconds(90))
-            .waitingFor(Wait.forLogMessage(".*Starting gRPC server listening on port: 9090.*", 1))
+            .waitingFor(Wait.forLogMessage(".*Pravega Sandbox is running locally now.*", 1))
             .withCommand("standalone");
 
     @Override

@@ -27,6 +27,10 @@
 
     <repositories>
         <repository>
+            <id>v0.13.0-rc0</id>
+            <url>https://oss.sonatype.org/content/repositories/iopravega-1206</url>
+        </repository>
+        <repository>
             <id>oss</id>
             <name>OSS Sonatype Nexus</name>
             <url>https://oss.sonatype.org/content/repositories/snapshots</url>
