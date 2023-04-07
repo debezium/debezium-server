@@ -149,11 +149,10 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
             final ChangeEvent<Object, Object> currentRecord = record;
 
             CompletableFuture<MessageId> future = message.sendAsync()
-                    .thenApply(messageId -> {
+                    .thenAccept(messageId -> {
                         LOGGER.trace("Sent message with id: {}", messageId);
                         try {
                             committer.markProcessed(currentRecord);
-                            return messageId;
                         }
                         catch (InterruptedException e) {
                             throw new DebeziumException(e);
