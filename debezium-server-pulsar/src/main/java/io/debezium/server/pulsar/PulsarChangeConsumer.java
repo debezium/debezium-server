@@ -5,15 +5,20 @@
  */
 package io.debezium.server.pulsar;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.Dependent;
 import javax.inject.Named;
 
+import io.netty.util.concurrent.CompleteFuture;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -118,10 +123,25 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
         }
     }
 
+    @SuppressWarnings("rawtypes")
+    private CompletableFuture<MessageId> send(TypedMessageBuilder message, ChangeEvent<Object, Object> record, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    {
+        return message.sendAsync().thenApply(messageId -> {
+            LOGGER.trace("Sent message with id: {}", messageId);
+            try {
+                committer.markProcessed(record);
+                return messageId;
+            } catch (InterruptedException e) {
+                throw new CompletionException(e);
+            }
+        });
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
+        final List<CompletableFuture<MessageId>> futures = new ArrayList<>(records.size());
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
             final String topicName = streamNameMapper.map(record.destination());
@@ -141,14 +161,15 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                     .key(key)
                     .value(record.value());
 
-            try {
-                final MessageId messageId = message.send();
-                LOGGER.trace("Sent message with id: {}", messageId);
-            }
-            catch (PulsarClientException e) {
-                throw new DebeziumException(e);
-            }
-            committer.markProcessed(record);
+            futures.add(send(message, record, committer));
+        }
+
+        try {
+            CompletableFuture
+                .allOf(futures.toArray(new CompletableFuture[]{}))
+                .join();
+        } catch (Exception exception) {
+            throw new DebeziumException(exception);
         }
         committer.markBatchFinished();
     }
