@@ -148,21 +148,22 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
             final ChangeEvent<Object, Object> currentRecord = record;
 
-            CompletableFuture<MessageId> future = message.sendAsync()
-                    .thenAccept(messageId -> {
-                        LOGGER.trace("Sent message with id: {}", messageId);
-                        try {
-                            committer.markProcessed(currentRecord);
-                        }
-                        catch (InterruptedException e) {
-                            throw new DebeziumException(e);
-                        }
-                    })
-                    .exceptionally(ex -> {
-                        Throwable exception = (Throwable) ex;
-                        LOGGER.error("Failed to send record to {}:", record.destination(), exception);
-                        throw new DebeziumException(exception);
-                    });
+            CompletableFuture<MessageId> future = message
+                .sendAsync()
+                .thenAccept(messageId -> {
+                    LOGGER.trace("Sent message with id: {}", messageId);
+                    try {
+                        committer.markProcessed(currentRecord);
+                    }
+                    catch (InterruptedException e) {
+                        throw new DebeziumException(e);
+                    }
+                })
+                .exceptionally(ex -> {
+                    Throwable exception = (Throwable) ex;
+                    LOGGER.error("Failed to send record to {}:", record.destination(), exception);
+                    throw new DebeziumException(exception);
+                });
 
             futures.add(future);
         }
@@ -170,8 +171,8 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
         try {
             // Wait for all CompletableFutures to complete
             CompletableFuture
-                    .allOf(futures.toArray(new CompletableFuture[0]))
-                    .join();
+                .allOf(futures.toArray(new CompletableFuture[0]))
+                .join();
         }
         catch (CompletionException e) {
             if (e.getCause() instanceof DebeziumException) {
