@@ -11,14 +11,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.CountDownLatch;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.Dependent;
 import javax.inject.Named;
 
-import io.netty.util.concurrent.CompleteFuture;
 import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -123,25 +121,12 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
         }
     }
 
-    @SuppressWarnings("rawtypes")
-    private CompletableFuture<MessageId> send(TypedMessageBuilder message, ChangeEvent<Object, Object> record, RecordCommitter<ChangeEvent<Object, Object>> committer)
-    {
-        return message.sendAsync().thenApply(messageId -> {
-            LOGGER.trace("Sent message with id: {}", messageId);
-            try {
-                committer.markProcessed(record);
-                return messageId;
-            } catch (InterruptedException e) {
-                throw new CompletionException(e);
-            }
-        });
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
-        final List<CompletableFuture<MessageId>> futures = new ArrayList<>(records.size());
+        List<CompletableFuture<MessageId>> futures = new ArrayList<>();
+
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
             final String topicName = streamNameMapper.map(record.destination());
@@ -161,16 +146,43 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                     .key(key)
                     .value(record.value());
 
-            futures.add(send(message, record, committer));
+            final ChangeEvent<Object, Object> currentRecord = record;
+
+            CompletableFuture<MessageId> future = message.sendAsync()
+                    .thenApply(messageId -> {
+                        LOGGER.trace("Sent message with id: {}", messageId);
+                        try {
+                            committer.markProcessed(currentRecord);
+                            return messageId;
+                        }
+                        catch (InterruptedException e) {
+                            throw new DebeziumException(e);
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        Throwable exception = (Throwable) ex;
+                        LOGGER.error("Failed to send record to {}:", record.destination(), exception);
+                        throw new DebeziumException(exception);
+                    });
+
+            futures.add(future);
         }
 
         try {
+            // Wait for all CompletableFutures to complete
             CompletableFuture
-                .allOf(futures.toArray(new CompletableFuture[]{}))
-                .join();
-        } catch (Exception exception) {
-            throw new DebeziumException(exception);
+                    .allOf(futures.toArray(new CompletableFuture[0]))
+                    .join();
         }
+        catch (CompletionException e) {
+            if (e.getCause() instanceof DebeziumException) {
+                throw (DebeziumException) e.getCause();
+            }
+            else {
+                throw new DebeziumException(e);
+            }
+        }
+
         committer.markBatchFinished();
     }
 }
