@@ -39,6 +39,7 @@ import io.debezium.server.BaseChangeConsumer;
  * Implementation of the consumer that delivers the messages into a Pulsar destination.
  *
  * @author Jiri Pechanec
+ * @author Henrik Schnell
  *
  */
 @Named("pulsar")
@@ -67,6 +68,9 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @ConfigProperty(name = PROP_PREFIX + "namespace", defaultValue = "default")
     String pulsarNamespace;
+
+    @ConfigProperty(name = PROP_PREFIX + "async", defaultValue = "false")
+    boolean asyncEnabled;
 
     @PostConstruct
     void connect() {
@@ -122,48 +126,81 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     }
 
     @SuppressWarnings("unchecked")
+    private TypedMessageBuilder buildMessage(ChangeEvent<Object, Object> record) {
+        LOGGER.trace("Received event '{}'", record);
+        final String topicName = streamNameMapper.map(record.destination());
+        final Producer<?> producer = producers.computeIfAbsent(topicName, (topic) -> createProducer(topic, record.value()));
+
+        final String key = (record.key()) == null ? nullKey : getString(record.key());
+        @SuppressWarnings("rawtypes")
+        final TypedMessageBuilder message;
+        if (record.value() instanceof String) {
+            message = producer.newMessage(Schema.STRING);
+        }
+        else {
+            message = producer.newMessage();
+        }
+        message
+                .properties(convertHeaders(record))
+                .key(key)
+                .value(record.value());
+
+        return message;
+    }
+
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
+        if (asyncEnabled) {
+            handleBatchAsync(records, committer);
+        }
+        else {
+            handleBatchSync(records, committer);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleBatchSync(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
+        for (ChangeEvent<Object, Object> record : records) {
+            final TypedMessageBuilder message = buildMessage(record);
+
+            try {
+                final MessageId messageId = message.send();
+                LOGGER.trace("Sent message with id: {}", messageId);
+            }
+            catch (PulsarClientException e) {
+                throw new DebeziumException(e);
+            }
+            committer.markProcessed(record);
+        }
+        committer.markBatchFinished();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleBatchAsync(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
         List<CompletableFuture<MessageId>> futures = new ArrayList<>();
 
         for (ChangeEvent<Object, Object> record : records) {
-            LOGGER.trace("Received event '{}'", record);
-            final String topicName = streamNameMapper.map(record.destination());
-            final Producer<?> producer = producers.computeIfAbsent(topicName, (topic) -> createProducer(topic, record.value()));
-
-            final String key = (record.key()) == null ? nullKey : getString(record.key());
-            @SuppressWarnings("rawtypes")
-            final TypedMessageBuilder message;
-            if (record.value() instanceof String) {
-                message = producer.newMessage(Schema.STRING);
-            }
-            else {
-                message = producer.newMessage();
-            }
-            message
-                    .properties(convertHeaders(record))
-                    .key(key)
-                    .value(record.value());
+            final TypedMessageBuilder message = buildMessage(record);
 
             final ChangeEvent<Object, Object> currentRecord = record;
 
             CompletableFuture<MessageId> future = message
-                .sendAsync()
-                .thenAccept(messageId -> {
-                    LOGGER.trace("Sent message with id: {}", messageId);
-                    try {
-                        committer.markProcessed(currentRecord);
-                    }
-                    catch (InterruptedException e) {
-                        throw new DebeziumException(e);
-                    }
-                })
-                .exceptionally(ex -> {
-                    Throwable exception = (Throwable) ex;
-                    LOGGER.error("Failed to send record to {}:", record.destination(), exception);
-                    throw new DebeziumException(exception);
-                });
+                    .sendAsync()
+                    .thenAccept(messageId -> {
+                        LOGGER.trace("Sent message with id: {}", messageId);
+                        try {
+                            committer.markProcessed(currentRecord);
+                        }
+                        catch (InterruptedException e) {
+                            throw new DebeziumException(e);
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        Throwable exception = (Throwable) ex;
+                        LOGGER.error("Failed to send record to {}:", record.destination(), exception);
+                        throw new DebeziumException(exception);
+                    });
 
             futures.add(future);
         }
@@ -171,8 +208,8 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
         try {
             // Wait for all CompletableFutures to complete
             CompletableFuture
-                .allOf(futures.toArray(new CompletableFuture[0]))
-                .join();
+                    .allOf(futures.toArray(new CompletableFuture[0]))
+                    .join();
         }
         catch (CompletionException e) {
             if (e.getCause() instanceof DebeziumException) {
@@ -185,4 +222,5 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
         committer.markBatchFinished();
     }
+
 }
