@@ -5,19 +5,20 @@
  */
 package io.debezium.server.pulsar;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.Dependent;
 import javax.inject.Named;
 
-import org.apache.pulsar.client.api.MessageId;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
@@ -69,8 +70,8 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "namespace", defaultValue = "default")
     String pulsarNamespace;
 
-    @ConfigProperty(name = PROP_PREFIX + "async", defaultValue = "false")
-    boolean asyncEnabled;
+    @ConfigProperty(name = PROP_PREFIX + "timeout", defaultValue = "0")
+    Integer timeout;
 
     @PostConstruct
     void connect() {
@@ -93,14 +94,14 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                 producer.close();
             }
             catch (Exception e) {
-                LOGGER.warn("Exception while closing producer: {}", e);
+                LOGGER.warn("Exception while closing producer.", e);
             }
         });
         try {
             pulsarClient.close();
         }
         catch (Exception e) {
-            LOGGER.warn("Exception while closing client: {}", e);
+            LOGGER.warn("Exception while closing client.", e);
         }
     }
 
@@ -126,98 +127,69 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     }
 
     @SuppressWarnings("unchecked")
-    private TypedMessageBuilder buildMessage(ChangeEvent<Object, Object> record) {
-        LOGGER.trace("Received event '{}'", record);
-        final String topicName = streamNameMapper.map(record.destination());
-        final Producer<?> producer = producers.computeIfAbsent(topicName, (topic) -> createProducer(topic, record.value()));
-
-        final String key = (record.key()) == null ? nullKey : getString(record.key());
-        @SuppressWarnings("rawtypes")
-        final TypedMessageBuilder message;
-        if (record.value() instanceof String) {
-            message = producer.newMessage(Schema.STRING);
-        }
-        else {
-            message = producer.newMessage();
-        }
-        message
-                .properties(convertHeaders(record))
-                .key(key)
-                .value(record.value());
-
-        return message;
-    }
-
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
-        if (asyncEnabled) {
-            handleBatchAsync(records, committer);
-        }
-        else {
-            handleBatchSync(records, committer);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void handleBatchSync(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
-        for (ChangeEvent<Object, Object> record : records) {
-            final TypedMessageBuilder message = buildMessage(record);
-
-            try {
-                final MessageId messageId = message.send();
-                LOGGER.trace("Sent message with id: {}", messageId);
-            }
-            catch (PulsarClientException e) {
-                throw new DebeziumException(e);
-            }
-            committer.markProcessed(record);
-        }
-        committer.markBatchFinished();
-    }
-
-    @SuppressWarnings("unchecked")
-    private void handleBatchAsync(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
-        List<CompletableFuture<MessageId>> futures = new ArrayList<>();
+        Map<String, Producer<?>> batchProducers = new HashMap<>();
 
         for (ChangeEvent<Object, Object> record : records) {
-            final TypedMessageBuilder message = buildMessage(record);
+            LOGGER.trace("Received event '{}'", record);
+            final String topicName = streamNameMapper.map(record.destination());
+            final Producer<?> producer = producers.computeIfAbsent(topicName, (topic) -> createProducer(topic, record.value()));
+            batchProducers.put(topicName, producer);
+
+            final String key = (record.key()) == null ? nullKey : getString(record.key());
+            @SuppressWarnings("rawtypes")
+            final TypedMessageBuilder message;
+            if (record.value() instanceof String) {
+                message = producer.newMessage(Schema.STRING);
+            }
+            else {
+                message = producer.newMessage();
+            }
+            message
+                    .properties(convertHeaders(record))
+                    .key(key)
+                    .value(record.value());
 
             final ChangeEvent<Object, Object> currentRecord = record;
 
-            CompletableFuture<MessageId> future = message
-                    .sendAsync()
-                    .thenAccept(messageId -> {
-                        LOGGER.trace("Sent message with id: {}", messageId);
-                        try {
-                            committer.markProcessed(currentRecord);
+            // We will wait for the producers to flush instead of waiting for these individually
+            message.sendAsync()
+                    .whenComplete((messageId, exception) -> {
+                        if (exception == null) {
+                            LOGGER.trace("Sent message with id: {}", messageId);
+                            try {
+                                committer.markProcessed(currentRecord);
+                            }
+                            catch (InterruptedException e) {
+                                throw new DebeziumException(e);
+                            }
                         }
-                        catch (InterruptedException e) {
-                            throw new DebeziumException(e);
+                        else {
+                            Throwable throwable = (Throwable) exception;
+                            LOGGER.trace("Failed to send record to: " + record.destination(), throwable);
                         }
-                    })
-                    .exceptionally(ex -> {
-                        Throwable exception = (Throwable) ex;
-                        LOGGER.error("Failed to send record to {}:", record.destination(), exception);
-                        throw new DebeziumException(exception);
                     });
-
-            futures.add(future);
         }
+
+        // Flush all producers asynchronously
+        // Waiting for the returned futures will wait until all messages have been successfully persisted.
+        CompletableFuture<Void>[] futures = batchProducers
+                .values()
+                .stream()
+                .map(Producer::flushAsync)
+                .toArray(CompletableFuture[]::new);
 
         try {
-            // Wait for all CompletableFutures to complete
+            // Wait for all producers to complete the flush
             CompletableFuture
-                    .allOf(futures.toArray(new CompletableFuture[0]))
-                    .join();
+                    .allOf(futures)
+                    .get(timeout, TimeUnit.MILLISECONDS);
         }
-        catch (CompletionException e) {
-            if (e.getCause() instanceof DebeziumException) {
-                throw (DebeziumException) e.getCause();
-            }
-            else {
-                throw new DebeziumException(e);
-            }
+        catch (CompletionException | ExecutionException | TimeoutException exception) {
+            LOGGER.error("Failed to send batch:", exception);
+            throw new DebeziumException(exception);
         }
 
         committer.markBatchFinished();
