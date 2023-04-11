@@ -175,17 +175,21 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
         // Flush all producers asynchronously
         // Waiting for the returned futures will wait until all messages have been successfully persisted.
-        CompletableFuture<Void>[] futures = batchProducers
-                .values()
-                .stream()
-                .map(Producer::flushAsync)
-                .toArray(CompletableFuture[]::new);
+        CompletableFuture<Void> allProducersCompleted = CompletableFuture
+                .allOf(batchProducers
+                        .values()
+                        .stream()
+                        .map(Producer::flushAsync)
+                        .toArray(CompletableFuture[]::new));
 
         try {
-            // Wait for all producers to complete the flush
-            CompletableFuture
-                    .allOf(futures)
-                    .get(timeout, TimeUnit.MILLISECONDS);
+            // Wait for all producers to complete the flush with timeout
+            if (timeout > 0) {
+                allProducersCompleted.get(timeout, TimeUnit.MILLISECONDS);
+            }
+            else {
+                allProducersCompleted.join();
+            }
         }
         catch (CompletionException | ExecutionException | TimeoutException exception) {
             LOGGER.error("Failed to send batch:", exception);
