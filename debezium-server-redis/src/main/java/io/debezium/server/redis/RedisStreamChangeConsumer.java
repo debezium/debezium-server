@@ -147,7 +147,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
             // Move to the next batch once this list is empty.
             List<ChangeEvent<Object, Object>> clonedBatch = batch.stream().collect(Collectors.toList());
 
-            // As long as we failed to execute the current batch to the stream, we should retry if the reason was either a connection error or OOM in Redis.
+            // As long as we failed to execute the current batch to the stream, we should retry if the reason
+            // was either a connection error or OOM in Redis.
             while (!completedSuccessfully) {
                 if (client == null) {
                     // Try to reconnect
@@ -195,7 +196,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         clonedBatch.removeAll(processedRecords);
 
                         if (totalOOMResponses > 0) {
-                            LOGGER.warn("Redis runs OOM, {} command(s) failed", totalOOMResponses);
+                            LOGGER.info("Redis sink currently full, will retry ({} command(s) failed)",
+                                    totalOOMResponses);
                         }
 
                         if (clonedBatch.size() == 0) {
@@ -223,5 +225,4 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
         // Mark the whole batch as finished once the sub batches completed
         committer.markBatchFinished();
     }
-
 }
