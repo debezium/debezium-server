@@ -65,7 +65,7 @@ public class RedisMemoryThreshold {
             long percentage = usedMemory * 100 / maxMemory;
             if (percentage >= memoryThreshold) {
                 LOGGER.info("Sink memory threshold percentage was reached. Will retry; " +
-                                "(current: {}%, configured: {}%, used_memory: {}, maxmemory: {}).",
+                        "(current: {}%, configured: {}%, used_memory: {}, maxmemory: {}).",
                         percentage, memoryThreshold,
                         usedMemory, maxMemory);
                 return false;
