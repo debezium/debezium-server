@@ -50,12 +50,11 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     private static final String PROP_PREFIX = "debezium.sink.kinesis.";
     private static final String PROP_REGION_NAME = PROP_PREFIX + "region";
     private static final String PROP_ENDPOINT_NAME = PROP_PREFIX + "endpoint";
+    private static final String PROP_CREDENTIALS_PROFILE = PROP_PREFIX + "credentials.profile";
 
     private String region;
     private Optional<String> endpointOverride;
-
-    @ConfigProperty(name = PROP_PREFIX + "credentials.profile", defaultValue = "default")
-    String credentialsProfile;
+    private Optional<String> credentialsProfile;
 
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
@@ -77,10 +76,12 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         final Config config = ConfigProvider.getConfig();
         region = config.getValue(PROP_REGION_NAME, String.class);
         endpointOverride = config.getOptionalValue(PROP_ENDPOINT_NAME, String.class);
+        credentialsProfile = config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class);
         final KinesisClientBuilder builder = KinesisClient.builder()
-                .region(Region.of(region))
-                .credentialsProvider(ProfileCredentialsProvider.create(credentialsProfile));
+                .region(Region.of(region));
         endpointOverride.ifPresent(endpoint -> builder.endpointOverride(URI.create(endpoint)));
+        credentialsProfile.ifPresent(profile -> builder.credentialsProvider(ProfileCredentialsProvider.create(profile)));
+
         client = builder.build();
         LOGGER.info("Using default KinesisClient '{}'", client);
     }
