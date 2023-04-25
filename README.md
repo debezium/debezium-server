@@ -2,6 +2,57 @@
 
 Debezium Server is a standalone Java application built on Qurkus framework.
 The application itself contains the `core` module and a set of modules responsible for communication with different target systems.
+## Building and Packaging
+
+The following software is required to work with the Debezium codebase and build it locally:
+
+* [Git](https://git-scm.com) 2.2.1 or later
+* JDK 17 or later, e.g. [OpenJDK](http://openjdk.java.net/projects/jdk/)
+* [Docker Engine](https://docs.docker.com/engine/install/) or [Docker Desktop](https://docs.docker.com/desktop/) 1.9 or later
+* [Apache Maven](https://maven.apache.org/index.html) 3.8.4 or later  
+  (or invoke the wrapper with `./mvnw` for Maven commands)
+
+See the links above for installation instructions on your platform. You can verify the versions are installed and running:
+
+    $ git --version
+    $ javac -version
+    $ mvn -version
+
+### Building the code
+
+Debezium Server depends on core Debezium.  You'll need to install the most recent snapshot locally. First obtain the code by cloning the Git repository:
+
+    $ git clone https://github.com/debezium/debezium.git
+    $ cd debezium
+
+Then build the code using Maven:
+
+    $ mvn clean install -DskipITs -DskipTests
+
+Then, you can build Debezium Server:
+
+    $ git clone https://github.com/debezium/debezium-server.git
+    $ cd debezium-server
+    $ mvn clean install -DskipITs -DskipTests
+
+### Creating a Distribution
+
+Debezium Server is normally run by downloading the distribution tar.gz or zip file.  You can generate this file by:
+
+    $ mvn clean package -DskipITs -DskipTests -Passembly
+
+The archives can be found under `debezium-server-dist/target`.
+
+### Building just the artifacts, without running tests, CheckStyle, etc.
+
+You can skip all non-essential plug-ins (tests, integration tests, CheckStyle, formatter, API compatibility check, etc.) using the "quick" build profile:
+
+    $ mvn clean verify -Dquick
+
+This provides the fastest way for solely producing the output artifacts, without running any of the QA related Maven plug-ins.
+This comes in handy for producing connector JARs and/or archives as quickly as possible, e.g. for manual testing in Kafka Connect
+
+## Integration Tests
 
 The per-module integration tests depend on the availability of the external services.
 It is thus recommended to execute integration tests per-module and set-up necessary pre-requisities beforehand.
@@ -9,19 +60,19 @@ It is thus recommended to execute integration tests per-module and set-up necess
 Note: running these tests against external infrastructure may incur cost with your cloud provider.
 We're not going to pay your AWS/GCP/Azure bill.
 
-## Amazon Kinesis
+### Amazon Kinesis
 
 * Execute `aws configure` as described in AWS CLI [getting started](https://github.com/aws/aws-cli#getting-started) guide and setup the account.
 * Create Kinesis stream `aws kinesis create-stream --stream-name testc.inventory.customers --shard-count 1`
 * Build the module and execute the tests `mvn clean install -DskipITs=false -am -pl debezium-server-kinesis`
 * Remove the stream `aws kinesis delete-stream --stream-name testc.inventory.customers`
 
-## Google Cloud Pub/Sub
+### Google Cloud Pub/Sub
 
 * Login into your Google Cloud account using `gcloud auth application-default login` as described in the [documentation](https://cloud.google.com/sdk/gcloud/reference/auth/application-default).
 * Build the module and execute the tests `mvn clean install -DskipITs=false -am -pl debezium-server-pubsub`
 
-## Azure Event Hubs
+### Azure Event Hubs
 
 Login into your Azure account and create a resource group, e.g. on the CLI:
 
