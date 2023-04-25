@@ -21,6 +21,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.Dependent;
@@ -36,6 +37,7 @@ import io.debezium.annotation.VisibleForTesting;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
 
@@ -57,6 +59,10 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     public static final String PROP_HEADERS_ENCODE_BASE64 = "headers.encode.base64";
     public static final String PROP_HEADERS_PREFIX = "headers.prefix";
 
+    public static final String PROP_AUTHENTICATION_PREFIX = PROP_PREFIX + "authentication.";
+    public static final String PROP_AUTHENTICATION_TYPE = "type";
+    public static final String JWT_AUTHENTICATION = "jwt";
+
     private static final Long HTTP_TIMEOUT = Integer.toUnsignedLong(60000); // Default to 60s
     private static final int DEFAULT_RETRIES = 5;
     private static final Long RETRY_INTERVAL = Integer.toUnsignedLong(1_000); // Default to 1s
@@ -71,6 +77,9 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     private HttpClient client;
     private HttpRequest.Builder requestBuilder;
 
+    // not null if using authentication; null otherwise
+    private Authenticator authenticator;
+
     // If this is running as a Knative object, then expect the sink URL to be located in `K_SINK`
     // as per https://knative.dev/development/eventing/custom-event-source/sinkbinding/
     @PostConstruct
@@ -80,7 +89,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @VisibleForTesting
-    void initWithConfig(Config config) throws URISyntaxException {
+    void initWithConfig(Config config) throws URISyntaxException, IllegalArgumentException, URISyntaxException {
         String sinkUrl;
         String contentType;
 
@@ -124,6 +133,22 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                 contentType = "application/json";
         }
 
+        // Need to be able to throw an exception
+        // so not using ifPresent() syntax
+        Optional<String> authenticationType = config.getOptionalValue(PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE, String.class);
+        if (authenticationType.isPresent()) {
+            String t = authenticationType.get();
+            if (t.equalsIgnoreCase(JWT_AUTHENTICATION)) {
+                JWTAuthenticatorBuilder builder = JWTAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
+                authenticator = builder.build();
+            }
+            else {
+                String msg = "Unknown value '" + t + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE;
+                LOGGER.error(msg);
+                throw new IllegalArgumentException(msg);
+            }
+        }
+
         LOGGER.info("Using http content-type type {}", contentType);
         LOGGER.info("Using sink URL: {}", sinkUrl);
         requestBuilder = HttpRequest.newBuilder(new URI(sinkUrl)).timeout(timeoutDuration);
@@ -132,7 +157,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+            throws InterruptedException, IllegalStateException {
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
@@ -152,13 +177,24 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         committer.markBatchFinished();
     }
 
-    private boolean recordSent(ChangeEvent<Object, Object> record) throws InterruptedException {
+    private boolean recordSent(ChangeEvent<Object, Object> record) throws InterruptedException, IllegalStateException {
         boolean sent = false;
         HttpResponse<String> r;
 
-        HttpRequest request = generateRequest(record);
+        HttpRequest.Builder requestBuilder = generateRequest(record);
 
         try {
+            if (authenticator != null) {
+                if (!authenticator.authenticate()) {
+                    String msg = "Failed to authenticate successfully.  Cannot continue.";
+                    LOGGER.error(msg);
+                    throw new IllegalStateException(msg);
+                }
+                authenticator.addAuthorizationHeader(requestBuilder);
+            }
+
+            HttpRequest request = requestBuilder.build();
+
             r = client.send(request, HttpResponse.BodyHandlers.ofString());
         }
         catch (IOException ioe) {
@@ -176,7 +212,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @VisibleForTesting
-    HttpRequest generateRequest(ChangeEvent<Object, Object> record) {
+    HttpRequest.Builder generateRequest(ChangeEvent<Object, Object> record) {
         String value = (String) record.value();
         HttpRequest.Builder builder = requestBuilder.POST(HttpRequest.BodyPublishers.ofString(value));
 
@@ -190,6 +226,6 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
             builder.header(headersPrefix + entry.getKey().toUpperCase(Locale.ROOT), headerValue);
         }
 
-        return builder.build();
+        return builder;
     }
 }

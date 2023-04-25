@@ -31,7 +31,7 @@ public class HttpChangeConsumerTest {
         changeConsumer.initWithConfig(generateMockConfig(Map.of(
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
                 "debezium.format.value", "avro")));
-        HttpRequest request = changeConsumer.generateRequest(createChangeEvent());
+        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
         String value = request.headers().firstValue("X-DEBEZIUM-h1key").orElse(null);
         assertEquals("aDFWYWx1ZQ==", value);
@@ -44,7 +44,7 @@ public class HttpChangeConsumerTest {
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, false,
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
                 "debezium.format.value", "avro")));
-        HttpRequest request = changeConsumer.generateRequest(createChangeEvent());
+        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
         String value = request.headers().firstValue("X-DEBEZIUM-h1key").orElse(null);
         assertEquals("h1Value", value);
@@ -58,7 +58,7 @@ public class HttpChangeConsumerTest {
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_PREFIX, "XYZ-DBZ-",
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
                 "debezium.format.value", "avro")));
-        HttpRequest request = changeConsumer.generateRequest(createChangeEvent());
+        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
         String value = request.headers().firstValue("XYZ-DBZ-h1key").orElse(null);
         assertEquals("h1Value", value);
