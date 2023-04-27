@@ -33,7 +33,8 @@ import io.debezium.server.http.Authenticator;
  * is successful, additional authentication attempts will refresh the token.
  */
 public class JWTAuthenticator implements Authenticator {
-    private enum AuthenticationState {
+    @VisibleForTesting
+    enum AuthenticationState {
         NOT_AUTHENTICATED, // before first successful authentication
         FAILED_AUTHENTICATION, // attempted authentication but it failed
         ACTIVE, // successful authentication and token is still valid
@@ -77,6 +78,21 @@ public class JWTAuthenticator implements Authenticator {
         authenticationState = AuthenticationState.NOT_AUTHENTICATED;
         // initialize to value before now to correspond to not authenticated state
         expirationDateTime = DateTime.now().minusDays(1);
+    }
+
+    @VisibleForTesting
+    void setAuthenticationState(AuthenticationState state) {
+        this.authenticationState = state;
+    }
+
+    @VisibleForTesting
+    void setJwtToken(String token) {
+        this.jwtToken = token;
+    }
+
+    @VisibleForTesting
+    void setJwtRefreshToken(String token) {
+        this.jwtRefreshToken = token;
     }
 
     @VisibleForTesting
