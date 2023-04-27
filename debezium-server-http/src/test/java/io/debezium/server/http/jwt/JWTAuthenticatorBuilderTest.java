@@ -23,7 +23,8 @@ public class JWTAuthenticatorBuilderTest {
     @Test
     public void verifyBuild() throws URISyntaxException {
         JWTAuthenticatorBuilder builder = new JWTAuthenticatorBuilder();
-        builder.setRefreshUri(new URI("http://test.com"));
+        builder.setAuthUri(new URI("http://test.com/auth/authenticate"));
+        builder.setRefreshUri(new URI("http://test.com/auth/refreshToken"));
         builder.setUsername("testUser");
         builder.setPassword("testPassword");
 
