@@ -50,6 +50,7 @@ public class JWTAuthenticatorTest {
                 Duration.ofMillis(100000));
 
         authenticator.setJwtToken("fakeToken");
+        authenticator.setJwtRefreshToken("fakeRefreshToken");
         authenticator.setAuthenticationState(JWTAuthenticator.AuthenticationState.EXPIRED);
 
         HttpRequest initialRequest = authenticator.generateRefreshAuthenticationRequest();
@@ -86,6 +87,6 @@ public class JWTAuthenticatorTest {
         HttpRequest initialRequest = authenticator.generateInitialAuthenticationRequest();
 
         Assertions.assertTrue(authValue.isPresent());
-        Assertions.assertTrue(authValue.get().startsWith("Bearer: "));
+        Assertions.assertEquals(authValue.get(), "Bearer: fakeToken");
     }
 }
