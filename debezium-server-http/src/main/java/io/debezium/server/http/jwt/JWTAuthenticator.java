@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.debezium.DebeziumException;
 import io.debezium.annotation.VisibleForTesting;
 import io.debezium.server.http.Authenticator;
 
@@ -79,7 +80,7 @@ public class JWTAuthenticator implements Authenticator {
     }
 
     @VisibleForTesting
-    HttpRequest generateInitialAuthenticationRequest() throws IOException {
+    HttpRequest generateInitialAuthenticationRequest() {
         JWTAuthorizationInitialRequest payload = new JWTAuthorizationInitialRequest(username, password, tokenExpirationDuration, refreshTokenExpirationDuration);
 
         StringWriter payloadWriter = new StringWriter();
@@ -87,8 +88,7 @@ public class JWTAuthenticator implements Authenticator {
             mapper.writeValue(payloadWriter, payload);
         }
         catch (IOException e) {
-            LOGGER.error("Could not serialize JWTAuthorizationRequest object to JSON.");
-            throw e;
+            throw new DebeziumException("Could not serialize JWTAuthorizationRequest object to JSON.", e);
         }
 
         String payloadJSON = payloadWriter.toString();
@@ -106,13 +106,11 @@ public class JWTAuthenticator implements Authenticator {
     }
 
     @VisibleForTesting
-    HttpRequest generateRefreshAuthenticationRequest() throws IOException {
+    HttpRequest generateRefreshAuthenticationRequest() {
         checkAuthenticationExpired();
 
         if (authenticationState == AuthenticationState.NOT_AUTHENTICATED || authenticationState == AuthenticationState.FAILED_AUTHENTICATION) {
-            String msg = "Must perform initial authentication successfully before attempting to refresh authentication";
-            LOGGER.error(msg);
-            throw new IllegalStateException(msg);
+            throw new DebeziumException("Must perform initial authentication successfully before attempting to refresh authentication");
         }
 
         JWTAuthorizationRefreshRequest payload = new JWTAuthorizationRefreshRequest(jwtRefreshToken, tokenExpirationDuration, refreshTokenExpirationDuration);
@@ -122,8 +120,7 @@ public class JWTAuthenticator implements Authenticator {
             mapper.writeValue(payloadWriter, payload);
         }
         catch (IOException e) {
-            LOGGER.error("Could not serialize JWTAuthorizationRequest object to JSON.");
-            throw e;
+            throw new DebeziumException("Could not serialize JWTAuthorizationRequest object to JSON.", e);
         }
 
         String payloadJSON = payloadWriter.toString();
@@ -135,20 +132,16 @@ public class JWTAuthenticator implements Authenticator {
     public void addAuthorizationHeader(HttpRequest.Builder httpRequestBuilder) {
         checkAuthenticationExpired();
         if (authenticationState == AuthenticationState.NOT_AUTHENTICATED || authenticationState == AuthenticationState.FAILED_AUTHENTICATION) {
-            String msg = "Must successfully authenticate against JWT endpoint before you can add the authorization information to the HTTP header.";
-            LOGGER.error(msg);
-            throw new IllegalStateException(msg);
+            throw new DebeziumException("Must successfully authenticate against JWT endpoint before you can add the authorization information to the HTTP header.");
         }
         else if (authenticationState == AuthenticationState.EXPIRED) {
-            String msg = "JWT authentication is expired. Must renew authentication before you can add the authorization information to the HTTP header.";
-            LOGGER.error(msg);
-            throw new IllegalStateException(msg);
+            throw new DebeziumException("JWT authentication is expired. Must renew authentication before you can add the authorization information to the HTTP header.");
         }
 
         httpRequestBuilder.header("Authorization", "Bearer: " + jwtToken);
     }
 
-    public boolean authenticate() throws InterruptedException, IOException {
+    public boolean authenticate() throws InterruptedException {
         checkAuthenticationExpired();
 
         HttpResponse<String> r;
@@ -166,16 +159,14 @@ public class JWTAuthenticator implements Authenticator {
         }
         else {
             // we should never get here...
-            String msg = "Reached invalid authentication state.";
-            LOGGER.error(msg);
-            throw new IllegalStateException(msg);
+            throw new DebeziumException("Reached invalid authentication state.");
         }
 
         try {
             r = client.send(request, HttpResponse.BodyHandlers.ofString());
         }
-        catch (IOException ioe) {
-            throw new InterruptedException(ioe.toString());
+        catch (IOException e) {
+            throw new DebeziumException("Failed to send authentication request", e);
         }
 
         if (r.statusCode() == HTTP_OK) {
@@ -185,8 +176,7 @@ public class JWTAuthenticator implements Authenticator {
                 response = mapper.readValue(responseBody, JWTAuthorizationResponse.class);
             }
             catch (IOException e) {
-                LOGGER.error("Could not deserialize JWT authorization response.");
-                throw e;
+                throw new DebeziumException("Could not deserialize JWT authorization response.", e);
             }
 
             jwtToken = response.getJwt();

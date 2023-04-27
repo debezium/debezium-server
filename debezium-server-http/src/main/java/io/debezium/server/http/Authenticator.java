@@ -5,11 +5,10 @@
  */
 package io.debezium.server.http;
 
-import java.io.IOException;
 import java.net.http.HttpRequest;
 
 public interface Authenticator {
     void addAuthorizationHeader(HttpRequest.Builder httpRequestBuilder);
 
-    boolean authenticate() throws InterruptedException, IOException;
+    boolean authenticate() throws InterruptedException;
 }

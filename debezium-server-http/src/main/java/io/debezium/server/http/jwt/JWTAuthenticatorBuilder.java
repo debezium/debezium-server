@@ -14,6 +14,8 @@ import org.eclipse.microprofile.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.debezium.DebeziumException;
+
 public class JWTAuthenticatorBuilder {
     private static final Logger LOGGER = LoggerFactory.getLogger(JWTAuthenticatorBuilder.class);
     private static final long HTTP_TIMEOUT = Integer.toUnsignedLong(60000); // Default to 60s
@@ -35,7 +37,7 @@ public class JWTAuthenticatorBuilder {
     private long refreshTokenExpirationDuration = Integer.toUnsignedLong(60 * 24); // Default to 24 hours
     private Duration httpTimeoutDuration = Duration.ofMillis(HTTP_TIMEOUT); // in ms
 
-    public static JWTAuthenticatorBuilder fromConfig(Config config, String prop_prefix) throws URISyntaxException {
+    public static JWTAuthenticatorBuilder fromConfig(Config config, String prop_prefix) {
         JWTAuthenticatorBuilder builder = new JWTAuthenticatorBuilder();
 
         builder.setUsername(config.getValue(prop_prefix + PROP_USERNAME, String.class));
@@ -49,8 +51,7 @@ public class JWTAuthenticatorBuilder {
             builder.setAuthUri(authUri);
         }
         catch (URISyntaxException e) {
-            LOGGER.error("Could not parse authentication URL: " + uriString + AUTHENTICATE_PATH);
-            throw e;
+            throw new DebeziumException("Could not parse authentication URL: " + uriString + AUTHENTICATE_PATH, e);
         }
 
         try {
@@ -59,8 +60,7 @@ public class JWTAuthenticatorBuilder {
             builder.setRefreshUri(refreshUri);
         }
         catch (URISyntaxException e) {
-            LOGGER.error("Could not parse refresh URL: " + uriString + REFRESH_PATH);
-            throw e;
+            throw new DebeziumException("Could not parse refresh URL: " + uriString + REFRESH_PATH, e);
         }
 
         config.getOptionalValue(prop_prefix + PROP_TOKEN_EXPIRATION, Long.class)

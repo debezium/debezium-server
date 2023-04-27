@@ -89,7 +89,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @VisibleForTesting
-    void initWithConfig(Config config) throws URISyntaxException, IllegalArgumentException, URISyntaxException {
+    void initWithConfig(Config config) throws URISyntaxException {
         String sinkUrl;
         String contentType;
 
@@ -143,9 +143,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                 authenticator = builder.build();
             }
             else {
-                String msg = "Unknown value '" + t + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE;
-                LOGGER.error(msg);
-                throw new IllegalArgumentException(msg);
+                throw new DebeziumException("Unknown value '" + t + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
             }
         }
 
@@ -157,7 +155,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException, IllegalStateException {
+            throws InterruptedException {
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
@@ -177,7 +175,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         committer.markBatchFinished();
     }
 
-    private boolean recordSent(ChangeEvent<Object, Object> record) throws InterruptedException, IllegalStateException {
+    private boolean recordSent(ChangeEvent<Object, Object> record) throws InterruptedException {
         boolean sent = false;
         HttpResponse<String> r;
 
@@ -186,9 +184,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         try {
             if (authenticator != null) {
                 if (!authenticator.authenticate()) {
-                    String msg = "Failed to authenticate successfully.  Cannot continue.";
-                    LOGGER.error(msg);
-                    throw new IllegalStateException(msg);
+                    throw new DebeziumException("Failed to authenticate successfully.  Cannot continue.");
                 }
                 authenticator.addAuthorizationHeader(requestBuilder);
             }
