@@ -108,7 +108,13 @@ public class JWTAuthenticatorBuilder {
 
     public JWTAuthenticator build() {
         if (authUri == null) {
-            String msg = "Cannot build JWTAuthenticator.  Uri must be set.";
+            String msg = "Cannot build JWTAuthenticator.  Initialization authorization URI must be set.";
+            LOGGER.error(msg);
+            throw new NoSuchElementException(msg);
+        }
+
+        if (refreshUri == null) {
+            String msg = "Cannot build JWTAuthenticator.  Refresh authorization URI must be set.";
             LOGGER.error(msg);
             throw new NoSuchElementException(msg);
         }
