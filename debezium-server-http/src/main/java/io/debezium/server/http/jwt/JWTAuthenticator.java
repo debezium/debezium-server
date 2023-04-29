@@ -145,7 +145,7 @@ public class JWTAuthenticator implements Authenticator {
         return builder.build();
     }
 
-    public void addAuthorizationHeader(HttpRequest.Builder httpRequestBuilder) {
+    public void setAuthorizationHeader(HttpRequest.Builder httpRequestBuilder) {
         checkAuthenticationExpired();
         if (authenticationState == AuthenticationState.NOT_AUTHENTICATED || authenticationState == AuthenticationState.FAILED_AUTHENTICATION) {
             throw new DebeziumException("Must successfully authenticate against JWT endpoint before you can add the authorization information to the HTTP header.");
@@ -154,7 +154,7 @@ public class JWTAuthenticator implements Authenticator {
             throw new DebeziumException("JWT authentication is expired. Must renew authentication before you can add the authorization information to the HTTP header.");
         }
 
-        httpRequestBuilder.header("Authorization", "Bearer: " + jwtToken);
+        httpRequestBuilder.setHeader("Authorization", "Bearer: " + jwtToken);
     }
 
     public boolean authenticate() throws InterruptedException {

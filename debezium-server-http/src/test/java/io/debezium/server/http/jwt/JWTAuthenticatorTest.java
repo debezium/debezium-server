@@ -78,7 +78,7 @@ public class JWTAuthenticatorTest {
 
         URI testURI = new URI("http://test.com/cookies");
         HttpRequest.Builder builder = HttpRequest.newBuilder(testURI);
-        authenticator.addAuthorizationHeader(builder);
+        authenticator.setAuthorizationHeader(builder);
         HttpRequest request = builder.build();
 
         HttpHeaders headers = request.headers();
