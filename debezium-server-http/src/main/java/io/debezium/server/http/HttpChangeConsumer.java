@@ -186,7 +186,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                 if (!authenticator.authenticate()) {
                     throw new DebeziumException("Failed to authenticate successfully.  Cannot continue.");
                 }
-                authenticator.addAuthorizationHeader(requestBuilder);
+                authenticator.setAuthorizationHeader(requestBuilder);
             }
 
             HttpRequest request = requestBuilder.build();
