@@ -55,6 +55,9 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     @ConfigProperty(name = PROP_PREFIX + "routingKey", defaultValue = "")
     Optional<String> routingKey;
 
+    @ConfigProperty(name = PROP_PREFIX + "exchange", defaultValue = "")
+    Optional<String> exchange;
+
     @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
     int ackTimeout;
 
@@ -106,7 +109,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             throws InterruptedException {
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
-            final String exchange = streamNameMapper.map(record.destination());
+            final String exchange = this.exchange.orElseGet(() -> streamNameMapper.map(record.destination()));
 
             try {
                 channel.basicPublish(exchange, routingKey.orElse(""),
