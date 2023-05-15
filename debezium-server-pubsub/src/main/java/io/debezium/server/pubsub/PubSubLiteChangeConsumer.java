@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -69,6 +71,9 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
 
+    @ConfigProperty(name = PROP_PREFIX + "wait.message.computation.timeout.ms", defaultValue = "5000")
+    Integer waitMessageComputationTimeout;
+
     @Inject
     @CustomConsumerBuilder
     Instance<PublisherBuilder> customPublisherBuilder;
@@ -124,41 +129,48 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
 
             Publisher publisher = publishers.computeIfAbsent(topicName, (topic) -> publisherBuilder.get(topic));
 
-            final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
+            PubsubMessage message = buildPubSubMessage(record);
 
-            if (orderingEnabled) {
-                if (record.key() == null) {
-                    pubsubMessage.setOrderingKey(nullKey);
-                }
-                else if (record.key() instanceof String) {
-                    pubsubMessage.setOrderingKey((String) record.key());
-                }
-                else if (record.key() instanceof byte[]) {
-                    pubsubMessage.setOrderingKeyBytes(ByteString.copyFrom((byte[]) record.key()));
-                }
-            }
-
-            if (record.value() instanceof String) {
-                pubsubMessage.setData(ByteString.copyFromUtf8((String) record.value()));
-            }
-            else if (record.value() instanceof byte[]) {
-                pubsubMessage.setData(ByteString.copyFrom((byte[]) record.value()));
-            }
-
-            pubsubMessage.putAllAttributes(convertHeaders(record));
-
-            deliveries.add(publisher.publish(pubsubMessage.build()));
+            deliveries.add(publisher.publish(message));
             committer.markProcessed(record);
         }
         List<String> messageIds;
         try {
-            messageIds = ApiFutures.allAsList(deliveries).get();
+            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageComputationTimeout, TimeUnit.MILLISECONDS);
         }
-        catch (ExecutionException e) {
+        catch (ExecutionException | TimeoutException e) {
             throw new DebeziumException(e);
         }
         LOGGER.trace("Sent messages with ids: {}", messageIds);
         committer.markBatchFinished();
+    }
+
+    private PubsubMessage buildPubSubMessage(ChangeEvent<Object, Object> record) {
+
+        final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
+
+        if (orderingEnabled) {
+            if (record.key() == null) {
+                pubsubMessage.setOrderingKey(nullKey);
+            }
+            else if (record.key() instanceof String) {
+                pubsubMessage.setOrderingKey((String) record.key());
+            }
+            else if (record.key() instanceof byte[]) {
+                pubsubMessage.setOrderingKeyBytes(ByteString.copyFrom((byte[]) record.key()));
+            }
+        }
+
+        if (record.value() instanceof String) {
+            pubsubMessage.setData(ByteString.copyFromUtf8((String) record.value()));
+        }
+        else if (record.value() instanceof byte[]) {
+            pubsubMessage.setData(ByteString.copyFrom((byte[]) record.value()));
+        }
+
+        pubsubMessage.putAllAttributes(convertHeaders(record));
+
+        return pubsubMessage.build();
     }
 
     @Override
