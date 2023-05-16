@@ -125,8 +125,8 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "retry.rpc.timeout.multiplier", defaultValue = "2.0")
     Double rpcTimeoutMultiplier;
 
-    @ConfigProperty(name = PROP_PREFIX + "wait.message.computation.timeout.ms", defaultValue = "5000")
-    Integer waitMessageComputationTimeout;
+    @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
+    Integer waitMessageDeliveryTimeout;
 
     @ConfigProperty(name = PROP_PREFIX + "address")
     Optional<String> address;
@@ -238,7 +238,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         }
         List<String> messageIds;
         try {
-            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageComputationTimeout, TimeUnit.MILLISECONDS);
+            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
         }
         catch (ExecutionException | TimeoutException e) {
             throw new DebeziumException(e);
