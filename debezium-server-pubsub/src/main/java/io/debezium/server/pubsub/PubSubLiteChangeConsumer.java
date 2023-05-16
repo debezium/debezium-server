@@ -71,8 +71,8 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
 
-    @ConfigProperty(name = PROP_PREFIX + "wait.message.computation.timeout.ms", defaultValue = "5000")
-    Integer waitMessageComputationTimeout;
+    @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
+    Integer waitMessageDeliveryTimeout;
 
     @Inject
     @CustomConsumerBuilder
@@ -136,7 +136,7 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
         }
         List<String> messageIds;
         try {
-            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageComputationTimeout, TimeUnit.MILLISECONDS);
+            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
         }
         catch (ExecutionException | TimeoutException e) {
             throw new DebeziumException(e);
