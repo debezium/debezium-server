@@ -20,6 +20,9 @@
         <version.nats>2.16.3</version.nats>
         <version.stan>2.2.3</version.stan>
         <version.commons.logging>1.2</version.commons.logging>
+
+        <!-- Testing -->
+        <version.junit.pioneer>2.0.1</version.junit.pioneer>
     </properties>
 
     <dependencyManagement>
@@ -256,6 +259,13 @@
                 <scope>import</scope>
             </dependency>
 
+            <!-- Testing -->
+            <dependency>
+                <groupId>org.junit-pioneer</groupId>
+                <artifactId>junit-pioneer</artifactId>
+                <version>${version.junit.pioneer}</version>
+                <scope>test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
