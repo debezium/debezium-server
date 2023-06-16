@@ -40,7 +40,7 @@ public class TestUtils {
         waitBoolean(() -> jedis.hgetAll(hashName).size() >= expectedSize);
     }
 
-    private static void waitBoolean(Supplier<Boolean> bool) {
+    public static void waitBoolean(Supplier<Boolean> bool) {
         Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds())).until(() -> {
             return Boolean.TRUE.equals(bool.get());
         });

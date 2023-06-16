@@ -17,6 +17,7 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
+    static final String READY_MESSAGE = "Ready to accept connections";
     public static final int REDIS_PORT = 6379;
     public static final String REDIS_IMAGE = "redis";
 
@@ -27,6 +28,7 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
     private static synchronized void start(boolean ignored) {
         if (!running.get()) {
             container.start();
+            TestUtils.waitBoolean(() -> container.getLogs().contains(READY_MESSAGE));
             running.set(true);
         }
     }

@@ -31,6 +31,7 @@ public class RedisSSLTestResourceLifecycleManager implements QuarkusTestResource
     private static synchronized void start(boolean ignored) {
         if (!running.get()) {
             container.start();
+            TestUtils.waitBoolean(() -> container.getLogs().contains(RedisTestResourceLifecycleManager.READY_MESSAGE));
             running.set(true);
         }
     }
