@@ -29,6 +29,11 @@
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>
                 <version>${quarkus.version}</version>
+                <configuration>
+                    <systemProperties>
+                        <quarkus.kubernetes-config.secrets.enabled>true</quarkus.kubernetes-config.secrets.enabled>
+                    </systemProperties>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

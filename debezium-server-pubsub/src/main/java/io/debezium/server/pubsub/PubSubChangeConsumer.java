@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -123,6 +125,9 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "retry.rpc.timeout.multiplier", defaultValue = "2.0")
     Double rpcTimeoutMultiplier;
 
+    @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
+    Integer waitMessageDeliveryTimeout;
+
     @ConfigProperty(name = PROP_PREFIX + "address")
     Optional<String> address;
 
@@ -217,47 +222,57 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
+
         final List<ApiFuture<String>> deliveries = new ArrayList<>();
+
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
             final String topicName = streamNameMapper.map(record.destination());
             Publisher publisher = publishers.computeIfAbsent(topicName, (x) -> publisherBuilder.get(ProjectTopicName.of(projectId, x)));
 
-            final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
+            PubsubMessage message = buildPubSubMessage(record);
 
-            if (orderingEnabled) {
-                if (record.key() == null) {
-                    pubsubMessage.setOrderingKey(nullKey);
-                }
-                else if (record.key() instanceof String) {
-                    pubsubMessage.setOrderingKey((String) record.key());
-                }
-                else if (record.key() instanceof byte[]) {
-                    pubsubMessage.setOrderingKeyBytes(ByteString.copyFrom((byte[]) record.key()));
-                }
-            }
+            deliveries.add(publisher.publish(message));
 
-            if (record.value() instanceof String) {
-                pubsubMessage.setData(ByteString.copyFromUtf8((String) record.value()));
-            }
-            else if (record.value() instanceof byte[]) {
-                pubsubMessage.setData(ByteString.copyFrom((byte[]) record.value()));
-            }
-
-            pubsubMessage.putAllAttributes(convertHeaders(record));
-
-            deliveries.add(publisher.publish(pubsubMessage.build()));
             committer.markProcessed(record);
         }
         List<String> messageIds;
         try {
-            messageIds = ApiFutures.allAsList(deliveries).get();
+            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
         }
-        catch (ExecutionException e) {
+        catch (ExecutionException | TimeoutException e) {
             throw new DebeziumException(e);
         }
         LOGGER.trace("Sent messages with ids: {}", messageIds);
         committer.markBatchFinished();
+    }
+
+    private PubsubMessage buildPubSubMessage(ChangeEvent<Object, Object> record) {
+
+        final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
+
+        if (orderingEnabled) {
+            if (record.key() == null) {
+                pubsubMessage.setOrderingKey(nullKey);
+            }
+            else if (record.key() instanceof String) {
+                pubsubMessage.setOrderingKey((String) record.key());
+            }
+            else if (record.key() instanceof byte[]) {
+                pubsubMessage.setOrderingKeyBytes(ByteString.copyFrom((byte[]) record.key()));
+            }
+        }
+
+        if (record.value() instanceof String) {
+            pubsubMessage.setData(ByteString.copyFromUtf8((String) record.value()));
+        }
+        else if (record.value() instanceof byte[]) {
+            pubsubMessage.setData(ByteString.copyFrom((byte[]) record.value()));
+        }
+
+        pubsubMessage.putAllAttributes(convertHeaders(record));
+
+        return pubsubMessage.build();
     }
 
     @Override
