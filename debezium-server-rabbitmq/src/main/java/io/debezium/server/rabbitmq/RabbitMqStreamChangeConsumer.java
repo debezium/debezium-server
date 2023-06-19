@@ -6,10 +6,7 @@
 package io.debezium.server.rabbitmq;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -50,10 +47,16 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmq.";
-    private static final String PROP_CONNECTION_PREFIX = "debezium.sink.rabbitmq.connection.";
+    private static final String PROP_CONNECTION_PREFIX = PROP_PREFIX + "connection.";
 
-    @ConfigProperty(name = PROP_PREFIX + "routingKey", defaultValue = "")
-    Optional<String> routingKey;
+    @ConfigProperty(name = PROP_PREFIX + "exchange", defaultValue = "")
+    Optional<String> exchange;
+
+    @ConfigProperty(name = PROP_PREFIX + "autoCreateQueue", defaultValue = "true")
+    Boolean autoCreateQueue;
+
+    @ConfigProperty(name = PROP_PREFIX + "queuePersistent", defaultValue = "true")
+    Boolean queuePersistent;
 
     @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
     int ackTimeout;
@@ -106,10 +109,14 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             throws InterruptedException {
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
-            final String exchange = streamNameMapper.map(record.destination());
+
+            final String routingKey = streamNameMapper.map(record.destination());
 
             try {
-                channel.basicPublish(exchange, routingKey.orElse(""),
+                if (autoCreateQueue) {
+                    channel.queueDeclare(routingKey, queuePersistent, false, false, null);
+                }
+                channel.basicPublish(exchange.orElse(""), routingKey,
                         new AMQP.BasicProperties.Builder()
                                 .headers(convertRabbitMqHeaders(record))
                                 .build(),
