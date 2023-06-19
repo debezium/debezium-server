@@ -50,10 +50,22 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmq.";
-    private static final String PROP_CONNECTION_PREFIX = "debezium.sink.rabbitmq.connection.";
+    private static final String PROP_CONNECTION_PREFIX = PROP_PREFIX + "connection.";
+
+    @ConfigProperty(name = PROP_PREFIX + "exchange", defaultValue = "")
+    Optional<String> exchange;
 
     @ConfigProperty(name = PROP_PREFIX + "routingKey", defaultValue = "")
     Optional<String> routingKey;
+
+    @ConfigProperty(name = PROP_PREFIX + "autoCreateRoutingKey", defaultValue = "true")
+    Boolean autoCreateRoutingKey;
+
+    @ConfigProperty(name = PROP_PREFIX + "routingKeyDurable", defaultValue = "true")
+    Boolean routingKeyDurable;
+
+    @ConfigProperty(name = PROP_PREFIX + "deliveryMode", defaultValue = "2")
+    int deliveryMode;
 
     @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
     int ackTimeout;
@@ -106,11 +118,16 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             throws InterruptedException {
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
-            final String exchange = streamNameMapper.map(record.destination());
+
+            String routingKeyName = routingKey.orElse(streamNameMapper.map(record.destination()));
 
             try {
-                channel.basicPublish(exchange, routingKey.orElse(""),
+                if (autoCreateRoutingKey) {
+                    channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
+                }
+                channel.basicPublish(exchange.orElse(""), routingKeyName,
                         new AMQP.BasicProperties.Builder()
+                                .deliveryMode(deliveryMode)
                                 .headers(convertRabbitMqHeaders(record))
                                 .build(),
                         getBytes(record.value()));
