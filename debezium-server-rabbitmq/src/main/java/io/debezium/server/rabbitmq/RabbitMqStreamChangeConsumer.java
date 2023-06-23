@@ -58,11 +58,18 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     @ConfigProperty(name = PROP_PREFIX + "routingKey", defaultValue = "")
     Optional<String> routingKey;
 
-    @ConfigProperty(name = PROP_PREFIX + "autoCreateRoutingKey", defaultValue = "true")
+    @ConfigProperty(name = PROP_PREFIX + "autoCreateRoutingKey", defaultValue = "false")
     Boolean autoCreateRoutingKey;
 
     @ConfigProperty(name = PROP_PREFIX + "routingKeyDurable", defaultValue = "true")
     Boolean routingKeyDurable;
+
+    /**
+     * When true, the routing key is calculated from topic name using stream name mapper.
+     * When false the routingKey value or empty string is used.
+     */
+    @ConfigProperty(name = PROP_PREFIX + "routingKeyFromTopicName", defaultValue = "false")
+    Boolean routingKeyFromTopicName;
 
     @ConfigProperty(name = PROP_PREFIX + "deliveryMode", defaultValue = "2")
     int deliveryMode;
@@ -90,6 +97,12 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             connection = factory.newConnection();
             channel = connection.createChannel();
             channel.confirmSelect();
+
+            if (!routingKeyFromTopicName && autoCreateRoutingKey) {
+                final var routingKeyName = routingKey.orElse("");
+                LOGGER.info("Creating queue for routing key named '{}'", routingKeyName);
+                channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
+            }
         }
         catch (IOException | TimeoutException e) {
             throw new DebeziumException(e);
@@ -119,13 +132,16 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
-            String routingKeyName = routingKey.orElse(streamNameMapper.map(record.destination()));
+            final var routingKeyName = routingKey
+                    .orElse(routingKeyFromTopicName ? streamNameMapper.map(record.destination()) : "");
+            final var exchangeName = exchange.orElse(streamNameMapper.map(record.destination()));
 
             try {
-                if (autoCreateRoutingKey) {
+                if (routingKeyFromTopicName && autoCreateRoutingKey) {
+                    LOGGER.trace("Creating queue for routing key named '{}'", routingKeyName);
                     channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
                 }
-                channel.basicPublish(exchange.orElse(""), routingKeyName,
+                channel.basicPublish(exchangeName, routingKeyName,
                         new AMQP.BasicProperties.Builder()
                                 .deliveryMode(deliveryMode)
                                 .headers(convertRabbitMqHeaders(record))
