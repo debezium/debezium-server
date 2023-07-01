@@ -68,5 +68,26 @@
         <include>**/*</include>
       </includes>
     </fileSet>
+    <fileSet>
+      <directory></directory>
+      <outputDirectory>${project.parent.artifactId}/connectors/cassandra/ver3</outputDirectory>
+      <excludes>
+          <exclude>**/*</exclude>
+      </excludes>
+    </fileSet>
+    <fileSet>
+      <directory></directory>
+      <outputDirectory>${project.parent.artifactId}/connectors/cassandra/ver4</outputDirectory>
+      <excludes>
+          <exclude>**/*</exclude>
+      </excludes>
+    </fileSet>
+    <fileSet>
+      <directory></directory>
+      <outputDirectory>${project.parent.artifactId}/connectors/cassandra/dse</outputDirectory>
+      <excludes>
+          <exclude>**/*</exclude>
+      </excludes>
+    </fileSet>
   </fileSets>
 </assembly>
