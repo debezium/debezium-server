@@ -179,7 +179,15 @@
             <dependencies>
                 <dependency>
                     <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-cassandra-3</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
                     <artifactId>debezium-connector-cassandra-4</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-dse</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>
