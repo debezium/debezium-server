@@ -33,10 +33,40 @@
           <scope>runtime</scope>
           <useProjectArtifact>false</useProjectArtifact>
           <useTransitiveFiltering>true</useTransitiveFiltering>
-	  <includes>
-	    <include>io.debezium:debezium-scripting:*</include>
-	    <include>io.debezium:debezium-scripting-languages:*</include>
-	  </includes>
+          <includes>
+            <include>io.debezium:debezium-scripting:*</include>
+            <include>io.debezium:debezium-scripting-languages:*</include>
+          </includes>
+      </dependencySet>
+      <dependencySet>
+          <outputDirectory>${project.parent.artifactId}/connectors/cassandra/dse</outputDirectory>
+          <unpack>true</unpack>
+          <scope>runtime</scope>
+          <useProjectArtifact>false</useProjectArtifact>
+          <useTransitiveFiltering>true</useTransitiveFiltering>
+          <includes>
+              <include>io.debezium:debezium-connector-dse:*</include>
+          </includes>
+      </dependencySet>
+      <dependencySet>
+          <outputDirectory>${project.parent.artifactId}/connectors/cassandra/ver3</outputDirectory>
+          <unpack>true</unpack>
+          <scope>runtime</scope>
+          <useProjectArtifact>false</useProjectArtifact>
+          <useTransitiveFiltering>true</useTransitiveFiltering>
+          <includes>
+              <include>io.debezium:debezium-connector-cassandra-3:*</include>
+          </includes>
+      </dependencySet>
+      <dependencySet>
+          <outputDirectory>${project.parent.artifactId}/connectors/cassandra/ver4</outputDirectory>
+          <unpack>true</unpack>
+          <scope>runtime</scope>
+          <useProjectArtifact>false</useProjectArtifact>
+          <useTransitiveFiltering>true</useTransitiveFiltering>
+          <includes>
+              <include>io.debezium:debezium-connector-cassandra-4:*</include>
+          </includes>
       </dependencySet>
   </dependencySets>
   <fileSets>
@@ -67,27 +97,6 @@
       <includes>
         <include>**/*</include>
       </includes>
-    </fileSet>
-    <fileSet>
-      <directory></directory>
-      <outputDirectory>${project.parent.artifactId}/connectors/cassandra/ver3</outputDirectory>
-      <excludes>
-          <exclude>**/*</exclude>
-      </excludes>
-    </fileSet>
-    <fileSet>
-      <directory></directory>
-      <outputDirectory>${project.parent.artifactId}/connectors/cassandra/ver4</outputDirectory>
-      <excludes>
-          <exclude>**/*</exclude>
-      </excludes>
-    </fileSet>
-    <fileSet>
-      <directory></directory>
-      <outputDirectory>${project.parent.artifactId}/connectors/cassandra/dse</outputDirectory>
-      <excludes>
-          <exclude>**/*</exclude>
-      </excludes>
     </fileSet>
   </fileSets>
 </assembly>
