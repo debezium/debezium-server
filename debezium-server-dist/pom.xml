@@ -22,11 +22,6 @@
             <artifactId>debezium-server-core</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <version>3.1.0</version>
-        </dependency>
     </dependencies>
     <build>
         <plugins>
