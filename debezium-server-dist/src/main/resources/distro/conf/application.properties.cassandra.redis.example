@@ -1,0 +1,34 @@
+# Sink
+debezium.sink.type=redis
+debezium.sink.redis.address=localhost:12001
+
+# DSE Cassandra Connector
+debezium.source.connector.class=io.debezium.connector.dse.Dse6816Connector
+debezium.source.cassandra.node.id=node02
+debezium.source.cassandra.hosts=127.0.0.1
+debezium.source.cassandra.port=9042
+debezium.source.cassandra.config=/data/dse-6.8.16/resources/cassandra/conf/cassandra.yaml
+debezium.source.cassandra.driver.config.file=${user.dir}/conf/cassandra/driver.conf
+debezium.source.commit.log.relocation.dir=/data/dse-6.8.16/dse-data/relocdir
+debezium.source.commit.log.real.time.processing.enabled=true
+debezium.source.commit.log.marked.complete.poll.interval.ms=2000
+debezium.source.offset.storage=io.debezium.server.redis.RedisOffsetBackingStore
+debezium.source.topic.prefix=dse684
+## internal http server
+debezium.source.http.port=8040
+
+# Transforms
+debezium.transforms=AddPrefix,EnvelopeTransformation
+debezium.transforms.AddPrefix.type=org.apache.kafka.connect.transforms.RegexRouter
+debezium.transforms.AddPrefix.regex=.*
+debezium.transforms.AddPrefix.replacement=data:\$0
+debezium.transforms.EnvelopeTransformation.type=io.debezium.connector.cassandra.transforms.EnvelopeTransformation
+
+debezium.sink.redis.memory.threshold.percentage=0
+
+# Quarkus
+quarkus.log.level=INFO
+quarkus.log.console.json=false
+# Uncomment to change Debezium port from 8080 [default] to any other port
+quarkus.http.port=8980
+quarkus.log.file.enable=true
