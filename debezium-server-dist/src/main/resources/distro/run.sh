@@ -51,7 +51,7 @@ handleCassandra() {
   CASSANDRA_PATH="./connectors/cassandra"
   version="${CASSANDRA_VERSION^^}"
   if [[ "${version}" == "V3" ]]; then
-    CONNECTOR_LIB="${CASSANDRA_PATH}/v3/*"
+    CONNECTOR_LIB="${CASSANDRA_PATH}/v3/debezium-connector-cassandra-3/*"
   elif [[ "${version}" == "V4" ]]; then
     CONNECTOR_LIB="${CASSANDRA_PATH}/ver4/debezium-connector-cassandra-4/*"
   elif [[ "${version}" == "DSE" ]]; then
