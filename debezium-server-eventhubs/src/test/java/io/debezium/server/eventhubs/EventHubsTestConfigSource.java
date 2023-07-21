@@ -25,6 +25,7 @@ public class EventHubsTestConfigSource extends TestConfigSource {
         eventHubsTest.put("debezium.sink.type", "eventhubs");
         eventHubsTest.put("debezium.sink.eventhubs.connectionstring", getEventHubsConnectionString());
         eventHubsTest.put("debezium.sink.eventhubs.hubname", getEventHubsName());
+        eventHubsTest.put("debezium.sink.eventhubs.partitionid", "0");
 
         // postgresql source config
 
