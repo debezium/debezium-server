@@ -38,10 +38,11 @@
             <artifactId>debezium-testing-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
-<dependency>
+        <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
-            <scope>test</scope></dependency>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.debezium</groupId>
             <artifactId>debezium-core</artifactId>
