@@ -97,7 +97,7 @@ public class EventHubsIT {
         final List<PartitionEvent> expected = new ArrayList<>();
 
         Awaitility.await().atMost(Duration.ofSeconds(EventHubsTestConfigSource.waitForSeconds())).until(() -> {
-            IterableStream<PartitionEvent> events = consumer.receiveFromPartition("0", MESSAGE_COUNT,
+            IterableStream<PartitionEvent> events = consumer.receiveFromPartition("3'", MESSAGE_COUNT,
                     EventPosition.latest());
 
             events.forEach(event -> expected.add(event));
