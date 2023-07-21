@@ -77,6 +77,9 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
     int ackTimeout;
 
+    @ConfigProperty(name = PROP_PREFIX + "null.value", defaultValue = "default")
+    String nullValue;
+
     Connection connection;
 
     Channel channel;
@@ -141,12 +144,14 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
                     LOGGER.trace("Creating queue for routing key named '{}'", routingKeyName);
                     channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
                 }
+
+                final Object value = (record.value() != null) ? record.value() : nullValue;
                 channel.basicPublish(exchangeName, routingKeyName,
                         new AMQP.BasicProperties.Builder()
                                 .deliveryMode(deliveryMode)
                                 .headers(convertRabbitMqHeaders(record))
                                 .build(),
-                        getBytes(record.value()));
+                        getBytes(value));
             }
             catch (IOException e) {
                 throw new DebeziumException(e);

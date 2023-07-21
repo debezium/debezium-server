@@ -18,6 +18,7 @@ import java.util.concurrent.TimeoutException;
 import jakarta.enterprise.event.Observes;
 
 import org.awaitility.Awaitility;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +30,8 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 
+import io.debezium.connector.postgresql.connection.PostgresConnection;
+import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.server.TestConfigSource;
 import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.server.events.ConnectorStartedEvent;
@@ -46,6 +49,21 @@ public class RabbitMqIT {
 
     private static Connection connection;
     private static Channel channel = null;
+
+    @ConfigProperty(name = "debezium.source.database.hostname")
+    String dbHostname;
+
+    @ConfigProperty(name = "debezium.source.database.port")
+    String dbPort;
+
+    @ConfigProperty(name = "debezium.source.database.user")
+    String dbUser;
+
+    @ConfigProperty(name = "debezium.source.database.password")
+    String dbPassword;
+
+    @ConfigProperty(name = "debezium.source.database.dbname")
+    String dbName;
 
     private static final List<String> messages = Collections.synchronizedList(new ArrayList<>());
 
@@ -96,7 +114,7 @@ public class RabbitMqIT {
     }
 
     @Test
-    public void testRabbitMq() {
+    public void testRabbitMq() throws Exception {
 
         // consume record
         Awaitility.await()
@@ -104,5 +122,27 @@ public class RabbitMqIT {
                 .until(() -> messages.size() >= MESSAGE_COUNT);
 
         assertThat(messages.size()).isGreaterThanOrEqualTo(MESSAGE_COUNT);
+        messages.clear();
+
+        final JdbcConfiguration config = JdbcConfiguration.create()
+                .with("hostname", dbHostname)
+                .with("port", dbPort)
+                .with("user", dbUser)
+                .with("password", dbPassword)
+                .with("dbname", dbName)
+                .build();
+        try (PostgresConnection connection = new PostgresConnection(config, "Debezium Pulsar Test")) {
+            connection.execute(
+                    "INSERT INTO inventory.customers VALUES (10000, 'John', 'Doe', 'jdoe@example.org')",
+                    "DELETE FROM inventory.customers WHERE id=10000");
+        }
+
+        // consume INSERT, DELETE, null (tombstone)
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(RabbitMqTestConfigSource.waitForSeconds()))
+                .until(() -> messages.size() >= 3);
+
+        assertThat(messages.size()).isGreaterThanOrEqualTo(3);
+        assertThat(messages.get(2)).isEqualTo("default");
     }
 }
