@@ -7,7 +7,6 @@
 #
 # Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
 #
-
 LIB_PATH="lib/*"
 
 if [ "$OSTYPE" = "msys" ] || [ "$OSTYPE" = "cygwin" ]; then
@@ -17,11 +16,11 @@ else
 fi
 
 if [ -n "$EXTRA_CONNECTOR" ]; then
-  EXTRA_CONNECTOR_DIR="connectors/debezium-connector-${EXTRA_CONNECTOR}"
+  EXTRA_CONNECTOR=${EXTRA_CONNECTOR,,}
+  export EXTRA_CONNECTOR_DIR="connectors/debezium-connector-${EXTRA_CONNECTOR}"
 
   echo "Connector - ${EXTRA_CONNECTOR} loaded from ${EXTRA_CONNECTOR_DIR}"
 
-  LIB_PATH=$LIB_PATH$PATH_SEP"$EXTRA_CONNECTOR_DIR/*"
   if [ -f "${EXTRA_CONNECTOR_DIR}/jdk_java_options.sh" ]; then
     source "${EXTRA_CONNECTOR_DIR}/jdk_java_options.sh"
   fi
@@ -29,7 +28,7 @@ if [ -n "$EXTRA_CONNECTOR" ]; then
   EXTRA_CLASS_PATH=""
   if [ -f "${EXTRA_CONNECTOR_DIR}/extra_class_path.sh" ]; then
     source "${EXTRA_CONNECTOR_DIR}/extra_class_path.sh"
-    LIB_PATH=$LIB_PATH$PATH_SEP$EXTRA_CLASS_PATH
+    LIB_PATH=$EXTRA_CLASS_PATH$LIB_PATH
   fi
 fi
 

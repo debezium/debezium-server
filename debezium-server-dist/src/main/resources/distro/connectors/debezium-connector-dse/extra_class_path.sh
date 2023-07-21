@@ -1,1 +1,1 @@
-export EXTRA_CLASS_PATH="lib/slf4j-jboss-logmanager-2.0.0.Final.jar"$PATH_SEP"$DSE_HOME/resources/cassandra/lib/*"$PATH_SEP"$EXTRA_CONNECTOR/*"$PATH_SEP"$DSE_HOME/resources/cassandra/conf"$PATH_SEP"$DSE_HOME/lib/*"$PATH_SEP"$DSE_HOME/resources/solr/lib/*"$PATH_SEP
+export EXTRA_CLASS_PATH="lib/slf4j-jboss-logmanager-2.0.0.Final.jar"$PATH_SEP"$DSE_HOME/resources/cassandra/lib/*"$PATH_SEP"$EXTRA_CONNECTOR_DIR/*"$PATH_SEP"$DSE_HOME/resources/cassandra/conf"$PATH_SEP"$DSE_HOME/lib/*"$PATH_SEP"$DSE_HOME/resources/solr/lib/*"$PATH_SEP
