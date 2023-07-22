@@ -72,10 +72,15 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private static final String CONNECTION_STRING_FORMAT = "%s;EntityPath=%s";
 
     private EventHubProducerClient producer = null;
+    private EventHubsPartitionKeyCalculator partitionKeyCalculator = null;
 
     @Inject
     @CustomConsumerBuilder
     Instance<EventHubProducerClient> customProducer;
+
+    @Inject
+    Instance<EventHubsPartitionKeyCalculator> customPartitionKeyCalculator;
+    private boolean forceSinglePartitionMode = false;
 
     @PostConstruct
     void connect() {
@@ -86,6 +91,17 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             return;
         }
 
+        if (customPartitionKeyCalculator.isResolvable()) {
+            partitionKeyCalculator = customPartitionKeyCalculator.get();
+            LOGGER.info("Obtained custom Event Hubs partition key calculator '{}'",
+                    customPartitionKeyCalculator.get().getClass().getName());
+        }
+        else {
+            partitionKeyCalculator = new EventHubsDefaultPartitionKeyCalculatorImpl();
+            LOGGER.info("Using default Event Hubs partition key calculator '{}'",
+                    partitionKeyCalculator.getClass().getName());
+        }
+
         final Config config = ConfigProvider.getConfig();
         connectionString = config.getValue(PROP_CONNECTION_STRING_NAME, String.class);
         eventHubName = config.getValue(PROP_EVENTHUB_NAME, String.class);
@@ -93,6 +109,11 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         // optional config
         partitionID = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         partitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        LOGGER.trace("Using partitionID {} and partitionKey {}", partitionID, partitionKey);
+        if (partitionID != "" || partitionKey != "") {
+            forceSinglePartitionMode = true;
+            LOGGER.trace("Using single partition mode for Event Hub '{}' with partitionID {} and partitionKey {}", eventHubName, partitionID, partitionKey);
+        }
         maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
 
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
@@ -130,21 +151,36 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
         // Prepare CreateBatchOptions for N partitions
         HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
-        producer.getPartitionIds().stream().forEach(partitionId -> {
-            CreateBatchOptions op = new CreateBatchOptions().setPartitionId(partitionId);
-            if (maxBatchSize != 0) {
-                op.setMaximumSizeInBytes(maxBatchSize);
-            }
-            batchOptions.put(Integer.parseInt(partitionId), op);
-        });
-        // Prepare batches
         HashMap<Integer, EventDataBatch> batches = new HashMap<>();
         HashMap<Integer, ArrayList<Integer>> processedRecordIndices = new HashMap<>();
-        batchOptions.forEach((partitionId, batchOption) -> {
-            EventDataBatch batch = producer.createBatch(batchOption);
-            batches.put(partitionId, batch);
-            processedRecordIndices.put(partitionId, new ArrayList<>());
-        });
+
+        if (forceSinglePartitionMode) {
+            CreateBatchOptions op = new CreateBatchOptions().setPartitionId(partitionID);
+            if (partitionKey != "") {
+                op.setPartitionKey(partitionKey);
+            }
+            if (maxBatchSize.intValue() != 0) {
+                op.setMaximumSizeInBytes(maxBatchSize);
+            }
+            batchOptions.put(Integer.parseInt(partitionID), op);
+            batches.put(Integer.parseInt(partitionID), producer.createBatch(op));
+            processedRecordIndices.put(Integer.parseInt(partitionID), new ArrayList<>());
+        }
+        else {
+            producer.getPartitionIds().stream().forEach(partitionId -> {
+                CreateBatchOptions op = new CreateBatchOptions().setPartitionId(partitionId);
+                if (maxBatchSize != 0) {
+                    op.setMaximumSizeInBytes(maxBatchSize);
+                }
+                batchOptions.put(Integer.parseInt(partitionId), op);
+            });
+            // Prepare batches
+            batchOptions.forEach((partitionId, batchOption) -> {
+                EventDataBatch batch = producer.createBatch(batchOption);
+                batches.put(partitionId, batch);
+                processedRecordIndices.put(partitionId, new ArrayList<>());
+            });
+        }
 
         for (int recordIndex = 0; recordIndex < records.size();) {
             int start = recordIndex;
@@ -153,12 +189,14 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             // The inner loop adds as many records to the batch as possible, keeping track of the batch size
             for (; recordIndex < records.size(); recordIndex++) {
                 ChangeEvent<Object, Object> record = records.get(recordIndex);
-                LOGGER.trace("Received record '{}'", record.value());
+                LOGGER.trace("Received record with destination '{}'", record.destination());
+                LOGGER.trace("Received record with key '{}'", record.key());
+                LOGGER.trace("Received record with value '{}'", record.value());
                 if (null == record.value()) {
                     continue;
                 }
 
-                EventData eventData = null;
+                EventData eventData;
                 if (record.value() instanceof String) {
                     eventData = new EventData((String) record.value());
                 }
@@ -172,7 +210,13 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 }
 
                 // Derive the partition to send eventData to from the record.value().
-                Integer partitionId = derivePartitionIdFromRecordValue(record);
+                Integer partitionId;
+                if (forceSinglePartitionMode) {
+                    partitionId = Integer.parseInt(partitionID);
+                }
+                else {
+                    partitionId = derivePartitionIdFromRecordValue(record);
+                }
                 EventDataBatch batch = batches.get(partitionId);
 
                 try {
