@@ -41,9 +41,7 @@ public class TestUtils {
     }
 
     public static void waitBoolean(Supplier<Boolean> bool) {
-        Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds())).until(() -> {
-            return Boolean.TRUE.equals(bool.get());
-        });
+        Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds())).until(() -> Boolean.TRUE.equals(bool.get()));
     }
 
 }

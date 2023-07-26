@@ -3,12 +3,14 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis;
+package io.debezium.server.redis.functionaltests;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.server.redis.RedisMemoryThreshold;
+import io.debezium.server.redis.RedisStreamChangeConsumerConfig;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 

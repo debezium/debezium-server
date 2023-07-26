@@ -3,13 +3,17 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis;
+package io.debezium.server.redis.integrationtests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import io.debezium.server.redis.RedisSchemaHistory;
+import io.debezium.server.redis.TestUtils;
+import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
+import io.debezium.server.redis.profiles.RedisSchemaHistoryTestProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junitpioneer.jupiter.RetryingTest;
@@ -23,7 +27,6 @@ import io.debezium.relational.history.SchemaHistory;
 import io.debezium.relational.history.SchemaHistoryMetrics;
 import io.debezium.testing.testcontainers.MySqlTestResourceLifecycleManager;
 import io.debezium.util.Testing;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
 
@@ -39,7 +42,6 @@ import redis.clients.jedis.resps.StreamEntry;
  */
 @QuarkusIntegrationTest
 @TestProfile(RedisSchemaHistoryTestProfile.class)
-@QuarkusTestResource(RedisTestResourceLifecycleManager.class)
 public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
 
     private static final String STREAM_NAME = "metadata:debezium:schema_history";

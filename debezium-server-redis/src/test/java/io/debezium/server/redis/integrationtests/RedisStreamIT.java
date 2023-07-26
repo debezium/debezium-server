@@ -3,19 +3,21 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis;
+package io.debezium.server.redis.integrationtests;
 
 import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.server.redis.TestUtils;
+import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
+import io.debezium.server.redis.profiles.RedisStreamTestProfile;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.doc.FixFor;
 import io.debezium.util.Testing;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
 
@@ -33,7 +35,6 @@ import redis.clients.jedis.resps.StreamEntry;
  */
 @QuarkusIntegrationTest
 @TestProfile(RedisStreamTestProfile.class)
-@QuarkusTestResource(RedisTestResourceLifecycleManager.class)
 public class RedisStreamIT {
 
     /**

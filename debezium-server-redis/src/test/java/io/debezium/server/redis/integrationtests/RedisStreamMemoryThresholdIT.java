@@ -3,15 +3,17 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis;
+package io.debezium.server.redis.integrationtests;
 
 import static org.junit.Assert.assertTrue;
 
+import io.debezium.server.redis.TestUtils;
+import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
+import io.debezium.server.redis.profiles.RedisStreamMemoryThresholdTestProfile;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.util.Testing;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
 
@@ -20,7 +22,6 @@ import redis.clients.jedis.Jedis;
 
 @QuarkusIntegrationTest
 @TestProfile(RedisStreamMemoryThresholdTestProfile.class)
-@QuarkusTestResource(RedisTestResourceLifecycleManager.class)
 public class RedisStreamMemoryThresholdIT {
 
     @Test

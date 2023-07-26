@@ -3,12 +3,13 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis;
+package io.debezium.server.redis.lifecyclemanagers;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.debezium.server.redis.TestUtils;
 import org.testcontainers.containers.GenericContainer;
 
 import io.debezium.server.TestConfigSource;

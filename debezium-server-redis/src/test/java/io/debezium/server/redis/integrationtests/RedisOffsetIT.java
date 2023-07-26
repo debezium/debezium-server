@@ -3,18 +3,20 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis;
+package io.debezium.server.redis.integrationtests;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
 
+import io.debezium.server.redis.TestUtils;
+import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
+import io.debezium.server.redis.profiles.RedisOffsetTestProfile;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.doc.FixFor;
 import io.debezium.util.Testing;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
 
@@ -28,7 +30,6 @@ import redis.clients.jedis.Jedis;
  */
 @QuarkusIntegrationTest
 @TestProfile(RedisOffsetTestProfile.class)
-@QuarkusTestResource(RedisTestResourceLifecycleManager.class)
 public class RedisOffsetIT {
 
     private static final int MESSAGE_COUNT = 4;

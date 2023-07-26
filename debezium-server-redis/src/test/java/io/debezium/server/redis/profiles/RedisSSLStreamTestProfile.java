@@ -3,7 +3,7 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis;
+package io.debezium.server.redis.profiles;
 
 import java.net.URL;
 import java.util.Arrays;
@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.server.redis.lifecyclemanagers.RedisSSLTestResourceLifecycleManager;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.quarkus.test.junit.QuarkusTestProfile;
 
