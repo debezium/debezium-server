@@ -91,10 +91,10 @@ az eventhubs namespace create --name debezium-test --resource-group eventhubstes
 
 ### Create an Event Hub
 
-Create an Event Hub (equivalent to a topic) with `one` partition. Check the documentation for options on how do this using the [Azure Portal](https://docs.microsoft.com/azure/event-hubs/event-hubs-create#create-an-event-hub), [Azure CLI](https://docs.microsoft.com/azure/event-hubs/event-hubs-quickstart-cli#create-an-event-hub) etc. , e.g. on the CLI:
+Create an Event Hub (equivalent to a topic) with 10 partitions. Check the documentation for options on how do this using the [Azure Portal](https://docs.microsoft.com/azure/event-hubs/event-hubs-create#create-an-event-hub), [Azure CLI](https://docs.microsoft.com/azure/event-hubs/event-hubs-quickstart-cli#create-an-event-hub) etc. , e.g. on the CLI:
 
 ```shell
-az eventhubs eventhub create --name debezium-test-hub --resource-group eventhubstest --namespace-name debezium-test
+`az eventhubs eventhub create` --name debezium-test-hub --resource-group eventhubstest --namespace-name debezium-test --partition-count 10
 ```
 
 ### Build the module

@@ -6,6 +6,7 @@
 package io.debezium.server.eventhubs;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -58,6 +59,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     // maximum size for the batch of events (bytes)
     private static final String PROP_MAX_BATCH_SIZE = PROP_PREFIX + "maxbatchsize";
 
+    // Supports Struct nesting using dot notation.
+    public static final String PROP_PARTITIONING_SELECTOR = PROP_PREFIX + "partitioning.selector";
+    private static final List<String> PARTITIONING_SELECTOR_OPTIONS = Arrays.asList("destination", "key", "value");
+
+    public static final String PROP_PARTITIONING_FIELD = PROP_PREFIX + "partitioning.field";
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private String connectionString;
@@ -91,30 +98,11 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             return;
         }
 
-        if (customPartitionKeyCalculator.isResolvable()) {
-            partitionKeyCalculator = customPartitionKeyCalculator.get();
-            LOGGER.info("Obtained custom Event Hubs partition key calculator '{}'",
-                    customPartitionKeyCalculator.get().getClass().getName());
-        }
-        else {
-            partitionKeyCalculator = new EventHubsDefaultPartitionKeyCalculatorImpl();
-            LOGGER.info("Using default Event Hubs partition key calculator '{}'",
-                    partitionKeyCalculator.getClass().getName());
-        }
-
         final Config config = ConfigProvider.getConfig();
         connectionString = config.getValue(PROP_CONNECTION_STRING_NAME, String.class);
         eventHubName = config.getValue(PROP_EVENTHUB_NAME, String.class);
 
-        // optional config
-        partitionID = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
-        partitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
-        LOGGER.trace("Using partitionID {} and partitionKey {}", partitionID, partitionKey);
-        if (partitionID != "" || partitionKey != "") {
-            forceSinglePartitionMode = true;
-            LOGGER.trace("Using single partition mode for Event Hub '{}' with partitionID {} and partitionKey {}", eventHubName, partitionID, partitionKey);
-        }
-        maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
+        configurePartitioningOptions(config);
 
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
 
@@ -130,6 +118,36 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         // Retrieve available partition count for the EventHub
         partitionCount = (int) producer.getPartitionIds().stream().count();
         LOGGER.warn("Event Hub '{}' has {} partitions", producer.getEventHubName(), partitionCount);
+    }
+
+    private void configurePartitioningOptions(Config config) {
+        // optional config
+        partitionID = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
+        partitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        LOGGER.trace("Using partitionID {} and partitionKey {}", partitionID, partitionKey);
+        if (partitionID != "" || partitionKey != "") {
+            forceSinglePartitionMode = true;
+            LOGGER.trace("Using single partition mode for Event Hub '{}' with partitionID {} and partitionKey {}", eventHubName, partitionID, partitionKey);
+        }
+        maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
+
+        String partitioningSelector = config.getOptionalValue(PROP_PARTITIONING_SELECTOR, String.class).orElse("");
+        String partitioningField = config.getOptionalValue(PROP_PARTITIONING_FIELD, String.class).orElse("");
+        if (partitioningSelector != "" && !PARTITIONING_SELECTOR_OPTIONS.contains(partitioningSelector)) {
+            throw new DebeziumException("Invalid value for " + PROP_PARTITIONING_SELECTOR + " property: " + partitioningSelector);
+        }
+        partitionKeyCalculator = new EventHubsDefaultPartitionKeyCalculatorImpl(partitioningSelector, partitioningField);
+
+        if (customPartitionKeyCalculator.isResolvable()) {
+            partitionKeyCalculator = customPartitionKeyCalculator.get();
+            LOGGER.info("Obtained custom Event Hubs partition key calculator '{}'",
+                    customPartitionKeyCalculator.get().getClass().getName());
+        }
+        else {
+            partitionKeyCalculator = new EventHubsDefaultPartitionKeyCalculatorImpl(partitioningSelector, partitioningField);
+            LOGGER.info("Using default Event Hubs partition key calculator '{}'",
+                    partitionKeyCalculator.getClass().getName());
+        }
     }
 
     @PreDestroy
@@ -215,7 +233,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     partitionId = Integer.parseInt(partitionID);
                 }
                 else {
-                    partitionId = derivePartitionIdFromRecordValue(record);
+                    partitionId = this.partitionKeyCalculator.derivePartitionIdFromRecord(record, partitionCount);
                 }
                 EventDataBatch batch = batches.get(partitionId);
 

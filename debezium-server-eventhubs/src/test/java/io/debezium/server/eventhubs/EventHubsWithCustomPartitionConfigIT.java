@@ -34,6 +34,7 @@ import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 /**
  * Integration test that verifies basic reading from PostgreSQL database and
@@ -42,10 +43,11 @@ import io.quarkus.test.junit.QuarkusTest;
  * @author Abhishek Gupta
  */
 @QuarkusTest
+@TestProfile(EventHubsWithCustomPartitionConfigProfile.class)
 @QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
-public class EventHubsIT {
+public class EventHubsWithCustomPartitionConfigIT {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(EventHubsIT.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(EventHubsWithCustomPartitionConfigIT.class);
 
     private static final int MESSAGE_COUNT = 4;
     private static final String CONSUMER_GROUP = "$Default";
@@ -85,7 +87,7 @@ public class EventHubsIT {
     }
 
     @Test
-    public void testEventHubsWithFixedPartitionId() throws Exception {
+    public void testEventHubsWithCustomPartitionConfiguration() throws Exception {
         Testing.Print.enable();
 
         String finalConnectionString = String.format("%s;EntityPath=%s",
@@ -97,7 +99,7 @@ public class EventHubsIT {
         final List<PartitionEvent> expected = new ArrayList<>();
 
         Awaitility.await().atMost(Duration.ofSeconds(EventHubsTestConfigSource.waitForSeconds())).until(() -> {
-            IterableStream<PartitionEvent> events = consumer.receiveFromPartition("0", MESSAGE_COUNT,
+            IterableStream<PartitionEvent> events = consumer.receiveFromPartition("1", MESSAGE_COUNT,
                     EventPosition.latest());
 
             events.forEach(event -> expected.add(event));
