@@ -5,11 +5,8 @@
  */
 package io.debezium.server.eventhubs;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -25,10 +22,8 @@ import org.slf4j.LoggerFactory;
 
 import com.azure.core.amqp.exception.AmqpException;
 import com.azure.messaging.eventhubs.EventData;
-import com.azure.messaging.eventhubs.EventDataBatch;
 import com.azure.messaging.eventhubs.EventHubClientBuilder;
 import com.azure.messaging.eventhubs.EventHubProducerClient;
-import com.azure.messaging.eventhubs.models.CreateBatchOptions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -81,6 +76,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private EventHubProducerClient producer = null;
     private EventHubsPartitionKeyCalculator partitionKeyCalculator = null;
 
+    private BatchManager batchManager = null;
+
     @Inject
     @CustomConsumerBuilder
     Instance<EventHubProducerClient> customProducer;
@@ -102,12 +99,15 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         connectionString = config.getValue(PROP_CONNECTION_STRING_NAME, String.class);
         eventHubName = config.getValue(PROP_EVENTHUB_NAME, String.class);
 
+        maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
+
         configurePartitioningOptions(config);
 
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
 
         try {
             producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
+            batchManager = new BatchManager(producer, forceSinglePartitionMode, partitionID, partitionKey, maxBatchSize);
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -129,7 +129,6 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             forceSinglePartitionMode = true;
             LOGGER.trace("Using single partition mode for Event Hub '{}' with partitionID {} and partitionKey {}", eventHubName, partitionID, partitionKey);
         }
-        maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
 
         String partitioningSelector = config.getOptionalValue(PROP_PARTITIONING_SELECTOR, String.class).orElse("");
         String partitioningField = config.getOptionalValue(PROP_PARTITIONING_FIELD, String.class).orElse("");
@@ -167,38 +166,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             throws InterruptedException {
         LOGGER.trace("Event Hubs sink adapter processing change events");
 
-        // Prepare CreateBatchOptions for N partitions
-        HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
-        HashMap<Integer, EventDataBatch> batches = new HashMap<>();
-        HashMap<Integer, ArrayList<Integer>> processedRecordIndices = new HashMap<>();
-
-        if (forceSinglePartitionMode) {
-            CreateBatchOptions op = new CreateBatchOptions().setPartitionId(partitionID);
-            if (partitionKey != "") {
-                op.setPartitionKey(partitionKey);
-            }
-            if (maxBatchSize.intValue() != 0) {
-                op.setMaximumSizeInBytes(maxBatchSize);
-            }
-            batchOptions.put(Integer.parseInt(partitionID), op);
-            batches.put(Integer.parseInt(partitionID), producer.createBatch(op));
-            processedRecordIndices.put(Integer.parseInt(partitionID), new ArrayList<>());
-        }
-        else {
-            producer.getPartitionIds().stream().forEach(partitionId -> {
-                CreateBatchOptions op = new CreateBatchOptions().setPartitionId(partitionId);
-                if (maxBatchSize != 0) {
-                    op.setMaximumSizeInBytes(maxBatchSize);
-                }
-                batchOptions.put(Integer.parseInt(partitionId), op);
-            });
-            // Prepare batches
-            batchOptions.forEach((partitionId, batchOption) -> {
-                EventDataBatch batch = producer.createBatch(batchOption);
-                batches.put(partitionId, batch);
-                processedRecordIndices.put(partitionId, new ArrayList<>());
-            });
-        }
+        batchManager.initializeBatch(records, committer);
 
         for (int recordIndex = 0; recordIndex < records.size();) {
             int start = recordIndex;
@@ -235,26 +203,9 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 else {
                     partitionId = this.partitionKeyCalculator.derivePartitionIdFromRecord(record, partitionCount);
                 }
-                EventDataBatch batch = batches.get(partitionId);
 
                 try {
-                    if (!batch.tryAdd(eventData)) {
-                        if (batch.getCount() == 0) {
-                            // If we fail to add at least the very first event to the batch that is because
-                            // the event's size exceeds the maxBatchSize in which case we cannot safely
-                            // recover and dispatch the event, only option is to throw an exception.
-                            throw new DebeziumException("Event data is too large to fit into batch");
-                        }
-                        // reached the maximum allowed size for the batch
-                        LOGGER.trace("Maximum batch reached, dispatching {} events.", batch.getCount());
-
-                        // Max size reached, dispatch the batch to EventHub
-                        emitBatchToEventHub(records, committer, processedRecordIndices.get(partitionId), batch);
-                        // Renew the batch object so we can continue.
-                        batch = producer.createBatch(batchOptions.get(partitionId));
-                        batches.put(partitionId, batch);
-                        processedRecordIndices.put(partitionId, new ArrayList<>());
-                    }
+                    batchManager.sendEventToPartitionId(eventData, recordIndex, partitionId);
                 }
                 catch (IllegalArgumentException e) {
                     // thrown by tryAdd if event data is null
@@ -268,69 +219,11 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 catch (Exception e) {
                     throw new DebeziumException(e);
                 }
-
-                // Record the index of the record that was added to the batch.
-                processedRecordIndices.get(partitionId).add(recordIndex);
             }
         }
 
-        // All records have been processed, emit the final (non-full) batches.
-        batches.forEach((partitionId, batch) -> {
-            if (batch.getCount() > 0) {
-                LOGGER.trace("Dispatching {} events.", batch.getCount());
-                emitBatchToEventHub(records, committer, processedRecordIndices.get(partitionId), batch);
-            }
-        });
-
+        batchManager.closeAndEmitBatches();
         committer.markBatchFinished();
         LOGGER.trace("Batch marked finished");
-    }
-
-    private void emitBatchToEventHub(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer,
-                                     ArrayList<Integer> processedIndices, EventDataBatch batch) {
-        final int batchEventSize = batch.getCount();
-        if (batchEventSize > 0) {
-            try {
-                LOGGER.trace("Sending batch of {} events to Event Hubs", batchEventSize);
-                producer.send(batch);
-                LOGGER.trace("Sent record batch to Event Hubs");
-            }
-            catch (Exception e) {
-                throw new DebeziumException(e);
-            }
-
-            // this loop commits each record submitted in the event hubs batch
-            List<String> processedIndexesStrings = processedIndices.stream().map(Object::toString).collect(Collectors.toList());
-            LOGGER.trace("Marking records as processed: {}", String.join("; ", processedIndexesStrings));
-            processedIndices.forEach(
-                    index -> {
-                        ChangeEvent<Object, Object> record = records.get(index);
-                        try {
-                            committer.markProcessed(record);
-                            LOGGER.trace("Record marked processed");
-                        }
-                        catch (Exception e) {
-                            throw new DebeziumException(e);
-                        }
-                    });
-        }
-    }
-
-    private Integer derivePartitionIdFromRecordValue(ChangeEvent<Object, Object> record) {
-        try {
-            JsonNode message = MAPPER.readTree(record.value().toString());
-            String db = message.get("payload").get("source").get("db").asText();
-            String schema = message.get("payload").get("source").get("schema").asText();
-
-            String databaseName = String.format("%s.%s", db, schema);
-            LOGGER.info("Extracted databaseName from message: {}", databaseName);
-            Integer partition = Math.abs(databaseName.hashCode() % partitionCount);
-            LOGGER.info("Hashed databaseName to partition: {}", partition);
-
-            return partition;
-        }
-        catch (Exception e) {
-            throw new DebeziumException(e);
-        }
     }
 }
