@@ -78,8 +78,6 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     @CustomConsumerBuilder
     Instance<EventHubProducerClient> customProducer;
 
-    @Inject
-    Instance<EventHubsPartitionIdCalculator> customPartitionKeyCalculator;
     private boolean forceSinglePartitionMode = false;
 
     @PostConstruct
@@ -140,18 +138,10 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         if (partitioningSelector != "" && !PARTITIONING_SELECTOR_OPTIONS.contains(partitioningSelector)) {
             throw new DebeziumException("Invalid value for " + PROP_PARTITIONING_SELECTOR + " property: " + partitioningSelector);
         }
-        partitionKeyCalculator = new EventHubsDefaultPartitionIdCalculatorImpl(partitioningSelector, partitioningField);
 
-        if (customPartitionKeyCalculator.isResolvable()) {
-            partitionKeyCalculator = customPartitionKeyCalculator.get();
-            LOGGER.info("Obtained custom Event Hubs partition key calculator '{}'",
-                    customPartitionKeyCalculator.get().getClass().getName());
-        }
-        else {
-            partitionKeyCalculator = new EventHubsDefaultPartitionIdCalculatorImpl(partitioningSelector, partitioningField);
-            LOGGER.info("Using default Event Hubs partition key calculator '{}'",
-                    partitionKeyCalculator.getClass().getName());
-        }
+        partitionKeyCalculator = new EventHubsDefaultPartitionIdCalculatorImpl(partitioningSelector, partitioningField);
+        LOGGER.info("Using default Event Hubs partition key calculator '{}'",
+                partitionKeyCalculator.getClass().getName());
     }
 
     @PreDestroy
