@@ -120,6 +120,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         partitionID = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         partitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
         if (partitionID != "" || partitionKey != "") {
+            if (partitionID != "" && partitionKey != "") {
+                throw new DebeziumException(String.format("partitionID and partitionKey are both set. "
+                    + "Only one or the other can be used. partitionID: '%s'. partitionKey: '%s'",
+                    partitionID, partitionKey
+                    ));
+            }
             forceSinglePartitionMode = true;
             LOGGER.trace("Using single partition mode for Event Hub '{}' with partitionID {} and partitionKey {}", eventHubName, partitionID, partitionKey);
         }
