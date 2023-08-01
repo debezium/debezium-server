@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.azure.messaging.eventhubs.EventData;
-import com.azure.messaging.eventhubs.EventDataBatch;
 import com.azure.messaging.eventhubs.EventHubProducerClient;
 import com.azure.messaging.eventhubs.models.CreateBatchOptions;
 
@@ -31,9 +30,9 @@ public class BatchManager {
     private final Integer maxBatchSize;
 
     // Prepare CreateBatchOptions for N partitions
-    private HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
-    private HashMap<Integer, EventDataBatch> batches = new HashMap<>();
-    private HashMap<Integer, ArrayList<Integer>> processedRecordIndices = new HashMap<>();
+    private final HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
+    private final HashMap<Integer, EventDataBatchProxy> batches = new HashMap<>();
+    private final HashMap<Integer, ArrayList<Integer>> processedRecordIndices = new HashMap<>();
     private List<ChangeEvent<Object, Object>> records;
     private DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer;
 
@@ -60,7 +59,7 @@ public class BatchManager {
                 op.setMaximumSizeInBytes(maxBatchSize);
             }
             batchOptions.put(Integer.parseInt(partitionID), op);
-            batches.put(Integer.parseInt(partitionID), producer.createBatch(op));
+            batches.put(Integer.parseInt(partitionID), new EventDataBatchProxy(producer, op));
             processedRecordIndices.put(Integer.parseInt(partitionID), new ArrayList<>());
 
             return;
@@ -75,7 +74,7 @@ public class BatchManager {
         });
         // Prepare batches
         batchOptions.forEach((partitionId, batchOption) -> {
-            EventDataBatch batch = producer.createBatch(batchOption);
+            EventDataBatchProxy batch = new EventDataBatchProxy(producer, batchOption);
             batches.put(partitionId, batch);
             processedRecordIndices.put(partitionId, new ArrayList<>());
         });
@@ -92,13 +91,38 @@ public class BatchManager {
         });
     }
 
+    public void sendEventToPartitionId(EventData eventData, Integer recordIndex, Integer partitionId) {
+        EventDataBatchProxy batch = batches.get(partitionId);
+
+        if (!batch.tryAdd(eventData)) {
+            if (batch.getCount() == 0) {
+                // If we fail to add at least the very first event to the batch that is because
+                // the event's size exceeds the maxBatchSize in which case we cannot safely
+                // recover and dispatch the event, only option is to throw an exception.
+                throw new DebeziumException("Event data is too large to fit into batch");
+            }
+            // reached the maximum allowed size for the batch
+            LOGGER.trace("Maximum batch reached, dispatching {} events.", batch.getCount());
+
+            // Max size reached, dispatch the batch to EventHub
+            emitBatchToEventHub(records, committer, processedRecordIndices.get(partitionId), batch);
+            // Renew the batch object so we can continue.
+            batch = new EventDataBatchProxy(producer, batchOptions.get(partitionId));
+            batches.put(partitionId, batch);
+            processedRecordIndices.put(partitionId, new ArrayList<>());
+        }
+
+        // Record the index of the record that was added to the batch.
+        processedRecordIndices.get(partitionId).add(recordIndex);
+    }
+
     private void emitBatchToEventHub(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer,
-                                     ArrayList<Integer> processedIndices, EventDataBatch batch) {
+                                     ArrayList<Integer> processedIndices, EventDataBatchProxy batch) {
         final int batchEventSize = batch.getCount();
         if (batchEventSize > 0) {
             try {
                 LOGGER.trace("Sending batch of {} events to Event Hubs", batchEventSize);
-                producer.send(batch);
+                batch.emit();
                 LOGGER.trace("Sent record batch to Event Hubs");
             }
             catch (Exception e) {
@@ -120,30 +144,5 @@ public class BatchManager {
                         }
                     });
         }
-    }
-
-    public void sendEventToPartitionId(EventData eventData, Integer recordIndex, Integer partitionId) {
-        EventDataBatch batch = batches.get(partitionId);
-
-        if (!batch.tryAdd(eventData)) {
-            if (batch.getCount() == 0) {
-                // If we fail to add at least the very first event to the batch that is because
-                // the event's size exceeds the maxBatchSize in which case we cannot safely
-                // recover and dispatch the event, only option is to throw an exception.
-                throw new DebeziumException("Event data is too large to fit into batch");
-            }
-            // reached the maximum allowed size for the batch
-            LOGGER.trace("Maximum batch reached, dispatching {} events.", batch.getCount());
-
-            // Max size reached, dispatch the batch to EventHub
-            emitBatchToEventHub(records, committer, processedRecordIndices.get(partitionId), batch);
-            // Renew the batch object so we can continue.
-            batch = producer.createBatch(batchOptions.get(partitionId));
-            batches.put(partitionId, batch);
-            processedRecordIndices.put(partitionId, new ArrayList<>());
-        }
-
-        // Record the index of the record that was added to the batch.
-        processedRecordIndices.get(partitionId).add(recordIndex);
     }
 }
