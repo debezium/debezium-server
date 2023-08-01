@@ -24,7 +24,6 @@ import com.azure.core.amqp.exception.AmqpException;
 import com.azure.messaging.eventhubs.EventData;
 import com.azure.messaging.eventhubs.EventHubClientBuilder;
 import com.azure.messaging.eventhubs.EventHubProducerClient;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.debezium.DebeziumException;
 import io.debezium.engine.ChangeEvent;
@@ -58,8 +57,6 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private static final List<String> PARTITIONING_SELECTOR_OPTIONS = Arrays.asList("destination", "key", "value");
 
     public static final String PROP_PARTITIONING_FIELD = PROP_PREFIX + "partitioning.field";
-
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private String connectionString;
     private String eventHubName;
@@ -116,14 +113,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
         // Retrieve available partition count for the EventHub
         partitionCount = (int) producer.getPartitionIds().stream().count();
-        LOGGER.warn("Event Hub '{}' has {} partitions", producer.getEventHubName(), partitionCount);
+        LOGGER.trace("Event Hub '{}' has {} partitions available", producer.getEventHubName(), partitionCount);
     }
 
     private void configurePartitioningOptions(Config config) {
-        // optional config
         partitionID = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         partitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
-        LOGGER.trace("Using partitionID {} and partitionKey {}", partitionID, partitionKey);
         if (partitionID != "" || partitionKey != "") {
             forceSinglePartitionMode = true;
             LOGGER.trace("Using single partition mode for Event Hub '{}' with partitionID {} and partitionKey {}", eventHubName, partitionID, partitionKey);
@@ -174,9 +169,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             // The inner loop adds as many records to the batch as possible, keeping track of the batch size
             for (; recordIndex < records.size(); recordIndex++) {
                 ChangeEvent<Object, Object> record = records.get(recordIndex);
-                LOGGER.trace("Received record with destination '{}'", record.destination());
-                LOGGER.trace("Received record with key '{}'", record.key());
-                LOGGER.trace("Received record with value '{}'", record.value());
+
                 if (null == record.value()) {
                     continue;
                 }
