@@ -51,7 +51,10 @@ public class BatchManager {
         this.committer = committer;
 
         if (forceSinglePartitionMode) {
-            CreateBatchOptions op = new CreateBatchOptions().setPartitionId(partitionID);
+            CreateBatchOptions op = new CreateBatchOptions();
+            if (!partitionID.equals("") && !partitionID.equals("-1")) {
+                op.setPartitionId(partitionID);
+            }
             if (!partitionKey.equals("")) {
                 op.setPartitionKey(partitionKey);
             }

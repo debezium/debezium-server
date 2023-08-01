@@ -122,12 +122,17 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         if (partitionID != "" || partitionKey != "") {
             if (partitionID != "" && partitionKey != "") {
                 throw new DebeziumException(String.format("partitionID and partitionKey are both set. "
-                    + "Only one or the other can be used. partitionID: '%s'. partitionKey: '%s'",
-                    partitionID, partitionKey
-                    ));
+                        + "Only one or the other can be used. partitionID: '%s'. partitionKey: '%s'",
+                        partitionID, partitionKey));
             }
             forceSinglePartitionMode = true;
             LOGGER.trace("Using single partition mode for Event Hub '{}' with partitionID {} and partitionKey {}", eventHubName, partitionID, partitionKey);
+
+            // PartitionKey and PartitionID cannot be set simultaneously, but we'll need a partition index for batch
+            // management, so setting to -1 as a placeholder.
+            if (partitionKey != "") {
+                partitionID = "-1";
+            }
         }
 
         String partitioningSelector = config.getOptionalValue(PROP_PARTITIONING_SELECTOR, String.class).orElse("");
@@ -193,7 +198,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     continue;
                 }
 
-                // Derive the partition to send eventData to from the record.value().
+                // Derive the partition to send eventData to.
                 Integer partitionId;
                 if (forceSinglePartitionMode) {
                     partitionId = Integer.parseInt(partitionID);
