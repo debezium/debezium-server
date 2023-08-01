@@ -70,7 +70,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private static final String CONNECTION_STRING_FORMAT = "%s;EntityPath=%s";
 
     private EventHubProducerClient producer = null;
-    private EventHubsPartitionKeyCalculator partitionKeyCalculator = null;
+    private EventHubsPartitionIdCalculator partitionKeyCalculator = null;
 
     private BatchManager batchManager = null;
 
@@ -79,7 +79,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     Instance<EventHubProducerClient> customProducer;
 
     @Inject
-    Instance<EventHubsPartitionKeyCalculator> customPartitionKeyCalculator;
+    Instance<EventHubsPartitionIdCalculator> customPartitionKeyCalculator;
     private boolean forceSinglePartitionMode = false;
 
     @PostConstruct
@@ -140,7 +140,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         if (partitioningSelector != "" && !PARTITIONING_SELECTOR_OPTIONS.contains(partitioningSelector)) {
             throw new DebeziumException("Invalid value for " + PROP_PARTITIONING_SELECTOR + " property: " + partitioningSelector);
         }
-        partitionKeyCalculator = new EventHubsDefaultPartitionKeyCalculatorImpl(partitioningSelector, partitioningField);
+        partitionKeyCalculator = new EventHubsDefaultPartitionIdCalculatorImpl(partitioningSelector, partitioningField);
 
         if (customPartitionKeyCalculator.isResolvable()) {
             partitionKeyCalculator = customPartitionKeyCalculator.get();
@@ -148,7 +148,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     customPartitionKeyCalculator.get().getClass().getName());
         }
         else {
-            partitionKeyCalculator = new EventHubsDefaultPartitionKeyCalculatorImpl(partitioningSelector, partitioningField);
+            partitionKeyCalculator = new EventHubsDefaultPartitionIdCalculatorImpl(partitioningSelector, partitioningField);
             LOGGER.info("Using default Event Hubs partition key calculator '{}'",
                     partitionKeyCalculator.getClass().getName());
         }

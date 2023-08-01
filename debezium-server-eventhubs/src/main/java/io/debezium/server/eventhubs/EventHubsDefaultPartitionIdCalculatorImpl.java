@@ -21,8 +21,8 @@ import io.debezium.engine.ChangeEvent;
 /**
  * Simple partitionKey calculator based on the hashcode of record.destination().
  */
-public class EventHubsDefaultPartitionKeyCalculatorImpl implements EventHubsPartitionKeyCalculator {
-    private static final Logger LOGGER = LoggerFactory.getLogger(EventHubsDefaultPartitionKeyCalculatorImpl.class);
+public class EventHubsDefaultPartitionIdCalculatorImpl implements EventHubsPartitionIdCalculator {
+    private static final Logger LOGGER = LoggerFactory.getLogger(EventHubsDefaultPartitionIdCalculatorImpl.class);
     public static final String PARTITIONING_SELECTOR_DESTINATION = "destination";
     public static final String PARTITIONING_SELECTOR_KEY = "key";
     public static final String PARTITIONING_SELECTOR_VALUE = "value";
@@ -30,7 +30,7 @@ public class EventHubsDefaultPartitionKeyCalculatorImpl implements EventHubsPart
     private List<String> partitioningFieldPaths;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    public EventHubsDefaultPartitionKeyCalculatorImpl(String partitioningSelector, String partitioningField) {
+    public EventHubsDefaultPartitionIdCalculatorImpl(String partitioningSelector, String partitioningField) {
         this.partitioningSelector = partitioningSelector;
 
         if (!partitioningField.equals("")) {

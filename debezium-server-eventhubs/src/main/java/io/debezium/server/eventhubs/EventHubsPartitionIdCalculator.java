@@ -10,6 +10,6 @@ import io.debezium.engine.ChangeEvent;
 /**
  * Interface for calculating/deriving the partition key for a given record.
  */
-public interface EventHubsPartitionKeyCalculator {
+public interface EventHubsPartitionIdCalculator {
     Integer derivePartitionIdFromRecord(ChangeEvent<Object, Object> record, Integer partitionCount);
 }
