@@ -9,12 +9,12 @@ import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.Map;
 
-import io.debezium.server.redis.RedisMemoryThreshold;
-import io.debezium.server.redis.RedisStreamChangeConsumerConfig;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.config.Configuration;
+import io.debezium.server.redis.RedisMemoryThreshold;
+import io.debezium.server.redis.RedisStreamChangeConsumerConfig;
 import io.debezium.storage.redis.RedisClient;
 import io.debezium.util.Collect;
 

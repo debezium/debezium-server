@@ -9,11 +9,11 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
 
+import org.junit.jupiter.api.Test;
+
 import io.debezium.server.redis.TestUtils;
 import io.debezium.server.redis.lifecyclemanagers.RedisSSLTestResourceLifecycleManager;
 import io.debezium.server.redis.profiles.RedisSSLStreamTestProfile;
-import org.junit.jupiter.api.Test;
-
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
 

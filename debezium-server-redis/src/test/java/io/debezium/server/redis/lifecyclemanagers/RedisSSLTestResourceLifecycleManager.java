@@ -9,11 +9,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import io.debezium.server.redis.TestUtils;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 
 import io.debezium.server.TestConfigSource;
+import io.debezium.server.redis.TestUtils;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 

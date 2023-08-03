@@ -1,23 +1,25 @@
 package io.debezium.server.redis.integrationtests;
 
+import static io.debezium.server.redis.profiles.RedisNullValueTestProfile.NULL_VALUE_REPLACEMENT;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.Test;
+
 import io.debezium.server.redis.TestUtils;
 import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
 import io.debezium.server.redis.profiles.RedisNullValueTestProfile;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
-import org.junit.jupiter.api.Test;
+
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.resps.StreamEntry;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import static io.debezium.server.redis.profiles.RedisNullValueTestProfile.NULL_VALUE_REPLACEMENT;
-import static org.assertj.core.api.Assertions.assertThat;
 
 @QuarkusIntegrationTest
 @TestProfile(RedisNullValueTestProfile.class)

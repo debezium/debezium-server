@@ -1,11 +1,13 @@
 package io.debezium.server.redis.integrationtests;
 
+import org.junit.jupiter.api.Test;
+
 import io.debezium.server.redis.TestUtils;
 import io.debezium.server.redis.lifecyclemanagers.RedisAuthTestLifecycleManager;
 import io.debezium.server.redis.profiles.RedisAuthTestProfile;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
-import org.junit.jupiter.api.Test;
+
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;

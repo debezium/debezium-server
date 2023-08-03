@@ -1,18 +1,19 @@
 package io.debezium.server.redis.lifecyclemanagers;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.GenericContainer;
+
 import io.debezium.server.TestConfigSource;
 import io.debezium.server.redis.TestUtils;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
-import lombok.SneakyThrows;
-import org.testcontainers.containers.BindMode;
-import org.testcontainers.containers.GenericContainer;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.SneakyThrows;
 
 public class RedisAuthTestLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
@@ -44,18 +45,7 @@ public class RedisAuthTestLifecycleManager implements QuarkusTestResourceLifecyc
         Testing.Files.delete(TestConfigSource.OFFSET_STORE_PATH);
         Testing.Files.createTestingFile(TestConfigSource.OFFSET_STORE_PATH);
 
-        Map<String, String> params = new ConcurrentHashMap<>();
-        params.put("debezium.sink.type", "redis");
-        params.put("debezium.sink.redis.user", "debezium");
-        params.put("debezium.sink.redis.password", "dbz");
-        params.put("debezium.sink.redis.address", RedisAuthTestLifecycleManager.getRedisContainerAddress());
-        params.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
-        params.put("debezium.source.offset.flush.interval.ms", "0");
-        params.put("debezium.source.topic.prefix", "testc");
-        params.put("debezium.source.schema.include.list", "inventory");
-        params.put("debezium.source.table.include.list", "inventory.customers,inventory.redis_test,inventory.redis_test2");
-        params.put("debezium.source.offset.storage.file.filename", TestConfigSource.OFFSET_STORE_PATH.toString());
-        return params;
+        return Map.of("debezium.sink.redis.address", RedisAuthTestLifecycleManager.getRedisContainerAddress());
     }
 
     @Override
@@ -70,8 +60,7 @@ public class RedisAuthTestLifecycleManager implements QuarkusTestResourceLifecyc
     }
 
     public static String getRedisContainerAddress() {
-//        start(true);
+        // start(true);
         return String.format("%s:%d", container.getContainerIpAddress(), container.getMappedPort(REDIS_PORT));
     }
 }
-

@@ -10,10 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import io.debezium.server.redis.RedisSchemaHistory;
-import io.debezium.server.redis.TestUtils;
-import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
-import io.debezium.server.redis.profiles.RedisSchemaHistoryTestProfile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junitpioneer.jupiter.RetryingTest;
@@ -25,6 +21,10 @@ import io.debezium.doc.FixFor;
 import io.debezium.relational.history.AbstractSchemaHistoryTest;
 import io.debezium.relational.history.SchemaHistory;
 import io.debezium.relational.history.SchemaHistoryMetrics;
+import io.debezium.server.redis.RedisSchemaHistory;
+import io.debezium.server.redis.TestUtils;
+import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
+import io.debezium.server.redis.profiles.RedisSchemaHistoryTestProfile;
 import io.debezium.testing.testcontainers.MySqlTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.junit.QuarkusIntegrationTest;

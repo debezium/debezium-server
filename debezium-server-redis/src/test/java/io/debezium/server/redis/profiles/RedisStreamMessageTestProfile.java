@@ -5,12 +5,12 @@
  */
 package io.debezium.server.redis.profiles;
 
-import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
-import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
+import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 
 public class RedisStreamMessageTestProfile extends RedisStreamTestProfile {
     @Override

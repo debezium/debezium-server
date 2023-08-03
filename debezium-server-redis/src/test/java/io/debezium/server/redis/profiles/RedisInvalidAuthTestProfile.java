@@ -10,7 +10,7 @@ import io.debezium.server.redis.lifecyclemanagers.RedisAuthTestLifecycleManager;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.quarkus.test.junit.QuarkusTestProfile;
 
-public class RedisAuthTestProfile implements QuarkusTestProfile {
+public class RedisInvalidAuthTestProfile implements QuarkusTestProfile {
     @Override
     public List<TestResourceEntry> testResources() {
         return Arrays.asList(new TestResourceEntry(RedisAuthTestLifecycleManager.class),
@@ -23,7 +23,7 @@ public class RedisAuthTestProfile implements QuarkusTestProfile {
         params.put("debezium.sink.type", "redis");
         params.put("debezium.sink.redis.user", "debezium");
 
-        params.put("debezium.sink.redis.password", "dbz");
+        params.put("debezium.sink.redis.password", "forgottenPass");
 
         params.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         params.put("debezium.source.offset.flush.interval.ms", "0");

@@ -9,13 +9,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
 
-import io.debezium.server.redis.TestUtils;
-import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
-import io.debezium.server.redis.profiles.RedisOffsetTestProfile;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.doc.FixFor;
+import io.debezium.server.redis.TestUtils;
+import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
+import io.debezium.server.redis.profiles.RedisOffsetTestProfile;
 import io.debezium.util.Testing;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;

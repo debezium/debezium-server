@@ -11,11 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.Test;
+
 import io.debezium.server.redis.TestUtils;
 import io.debezium.server.redis.lifecyclemanagers.RedisTestResourceLifecycleManager;
 import io.debezium.server.redis.profiles.RedisStreamMessageTestProfile;
-import org.junit.jupiter.api.Test;
-
 import io.debezium.util.Testing;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
