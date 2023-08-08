@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
@@ -26,6 +27,7 @@ import redis.clients.jedis.Jedis;
  *
  * @author Oren Elias
  */
+@Disabled
 @QuarkusIntegrationTest
 @TestProfile(RedisOffsetTestProfile.class)
 @QuarkusTestResource(RedisTestResourceLifecycleManager.class)

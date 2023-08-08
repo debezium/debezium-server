@@ -10,6 +10,6 @@ public final class TestProperties {
         // intentionally private
     }
 
-    public static final String DEBEZIUM_VERSION = System.getProperty("test.debezium.version");
-    public static final String DEBEZIUM_SERVER_IMAGE_GROUP = System.getProperty("test.quarkus.container-image.group");
+    public static final String DEBEZIUM_VERSION = System.getProperty("test.version.debezium");
+    public static final String DEBEZIUM_SERVER_IMAGE_GROUP = System.getProperty("test.server.image.group");
 }

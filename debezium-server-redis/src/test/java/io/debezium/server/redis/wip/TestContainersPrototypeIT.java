@@ -5,44 +5,40 @@
  */
 package io.debezium.server.redis.wip;
 
-import static io.debezium.server.redis.RedisTestResourceLifecycleManager.REDIS_PORT;
+import static io.debezium.server.redis.wip.TestConstants.POSTGRES_DATABASE;
+import static io.debezium.server.redis.wip.TestConstants.POSTGRES_IMAGE;
+import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PASSWORD;
+import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PORT;
+import static io.debezium.server.redis.wip.TestConstants.POSTGRES_USER;
+import static io.debezium.server.redis.wip.TestConstants.REDIS_IMAGE;
+import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
 import static io.debezium.server.redis.wip.TestProperties.DEBEZIUM_SERVER_IMAGE_GROUP;
 import static io.debezium.server.redis.wip.TestProperties.DEBEZIUM_VERSION;
-import static io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager.POSTGRES_DBNAME;
-import static io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager.POSTGRES_PASSWORD;
-import static io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager.POSTGRES_PORT;
-import static io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager.POSTGRES_USER;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.testcontainers.containers.output.OutputFrame.OutputType.STDOUT;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-
-import io.debezium.server.redis.RedisTestResourceLifecycleManager;
 import io.debezium.server.redis.TestUtils;
-import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 
 public class TestContainersPrototypeIT {
 
-    private final PostgresTestResourceLifecycleManager postgres = new PostgresTestResourceLifecycleManager();
-    private final RedisTestResourceLifecycleManager redis = new RedisTestResourceLifecycleManager();
+    private final TestContainersResource postgres = new TestContainersResource(POSTGRES_IMAGE, POSTGRES_PORT,
+            List.of("POSTGRES_USER=" + POSTGRES_USER,
+                    "POSTGRES_PASSWORD=" + POSTGRES_PASSWORD,
+                    "POSTGRES_DB=" + POSTGRES_DATABASE,
+                    "POSTGRES_INITDB_ARGS=\"-E UTF8\"",
+                    "LANG=en_US.utf8"));
+
+    private final TestContainersResource redis = new TestContainersResource(REDIS_IMAGE, REDIS_PORT, List.of());
 
     @BeforeEach
     public void setUp() {
@@ -58,58 +54,60 @@ public class TestContainersPrototypeIT {
 
     @Test
     public void runServerContainer() throws InterruptedException, IOException {
-        try (
-                GenericContainer<?> server = new GenericContainer<>(DEBEZIUM_SERVER_IMAGE_GROUP + "/debezium-server-redis:" + DEBEZIUM_VERSION)
-                        .waitingFor(Wait.forLogMessage(".*debezium.*", 1))) {
+        TestContainersResource server = new TestContainersResource(DEBEZIUM_SERVER_IMAGE_GROUP + "/debezium-server-redis:" + DEBEZIUM_VERSION, 8080,
+                List.of("debezium.sink.type=redis",
+                        "debezium.sink.redis.address=" + getContainerIp(redis.getContainer()) + ":" + REDIS_PORT,
+                        "debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector",
+                        "debezium.source.offset.flush.interval.ms=0",
+                        "debezium.source.topic.prefix=testc",
+                        "debezium.source.schema.include.list=inventory",
+                        "debezium.source.database.hostname=" + getContainerIp(postgres.getContainer()),
+                        "debezium.source.database.port=" + POSTGRES_PORT,
+                        "debezium.source.database.user=" + POSTGRES_USER,
+                        "debezium.source.database.password=" + POSTGRES_PASSWORD,
+                        "debezium.source.database.dbname=" + POSTGRES_DATABASE,
+                        "debezium.source.offset.storage.file.filename=" + "offset.dat"));
 
-            server.setEnv(List.of("debezium.sink.type=redis",
-                    "debezium.sink.redis.address=" + getContainerIp(RedisTestResourceLifecycleManager.getContainer()) + ":" + REDIS_PORT,
-                    "debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector",
-                    "debezium.source.offset.flush.interval.ms=0",
-                    "debezium.source.topic.prefix=testc",
-                    "debezium.source.schema.include.list=inventory",
-                    "debezium.source.database.hostname=" + getContainerIp(PostgresTestResourceLifecycleManager.getContainer()),
-                    "debezium.source.database.port=" + POSTGRES_PORT,
-                    "debezium.source.database.user=" + POSTGRES_USER,
-                    "debezium.source.database.password=" + POSTGRES_PASSWORD,
-                    "debezium.source.database.dbname=" + POSTGRES_DBNAME,
-                    "debezium.source.offset.storage.file.filename=" + "/offset.dat"));
-            server.start();
-            Jedis jedis = new Jedis(HostAndPort.from(RedisTestResourceLifecycleManager.getRedisContainerAddress()));
-            final int MESSAGE_COUNT = 4;
-            final String STREAM_NAME = "testc.inventory.customers";
+        server.start();
+        Jedis jedis = new Jedis(HostAndPort.from(getRedisContainerAddress(redis)));
+        final int MESSAGE_COUNT = 4;
+        final String STREAM_NAME = "testc.inventory.customers";
 
-            TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, MESSAGE_COUNT);
-            assertThat(server.getLogs(STDOUT)).contains("inventory.customers");
+        TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, MESSAGE_COUNT);
+        assertThat(server.getStandardOutput()).contains("inventory.customers");
 
-            PostgresTestResourceLifecycleManager.getContainer().execInContainer("psql",
-                    "-U", PostgresTestResourceLifecycleManager.POSTGRES_USER,
-                    "-d", PostgresTestResourceLifecycleManager.POSTGRES_DBNAME,
-                    "-c", "INSERT INTO inventory.customers VALUES (1005, 'aaa','aaaa','aa@example.com')");
+        postgres.getContainer().execInContainer("psql",
+                "-U", POSTGRES_USER,
+                "-d", POSTGRES_DATABASE,
+                "-c", "INSERT INTO inventory.customers VALUES (1005, 'aaa','aaaa','aa@example.com')");
 
-            TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, MESSAGE_COUNT + 1);
-            System.out.println(server.getLogs(STDOUT));
-            server.stop();
-        }
+        TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, MESSAGE_COUNT + 1);
+        System.out.println(server.getStandardOutput());
+        server.stop();
     }
 
-    private void printLogs(GenericContainer<?> container) {
-        String logs = container.getLogs();
-        Arrays.asList(logs.split("\n")).forEach(
-                l -> {
-                    if (l.startsWith("{")) {
-                        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-                        JsonElement el = JsonParser.parseString(l).getAsJsonObject().get("message");
-                        String jsonString = gson.toJson(el);
-                        System.out.println(jsonString);
-                    }
-                    else {
-                        System.out.println(l);
-                    }
-                });
+    @Test
+    public void shouldFailWithIncorrectRedisAddress() {
+        TestContainersResource server = new TestContainersResource(DEBEZIUM_SERVER_IMAGE_GROUP + "/debezium-server-redis:" + DEBEZIUM_VERSION, 8080,
+                List.of("debezium.sink.type=redis",
+                        "debezium.sink.redis.address=" + getContainerIp(redis.getContainer()) + ":" + 1000, // Incorrect port
+                        "debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector",
+                        "debezium.source.offset.flush.interval.ms=0",
+                        "debezium.source.topic.prefix=testc",
+                        "debezium.source.schema.include.list=inventory",
+                        "debezium.source.database.hostname=" + getContainerIp(postgres.getContainer()),
+                        "debezium.source.database.port=" + POSTGRES_PORT,
+                        "debezium.source.database.user=" + POSTGRES_USER,
+                        "debezium.source.database.password=" + POSTGRES_PASSWORD,
+                        "debezium.source.database.dbname=" + POSTGRES_DATABASE,
+                        "debezium.source.offset.storage.file.filename=" + "offset.dat"));
+
+        server.start();
+        assertThat(server.getStandardOutput()).contains("Failed to connect to any host resolved for DNS name");
+        server.stop();
     }
 
-    private String getContainerIp(GenericContainer<?> container) {
+    private static String getContainerIp(GenericContainer<?> container) {
         return container
                 .getContainerInfo()
                 .getNetworkSettings()
@@ -122,9 +120,7 @@ public class TestContainersPrototypeIT {
                 .getIpAddress();
     }
 
-    private String getTargetPath() throws URISyntaxException {
-        return Paths.get(getClass().getResource("/").toURI()).getParent().toString();
+    public static String getRedisContainerAddress(TestContainersResource resource) {
+        return String.format("%s:%d", getContainerIp(resource.getContainer()), resource.getPort());
     }
-
-    ;
 }
