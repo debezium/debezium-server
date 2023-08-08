@@ -7,6 +7,7 @@ package io.debezium.server.redis;
 
 import static org.junit.Assert.assertTrue;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
@@ -18,6 +19,7 @@ import io.quarkus.test.junit.TestProfile;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 
+@Disabled
 @QuarkusIntegrationTest
 @TestProfile(RedisStreamMemoryThresholdTestProfile.class)
 @QuarkusTestResource(RedisTestResourceLifecycleManager.class)

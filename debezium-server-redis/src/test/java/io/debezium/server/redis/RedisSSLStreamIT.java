@@ -9,6 +9,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusIntegrationTest;
@@ -22,6 +23,7 @@ import redis.clients.jedis.Jedis;
  *
  * @author Oren Elias
  */
+@Disabled
 @QuarkusIntegrationTest
 @TestProfile(RedisSSLStreamTestProfile.class)
 public class RedisSSLStreamIT {

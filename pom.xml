@@ -23,6 +23,8 @@
     <properties>
         <!-- Debezium parent -->
         <version.debezium>${project.version}</version.debezium>
+        <quarkus.container-image.build>true</quarkus.container-image.build>
+        <quarkus.container-image.group>${artifactId}</quarkus.container-image.group>
     </properties>
 
     <repositories>

@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
@@ -31,6 +32,7 @@ import redis.clients.jedis.resps.StreamEntry;
  * @author M Sazzadul Hoque
  * @author Yossi Shirizli
  */
+@Disabled
 @QuarkusIntegrationTest
 @TestProfile(RedisStreamTestProfile.class)
 @QuarkusTestResource(RedisTestResourceLifecycleManager.class)

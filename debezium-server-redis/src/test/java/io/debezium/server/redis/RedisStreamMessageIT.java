@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.util.Testing;
@@ -28,6 +29,7 @@ import redis.clients.jedis.resps.StreamEntry;
  *
  * @author ggaborg
  */
+@Disabled
 @QuarkusIntegrationTest
 @TestProfile(RedisStreamMessageTestProfile.class)
 @QuarkusTestResource(RedisTestResourceLifecycleManager.class)

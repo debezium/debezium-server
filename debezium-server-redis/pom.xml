@@ -11,6 +11,10 @@
     <name>Debezium Server Redis Sink Adapter</name>
     <packaging>jar</packaging>
 
+    <properties>
+        <quarkus.jib.jvm-entrypoint>java</quarkus.jib.jvm-entrypoint>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.debezium</groupId>
@@ -28,6 +32,10 @@
         </dependency>
 
         <!-- Testing -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-container-image-jib</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5</artifactId>
@@ -143,6 +151,10 @@
                         <test.type>IT</test.type>
                     </systemProperties>
                     <runOrder>${runOrder}</runOrder>
+                    <systemPropertyVariables>
+                        <test.version.debezium>${version.debezium}</test.version.debezium>
+                        <test.server.image.group>${quarkus.container-image.group}</test.server.image.group>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
