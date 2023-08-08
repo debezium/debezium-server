@@ -12,4 +12,5 @@ public final class TestProperties {
 
     public static final String DEBEZIUM_VERSION = System.getProperty("test.version.debezium");
     public static final String DEBEZIUM_SERVER_IMAGE_GROUP = System.getProperty("test.server.image.group");
+    public static final String DEBEZIUM_SERVER_IMAGE = DEBEZIUM_SERVER_IMAGE_GROUP + "/debezium-server-redis:" + DEBEZIUM_VERSION;
 }

@@ -16,5 +16,4 @@ public class TestConstants {
     // REDIS
     public static final String REDIS_IMAGE = "redis";
     public static final int REDIS_PORT = 6379;
-
 }
