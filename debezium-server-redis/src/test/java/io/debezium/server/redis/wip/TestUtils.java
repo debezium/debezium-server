@@ -6,6 +6,8 @@
 package io.debezium.server.redis.wip;
 
 import static io.debezium.server.redis.wip.TestConstants.POSTGRES_DATABASE;
+import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PASSWORD;
+import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PORT;
 import static io.debezium.server.redis.wip.TestConstants.POSTGRES_USER;
 import static org.awaitility.Awaitility.await;
 
@@ -15,7 +17,13 @@ import java.util.concurrent.TimeUnit;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.output.OutputFrame;
 
-public class RenameMe_TestUtils {
+import io.debezium.connector.postgresql.connection.PostgresConnection;
+import io.debezium.jdbc.JdbcConfiguration;
+import io.debezium.server.TestConfigSource;
+
+import redis.clients.jedis.Jedis;
+
+public class TestUtils {
     public static void waitForContainerLog(GenericContainer<?> container, String expectedLog) {
         await()
                 .atMost(20, TimeUnit.SECONDS)
@@ -52,4 +60,28 @@ public class RenameMe_TestUtils {
                 "-d", POSTGRES_DATABASE,
                 "-c", "INSERT INTO inventory.customers VALUES (default,'" + firstName + "','" + lastName + "','" + email + "')");
     }
+
+    public static PostgresConnection getPostgresConnection(TestContainersResource containersResource) {
+        return new PostgresConnection(JdbcConfiguration.create()
+                .with("user", POSTGRES_USER)
+                .with("password", POSTGRES_PASSWORD)
+                .with("dbname", POSTGRES_DATABASE)
+                .with("hostname", containersResource.getContainerIp())
+                .with("port", POSTGRES_PORT)
+                .build(), "Debezium Redis Test");
+    }
+
+    public static void awaitStreamLengthGte(Jedis jedis, String streamName, int expectedLength) {
+        await()
+                .atMost(TestConfigSource.waitForSeconds(), TimeUnit.SECONDS)
+                .until(() -> jedis.xlen(streamName) >= expectedLength);
+
+    }
+
+    public static void awaitStreamLength(Jedis jedis, String streamName, int expectedLength) {
+        await()
+                .atMost(TestConfigSource.waitForSeconds(), TimeUnit.SECONDS)
+                .until(() -> jedis.xlen(streamName) == expectedLength);
+    }
+
 }
