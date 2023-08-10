@@ -32,13 +32,13 @@ public class DebeziumServerConfigBuilder {
                 .collect(Collectors.toList());
     }
 
-    public Map<String, String> baseRedisConfig(TestContainersResource redis) {
+    public Map<String, String> baseRedisConfig(DebeziumTestContainerWrapper redis) {
         return Map.of(
                 "debezium.sink.type", "redis",
                 "debezium.sink.redis.address", redis.getContainerIp() + ":" + REDIS_PORT);
     }
 
-    public Map<String, String> basePostgresConfig(TestContainersResource postgres) {
+    public Map<String, String> basePostgresConfig(DebeziumTestContainerWrapper postgres) {
         return Map.of("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector",
                 "debezium.source.offset.flush.interval.ms", "0",
                 "debezium.source.topic.prefix", "testc",
@@ -51,7 +51,7 @@ public class DebeziumServerConfigBuilder {
                 "debezium.source.offset.storage.file.filename", "offset.dat");
     }
 
-    public DebeziumServerConfigBuilder withBaseConfig(TestContainersResource redis, TestContainersResource postgres) {
+    public DebeziumServerConfigBuilder withBaseConfig(DebeziumTestContainerWrapper redis, DebeziumTestContainerWrapper postgres) {
         config.putAll(baseRedisConfig(redis));
         config.putAll(basePostgresConfig(postgres));
         return this;

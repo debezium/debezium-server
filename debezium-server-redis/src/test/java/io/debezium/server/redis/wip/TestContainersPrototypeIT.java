@@ -5,28 +5,15 @@
  */
 package io.debezium.server.redis.wip;
 
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_DATABASE;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_IMAGE;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PASSWORD;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PORT;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_USER;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_IMAGE;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
-import static io.debezium.server.redis.wip.TestProperties.DEBEZIUM_SERVER_IMAGE;
 import static io.debezium.server.redis.wip.TestUtils.awaitStreamLength;
-import static io.debezium.server.redis.wip.TestUtils.awaitStreamLengthGte;
 import static io.debezium.server.redis.wip.TestUtils.getPostgresConnection;
-import static io.debezium.server.redis.wip.TestUtils.getRedisContainerAddress;
 import static io.debezium.server.redis.wip.TestUtils.insertCustomerToPostgres;
 import static io.debezium.server.redis.wip.TestUtils.waitForContainerLog;
 import static io.debezium.server.redis.wip.TestUtils.waitForContainerStop;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.util.List;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,60 +21,21 @@ import org.slf4j.LoggerFactory;
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.doc.FixFor;
 
-import redis.clients.jedis.HostAndPort;
-import redis.clients.jedis.Jedis;
-
-public class TestContainersPrototypeIT {
-
+public class TestContainersPrototypeIT extends TestContainersRedisTestBase {
     private static final Logger LOGGER = LoggerFactory.getLogger(TestContainersPrototypeIT.class);
-
-    private final TestContainersResource postgres = TestContainersResource.builder()
-            .withName("postgres")
-            .withImage(POSTGRES_IMAGE)
-            .withPort(POSTGRES_PORT)
-            .withEnv(List.of("POSTGRES_USER=" + POSTGRES_USER,
-                    "POSTGRES_PASSWORD=" + POSTGRES_PASSWORD,
-                    "POSTGRES_DB=" + POSTGRES_DATABASE,
-                    "POSTGRES_INITDB_ARGS=\"-E UTF8\"",
-                    "LANG=en_US.utf8"))
-            .build();
-
-    private final TestContainersResource redis = TestContainersResource.builder()
-            .withName("redis")
-            .withImage(REDIS_IMAGE)
-            .withPort(REDIS_PORT)
-            .build();
-
-    private final TestContainersResource server = TestContainersResource.builder()
-            .withName("debezium server")
-            .withImage(DEBEZIUM_SERVER_IMAGE)
-            .build();
-
-    @BeforeEach
-    public void setUp() {
-        postgres.start();
-        redis.start();
-    }
-
-    @AfterEach
-    public void tearDown() {
-        server.stop();
-        postgres.stop();
-        redis.stop();
-    }
 
     @Test
     public void shouldStreamChanges() throws InterruptedException, IOException {
         server.setEnv(new DebeziumServerConfigBuilder().withBaseConfig(redis, postgres).build());
         server.start();
-        Jedis jedis = new Jedis(HostAndPort.from(getRedisContainerAddress(redis)));
+
         final int MESSAGE_COUNT = 4;
         final String STREAM_NAME = "testc.inventory.customers";
 
         awaitStreamLength(jedis, STREAM_NAME, MESSAGE_COUNT);
         assertThat(server.getStandardOutput()).contains("inventory.customers");
 
-        insertCustomerToPostgres(postgres.getContainer(), "Sergei", "Savage", "sesa@email.com");
+        insertCustomerToPostgres(postgres, "Sergei", "Savage", "sesa@email.com");
 
         awaitStreamLength(jedis, STREAM_NAME, MESSAGE_COUNT + 1);
     }
@@ -98,21 +46,23 @@ public class TestContainersPrototypeIT {
                 .withBaseConfig(redis, postgres)
                 .withValue("debezium.sink.redis.address", redis.getContainerIp() + ":" + 1000)
                 .build());
-
         server.start();
-        waitForContainerLog(server.getContainer(), "Failed to connect to any host resolved for DNS name");
-        waitForContainerStop(server.getContainer());
+
+        waitForContainerLog(server, "Failed to connect to any host resolved for DNS name");
+        waitForContainerStop(server);
     }
 
     @Test
     @FixFor("DBZ-4510")
     public void testRedisConnectionRetry() throws Exception {
-        server.setEnv(new DebeziumServerConfigBuilder().withBaseConfig(redis, postgres).build());
+        final int SOCKET_TIMEOUT = 4000;
+        server.setEnv(new DebeziumServerConfigBuilder().withBaseConfig(redis, postgres)
+                .withValue("debezium.sink.redis.socket.timeout.ms", String.valueOf(SOCKET_TIMEOUT))
+                .build());
         server.start();
 
         final int MESSAGE_COUNT = 5;
         final String STREAM_NAME = "testc.inventory.redis_test";
-        Jedis jedis = new Jedis(HostAndPort.from(getRedisContainerAddress(redis)));
         redis.pause();
 
         final PostgresConnection connection = getPostgresConnection(postgres);
@@ -126,10 +76,9 @@ public class TestContainersPrototypeIT {
                 "INSERT INTO inventory.redis_test VALUES (5)");
         connection.close();
 
-        LOGGER.info("Sleeping for 3 seconds to simulate no connection errors");
-        Thread.sleep(3000);
-        redis.resume();
-
+        LOGGER.info("Sleeping for " + SOCKET_TIMEOUT / 2 + " milis to simulate no connection errors");
+        Thread.sleep(SOCKET_TIMEOUT / 2);
+        redis.unpause();
         awaitStreamLength(jedis, STREAM_NAME, MESSAGE_COUNT);
     }
 
@@ -139,7 +88,6 @@ public class TestContainersPrototypeIT {
         server.setEnv(new DebeziumServerConfigBuilder().withBaseConfig(redis, postgres).build());
         server.start();
 
-        Jedis jedis = new Jedis(HostAndPort.from(getRedisContainerAddress(redis)));
         final String STREAM_NAME = "testc.inventory.redis_test2";
         final int TOTAL_RECORDS = 50;
 
@@ -155,13 +103,9 @@ public class TestContainersPrototypeIT {
                 "SELECT LEFT(i::text, 10), RANDOM()::text, RANDOM()::text FROM generate_series(1,%d) s(i)", TOTAL_RECORDS));
         connection.commit();
 
-        // wait for debezium to stream changes to redis and hit oom
-        awaitStreamLengthGte(jedis, STREAM_NAME, 0);
-        Thread.sleep(1000);
-        LOGGER.info("Entries in " + STREAM_NAME + ":" + jedis.xlen(STREAM_NAME));
+        waitForContainerLog(server, "Sink memory threshold percentage was reached");
         assertThat(jedis.xlen(STREAM_NAME)).isLessThan(TOTAL_RECORDS);
 
-        Thread.sleep(1000);
         LOGGER.info("Unsetting Redis' maxmemory");
         jedis.configSet("maxmemory", "30M");
         awaitStreamLength(jedis, STREAM_NAME, TOTAL_RECORDS);

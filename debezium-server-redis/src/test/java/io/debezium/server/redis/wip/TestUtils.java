@@ -49,11 +49,11 @@ public class TestUtils {
                 .getIpAddress();
     }
 
-    public static String getRedisContainerAddress(TestContainersResource resource) {
-        return String.format("%s:%d", getContainerIp(resource.getContainer()), resource.getPort());
+    public static String getRedisContainerAddress(DebeziumTestContainerWrapper resource) {
+        return String.format("%s:%d", getContainerIp(resource), resource.getExposedPorts().get(0));
     }
 
-    public static void insertCustomerToPostgres(GenericContainer<?> container, String firstName, String lastName, String email)
+    public static void insertCustomerToPostgres(DebeziumTestContainerWrapper container, String firstName, String lastName, String email)
             throws IOException, InterruptedException {
         container.execInContainer("psql",
                 "-U", POSTGRES_USER,
@@ -61,12 +61,12 @@ public class TestUtils {
                 "-c", "INSERT INTO inventory.customers VALUES (default,'" + firstName + "','" + lastName + "','" + email + "')");
     }
 
-    public static PostgresConnection getPostgresConnection(TestContainersResource containersResource) {
+    public static PostgresConnection getPostgresConnection(DebeziumTestContainerWrapper container) {
         return new PostgresConnection(JdbcConfiguration.create()
                 .with("user", POSTGRES_USER)
                 .with("password", POSTGRES_PASSWORD)
                 .with("dbname", POSTGRES_DATABASE)
-                .with("hostname", containersResource.getContainerIp())
+                .with("hostname", container.getContainerIp())
                 .with("port", POSTGRES_PORT)
                 .build(), "Debezium Redis Test");
     }
