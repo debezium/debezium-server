@@ -10,9 +10,9 @@
     <artifactId>debezium-server-redis</artifactId>
     <name>Debezium Server Redis Sink Adapter</name>
     <packaging>jar</packaging>
-    <!-- TODO what about this -->
+    <!-- TODO is writing custom dockerfile better? -->
     <properties>
-        <quarkus.jib.jvm-entrypoint>java,-Djavax.net.ssl.keyStore=/etc/certificates/client-keystore.p12,-Djavax.net.ssl.trustStore=/etc/certificates/client-truststore.p12,-Djavax.net.ssl.keyStorePassword=secret,-Djavax.net.ssl.trustStorePassword=secret,-jar,quarkus-run.jar</quarkus.jib.jvm-entrypoint>
+        <quarkus.jib.jvm-additional-arguments>-Djavax.net.ssl.keyStore=/ssl/client-keystore.p12,-Djavax.net.ssl.trustStore=/ssl/client-truststore.p12,-Djavax.net.ssl.keyStorePassword=secret,-Djavax.net.ssl.trustStorePassword=secret</quarkus.jib.jvm-additional-arguments>
     </properties>
 
     <dependencies>

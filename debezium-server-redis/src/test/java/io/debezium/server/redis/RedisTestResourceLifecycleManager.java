@@ -15,8 +15,6 @@ import io.debezium.server.TestConfigSource;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
-import lombok.Getter;
-
 public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
     static final String READY_MESSAGE = "Ready to accept connections";
@@ -24,7 +22,6 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
     public static final String REDIS_IMAGE = "redis";
 
     private static final AtomicBoolean running = new AtomicBoolean(false);
-    @Getter
     private static final GenericContainer<?> container = new GenericContainer<>(REDIS_IMAGE)
             .withExposedPorts(REDIS_PORT);
 

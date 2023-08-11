@@ -35,8 +35,13 @@ public class TestContainersSslStreamIT extends TestContainersRedisTestBase {
                                 "--tls-key-file /etc/certificates/redis.key " +
                                 "--tls-ca-cert-file /etc/certificates/ca.crt")
                 .withClasspathResourceMapping("ssl", "/etc/certificates", BindMode.READ_ONLY);
-        server
-                .withClasspathResourceMapping("ssl", "/etc/certificates", BindMode.READ_WRITE);
+        // server
+        // TODO why is withCommand not working
+        // .withCommand("-Djavax.net.ssl.keyStore=/ssl/client-keystore.p12",
+        // "-Djavax.net.ssl.trustStore=/ssl/client-truststore.p12",
+        // "-Djavax.net.ssl.keyStorePassword=secret",
+        // "-Djavax.net.ssl.trustStorePassword=secret")
+        // .withClasspathResourceMapping("ssl", "/etc/certificates", BindMode.READ_WRITE);
     }
 
     @Test

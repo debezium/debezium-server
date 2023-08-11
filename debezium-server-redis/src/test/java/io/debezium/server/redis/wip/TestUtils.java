@@ -25,8 +25,12 @@ import redis.clients.jedis.Jedis;
 
 public class TestUtils {
     public static void waitForContainerLog(GenericContainer<?> container, String expectedLog) {
+        waitForContainerLog(container, expectedLog, TestConfigSource.waitForSeconds());
+    }
+
+    public static void waitForContainerLog(GenericContainer<?> container, String expectedLog, int seconds) {
         await()
-                .atMost(20, TimeUnit.SECONDS)
+                .atMost(seconds, TimeUnit.SECONDS)
                 .until(() -> container.getLogs(OutputFrame.OutputType.STDOUT).contains(expectedLog));
     }
 
@@ -73,14 +77,14 @@ public class TestUtils {
 
     public static void awaitStreamLengthGte(Jedis jedis, String streamName, int expectedLength) {
         await()
-                .atMost(TestConfigSource.waitForSeconds(), TimeUnit.SECONDS)
+                .atMost(10, TimeUnit.SECONDS)
                 .until(() -> jedis.xlen(streamName) >= expectedLength);
 
     }
 
     public static void awaitStreamLength(Jedis jedis, String streamName, int expectedLength) {
         await()
-                .atMost(TestConfigSource.waitForSeconds(), TimeUnit.SECONDS)
+                .atMost(10, TimeUnit.SECONDS)
                 .until(() -> jedis.xlen(streamName) == expectedLength);
     }
 
