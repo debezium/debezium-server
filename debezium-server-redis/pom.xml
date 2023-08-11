@@ -10,6 +10,10 @@
     <artifactId>debezium-server-redis</artifactId>
     <name>Debezium Server Redis Sink Adapter</name>
     <packaging>jar</packaging>
+    <!-- TODO what about this -->
+    <properties>
+        <quarkus.jib.jvm-entrypoint>java,-Djavax.net.ssl.keyStore=/etc/certificates/client-keystore.p12,-Djavax.net.ssl.trustStore=/etc/certificates/client-truststore.p12,-Djavax.net.ssl.keyStorePassword=secret,-Djavax.net.ssl.trustStorePassword=secret,-jar,quarkus-run.jar</quarkus.jib.jvm-entrypoint>
+    </properties>
 
     <dependencies>
         <dependency>
