@@ -5,87 +5,53 @@
  */
 package io.debezium.server.redis.wip;
 
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_DATABASE;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PASSWORD;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PORT;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_USER;
+import static io.debezium.server.redis.wip.TestConstants.LOCALHOST;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_DATABASE;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PORT;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PRIVILEGED_PASSWORD;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PRIVILEGED_USER;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_ROOT_PASSWORD;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.output.OutputFrame;
-
-import io.debezium.connector.postgresql.connection.PostgresConnection;
-import io.debezium.jdbc.JdbcConfiguration;
-import io.debezium.server.TestConfigSource;
+import io.debezium.config.Configuration;
+import io.debezium.connector.mysql.MySqlConnection;
 
 import redis.clients.jedis.Jedis;
 
 public class TestUtils {
-    public static void waitForContainerLog(GenericContainer<?> container, String expectedLog) {
-        waitForContainerLog(container, expectedLog, TestConfigSource.waitForSeconds());
-    }
 
-    public static void waitForContainerLog(GenericContainer<?> container, String expectedLog, int seconds) {
-        await()
-                .atMost(seconds, TimeUnit.SECONDS)
-                .until(() -> container.getLogs(OutputFrame.OutputType.STDOUT).contains(expectedLog));
-    }
-
-    public static void waitForContainerStop(GenericContainer<?> container) {
-        await()
-                .atMost(20, TimeUnit.SECONDS)
-                .until(() -> !container.isRunning());
-    }
-
-    static String getContainerIp(GenericContainer<?> container) {
-        return container
-                .getContainerInfo()
-                .getNetworkSettings()
-                .getNetworks()
-                .entrySet()
-                .stream()
-                .findFirst()
-                .get()
-                .getValue()
-                .getIpAddress();
-    }
-
-    public static String getRedisContainerAddress(DebeziumTestContainerWrapper resource) {
-        return String.format("%s:%d", getContainerIp(resource), resource.getExposedPorts().get(0));
-    }
-
-    public static void insertCustomerToPostgres(DebeziumTestContainerWrapper container, String firstName, String lastName, String email)
+    public static void insertCustomerToMySql(DebeziumTestContainerWrapper container, String firstName, String lastName, String email)
             throws IOException, InterruptedException {
-        container.execInContainer("psql",
-                "-U", POSTGRES_USER,
-                "-d", POSTGRES_DATABASE,
-                "-c", "INSERT INTO inventory.customers VALUES (default,'" + firstName + "','" + lastName + "','" + email + "')");
+        container.execInContainer("mysql",
+                "-u", MYSQL_PRIVILEGED_USER,
+                "-p" + MYSQL_PRIVILEGED_PASSWORD,
+                "-D", MYSQL_DATABASE,
+                "-e", "INSERT INTO customers VALUES (default,'" + firstName + "','" + lastName + "','" + email + "')");
     }
 
-    public static PostgresConnection getPostgresConnection(DebeziumTestContainerWrapper container) {
-        return new PostgresConnection(JdbcConfiguration.create()
-                .with("user", POSTGRES_USER)
-                .with("password", POSTGRES_PASSWORD)
-                .with("dbname", POSTGRES_DATABASE)
-                .with("hostname", container.getContainerIp())
-                .with("port", POSTGRES_PORT)
-                .build(), "Debezium Redis Test");
+    public static MySqlConnection getMySqlConnection(DebeziumTestContainerWrapper container) {
+        return new MySqlConnection(new MySqlConnection.MySqlConnectionConfiguration(Configuration.create()
+                .with("database.user", "root")
+                .with("database.password", MYSQL_ROOT_PASSWORD)
+                .with("database.dbname", MYSQL_DATABASE)
+                .with("database.hostname", LOCALHOST)
+                .with("database.port", container.getMappedPort(MYSQL_PORT))
+                .build()));
     }
 
-    public static void awaitStreamLengthGte(Jedis jedis, String streamName, int expectedLength) {
+    public static void waitForStreamLength(Jedis jedis, String streamName, int expectedLength) {
         await()
-                .atMost(10, TimeUnit.SECONDS)
-                .until(() -> jedis.xlen(streamName) >= expectedLength);
-
-    }
-
-    public static void awaitStreamLength(Jedis jedis, String streamName, int expectedLength) {
-        await()
-                .atMost(10, TimeUnit.SECONDS)
+                .atMost(60, TimeUnit.SECONDS)
                 .until(() -> jedis.xlen(streamName) == expectedLength);
+    }
+
+    public static void awaitHashSizeGte(Jedis jedis, String hashName, int expectedSize) {
+        await()
+                .atMost(60, TimeUnit.SECONDS)
+                .until(() -> jedis.hgetAll(hashName).size() >= expectedSize);
     }
 
 }

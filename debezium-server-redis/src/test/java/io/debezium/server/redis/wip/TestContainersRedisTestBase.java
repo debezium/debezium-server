@@ -5,20 +5,22 @@
  */
 package io.debezium.server.redis.wip;
 
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_DATABASE;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_IMAGE;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PASSWORD;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PORT;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_USER;
+import static io.debezium.server.redis.wip.TestConstants.LOCALHOST;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PORT;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PRIVILEGED_PASSWORD;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PRIVILEGED_USER;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_ROOT_PASSWORD;
 import static io.debezium.server.redis.wip.TestConstants.REDIS_IMAGE;
 import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
 import static io.debezium.server.redis.wip.TestProperties.DEBEZIUM_SERVER_IMAGE;
-import static io.debezium.server.redis.wip.TestUtils.getRedisContainerAddress;
 
-import java.util.Map;
+import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.Network;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
@@ -27,34 +29,43 @@ public class TestContainersRedisTestBase {
     protected DebeziumTestContainerWrapper postgres;
     protected DebeziumTestContainerWrapper redis;
     protected DebeziumTestContainerWrapper server;
+    protected DebeziumTestContainerWrapper mysql;
     protected Jedis jedis;
 
     public TestContainersRedisTestBase() {
         // provide base configuration for all components
-        postgres = new DebeziumTestContainerWrapper(POSTGRES_IMAGE)
-                .withExposedPorts(POSTGRES_PORT)
-                .withEnv(Map.of("POSTGRES_USER", POSTGRES_USER,
-                        "POSTGRES_PASSWORD", POSTGRES_PASSWORD,
-                        "POSTGRES_DB", POSTGRES_DATABASE,
-                        "POSTGRES_INITDB_ARGS", "\"-E UTF8\"",
-                        "LANG", "en_US.utf8"));
+        Network network = Network.newNetwork();
+
+        mysql = new DebeziumTestContainerWrapper("quay.io/debezium/example-mysql")
+                .withNetwork(network)
+                .withNetworkAlias("mysql")
+                .waitingFor(Wait.forLogMessage(".*mysqld: ready for connections.*", 2))
+                .withEnv("MYSQL_ROOT_PASSWORD", MYSQL_ROOT_PASSWORD)
+                .withEnv("MYSQL_USER", MYSQL_PRIVILEGED_USER)
+                .withEnv("MYSQL_PASSWORD", MYSQL_PRIVILEGED_PASSWORD)
+                .withExposedPorts(MYSQL_PORT)
+                .withStartupTimeout(Duration.ofSeconds(180));
         redis = new DebeziumTestContainerWrapper(REDIS_IMAGE)
+                .withClasspathResourceMapping("redis", "/etc/redis", BindMode.READ_ONLY)
+                .withNetwork(network)
+                .withNetworkAlias("redis")
                 .withExposedPorts(REDIS_PORT);
-        server = new DebeziumTestContainerWrapper(DEBEZIUM_SERVER_IMAGE);
+        server = new DebeziumTestContainerWrapper(DEBEZIUM_SERVER_IMAGE)
+                .withNetwork(network)
+                .withCommand("-jar", "quarkus-run.jar");
     }
 
     @BeforeEach
     public void setUp() {
-        postgres.start();
+        mysql.start();
         redis.start();
-        jedis = new Jedis(HostAndPort.from(getRedisContainerAddress(redis)));
-
+        jedis = new Jedis(HostAndPort.from(LOCALHOST + ":" + redis.getMappedPort(REDIS_PORT)));
     }
 
     @AfterEach
     public void tearDown() {
         server.stop();
-        postgres.stop();
+        mysql.stop();
         redis.stop();
     }
 

@@ -6,14 +6,24 @@
 package io.debezium.server.redis.wip;
 
 public class TestConstants {
-    // POSTGRESQL
-    public static final String POSTGRES_USER = "debezium";
-    public static final String POSTGRES_PASSWORD = "dbz";
-    public static final String POSTGRES_DATABASE = "debezium";
-    public static final String POSTGRES_IMAGE = "quay.io/debezium/example-postgres";
-    public static final int POSTGRES_PORT = 5432;
+    private TestConstants() {
+        // intentionally private
+    }
+
+    public static final int INITIAL_CUSTOMER_COUNT = 4;
+    public static final int INITIAL_SCHEMA_HISTORY_SIZE = 16;
+    public static final String LOCALHOST = "localhost";
 
     // REDIS
     public static final String REDIS_IMAGE = "redis";
     public static final int REDIS_PORT = 6379;
+
+    // MYSQL
+    public static final String MYSQL_USER = "debezium";
+    public static final String MYSQL_PASSWORD = "dbz";
+    public static final String MYSQL_ROOT_PASSWORD = "debezium";
+    public static final String MYSQL_DATABASE = "inventory";
+    public static final String MYSQL_PRIVILEGED_USER = "mysqluser";
+    public static final String MYSQL_PRIVILEGED_PASSWORD = "mysqlpassword";
+    public static final int MYSQL_PORT = 3306;
 }

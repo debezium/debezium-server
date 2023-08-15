@@ -5,10 +5,10 @@
  */
 package io.debezium.server.redis.wip;
 
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_DATABASE;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PASSWORD;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_PORT;
-import static io.debezium.server.redis.wip.TestConstants.POSTGRES_USER;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_DATABASE;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PASSWORD;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_PORT;
+import static io.debezium.server.redis.wip.TestConstants.MYSQL_USER;
 import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
 
 import java.util.HashMap;
@@ -35,25 +35,27 @@ public class DebeziumServerConfigBuilder {
     public Map<String, String> baseRedisConfig(DebeziumTestContainerWrapper redis) {
         return Map.of(
                 "debezium.sink.type", "redis",
-                "debezium.sink.redis.address", redis.getContainerIp() + ":" + REDIS_PORT);
+                "debezium.sink.redis.address", redis.getContainerAddress() + ":" + REDIS_PORT);
     }
 
-    public Map<String, String> basePostgresConfig(DebeziumTestContainerWrapper postgres) {
-        return Map.of("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector",
+    public Map<String, String> baseMySqlConfig(DebeziumTestContainerWrapper mysql) {
+        Map<String, String> result = new HashMap<>(Map.of("debezium.source.connector.class", "io.debezium.connector.mysql.MySqlConnector",
                 "debezium.source.offset.flush.interval.ms", "0",
                 "debezium.source.topic.prefix", "testc",
-                "debezium.source.schema.include.list", "inventory",
-                "debezium.source.database.hostname", String.valueOf(postgres.getContainerIp()),
-                "debezium.source.database.port", String.valueOf(POSTGRES_PORT),
-                "debezium.source.database.user", POSTGRES_USER,
-                "debezium.source.database.password", POSTGRES_PASSWORD,
-                "debezium.source.database.dbname", POSTGRES_DATABASE,
-                "debezium.source.offset.storage.file.filename", "offset.dat");
+                "debezium.source.database.dbname", MYSQL_DATABASE,
+                "debezium.source.database.hostname", String.valueOf(mysql.getContainerAddress()),
+                "debezium.source.database.port", String.valueOf(MYSQL_PORT),
+                "debezium.source.database.user", MYSQL_USER,
+                "debezium.source.database.password", MYSQL_PASSWORD,
+                "debezium.source.database.server.id", "1",
+                "debezium.source.schema.history.internal", "io.debezium.server.redis.RedisSchemaHistory"));
+        result.put("debezium.source.offset.storage.file.filename", "offset.dat");
+        return result;
     }
 
-    public DebeziumServerConfigBuilder withBaseConfig(DebeziumTestContainerWrapper redis, DebeziumTestContainerWrapper postgres) {
+    public DebeziumServerConfigBuilder withBaseMySqlConfig(DebeziumTestContainerWrapper redis, DebeziumTestContainerWrapper mysql) {
         config.putAll(baseRedisConfig(redis));
-        config.putAll(basePostgresConfig(postgres));
+        config.putAll(baseMySqlConfig(mysql));
         return this;
     }
 }
