@@ -8,7 +8,8 @@ package io.debezium.server.kafka;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 
 import io.debezium.server.TestConfigSource;
 
@@ -23,7 +24,11 @@ public class KafkaTestConfigSource extends TestConfigSource {
         kafkaConfig.put("debezium.sink.kafka.producer.value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
         kafkaConfig.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
-        kafkaConfig.put("debezium.source." + StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, OFFSET_STORE_PATH.toAbsolutePath().toString());
+        kafkaConfig.put("debezium.source.offset.storage", KafkaOffsetBackingStore.class.getName());
+        kafkaConfig.put("debezium.source." + DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "offset-topic");
+        kafkaConfig.put("debezium.source." + DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG, "1");
+        kafkaConfig.put("debezium.source." + DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        kafkaConfig.put("debezium.source.bootstrap.servers", KafkaTestResourceLifecycleManager.getBootstrapServers());
 
         kafkaConfig.put("debezium.source.offset.flush.interval.ms", "0");
         kafkaConfig.put("debezium.source.topic.prefix", "testc");
