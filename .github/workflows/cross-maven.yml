@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Debezium Server repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: server
       - name: Check if pull request branch exists in debezium main repository
@@ -43,14 +43,14 @@ jobs:
           done < SORTED_PULLS.txt
       - name: Checkout core repository with pull request branch
         if: ${{ steps.branch.outputs.BRANCH_FOUND == 'true' }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ github.event.pull_request.user.login }}/debezium
           ref: ${{ github.head_ref }}
           path: core
       - name: Checkout core repository with default base branch
         if: ${{ steps.branch.outputs.BRANCH_FOUND != 'true' }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: debezium/debezium
           ref: ${{ github.base_ref }}
