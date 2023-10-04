@@ -53,6 +53,7 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.util.Strings;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 
@@ -131,6 +132,11 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "address")
     Optional<String> address;
 
+    @ConfigProperty(name = PROP_PREFIX + "attributes")
+    Optional<String> customAttributesConfig;
+
+    private final Map<String, String> customAttributes = new HashMap<>();
+
     @Inject
     @CustomConsumerBuilder
     Instance<PublisherBuilder> customPublisherBuilder;
@@ -199,6 +205,8 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
                 throw new DebeziumException(e);
             }
         };
+
+        prepareAdditonalAttributes();
 
         LOGGER.info("Using default PublisherBuilder '{}'", publisherBuilder);
     }
@@ -272,7 +280,23 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
         pubsubMessage.putAllAttributes(convertHeaders(record));
 
+        if (customAttributes.size() > 0) {
+            pubsubMessage.putAllAttributes(customAttributes);
+        }
+
         return pubsubMessage.build();
+    }
+
+    private void prepareAdditonalAttributes() {
+        if (customAttributesConfig.isPresent()) {
+            List<String> pairs = Strings.listOf(customAttributesConfig.get(), x -> x.split(","), String::trim);
+            for (String pair : pairs) {
+                List<String> parts = Strings.listOf(pair, x -> x.split(":"), String::trim);
+                if (parts.size() == 2) {
+                    customAttributes.put(parts.get(0), parts.get(1));
+                }
+            }
+        }
     }
 
     @Override
