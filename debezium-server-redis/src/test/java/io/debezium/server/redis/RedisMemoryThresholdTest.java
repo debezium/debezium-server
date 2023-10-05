@@ -177,6 +177,11 @@ public class RedisMemoryThresholdTest {
             return 0;
         }
 
+        @Override
+        public String clientList() {
+            return null;
+        }
+
     }
 
 }
