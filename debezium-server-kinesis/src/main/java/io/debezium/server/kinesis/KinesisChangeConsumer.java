@@ -107,7 +107,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
             }
 
             final PutRecordRequest putRecord = PutRecordRequest.builder()
-                    .partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
+                    .partitionKey((record.key() != null) ? String.valueOf(record.key().hashCode()) : nullKey)
                     .streamName(streamNameMapper.map(record.destination()))
                     .data(SdkBytes.fromByteArray(getBytes(rv)))
                     .build();
