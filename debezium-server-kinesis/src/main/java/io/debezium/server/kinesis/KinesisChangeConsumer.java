@@ -119,17 +119,15 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
-            if (record.value() != null) {
-                int attempts = 0;
-                if (!recordSent(record)) {
-                    attempts++;
-                    if (attempts >= retries) {
-                        throw new DebeziumException("Exceeded maximum number of attempts to publish event " + record);
-                    }
-                    Metronome.sleeper(retryInterval, Clock.SYSTEM).pause();
+            int attempts = 0;
+            if (!recordSent(record)) {
+                attempts++;
+                if (attempts >= retries) {
+                    throw new DebeziumException("Exceeded maximum number of attempts to publish event " + record);
                 }
-                committer.markProcessed(record);
+                Metronome.sleeper(retryInterval, Clock.SYSTEM).pause();
             }
+            committer.markProcessed(record);
         }
         committer.markBatchFinished();
     }
@@ -141,6 +139,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
             if (rv == null) {
                 rv = "";
             }
+
             final PutRecordRequest putRecord = PutRecordRequest.builder()
                     .partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
                     .streamName(streamNameMapper.map(record.destination()))
