@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Optional;
 
 import io.debezium.DebeziumException;
-import io.debezium.annotation.VisibleForTesting;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
 import jakarta.annotation.PostConstruct;
@@ -61,11 +60,8 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     private String region;
     private Optional<String> endpointOverride;
     private Optional<String> credentialsProfile;
-
-    private static int retries;
-    private static Duration retryInterval;
     private static final int DEFAULT_RETRIES = 5;
-    private static final Long RETRY_INTERVAL = Integer.toUnsignedLong(1_000); // Default to 1s
+    private static final Long RETRY_INTERVAL = Integer.toUnsignedLong(1_000);
 
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
@@ -97,12 +93,6 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         LOGGER.info("Using default KinesisClient '{}'", client);
     }
 
-    @VisibleForTesting
-    void initWithConfig(Config config) {
-        retries = DEFAULT_RETRIES;
-        retryInterval = Duration.ofMillis(RETRY_INTERVAL);
-    }
-
     @PreDestroy
     void close() {
         try {
@@ -120,35 +110,37 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
             LOGGER.trace("Received event '{}'", record);
 
             int attempts = 0;
-            if (!recordSent(record)) {
+            while (!recordSent(record)) {
                 attempts++;
-                if (attempts >= retries) {
+                if (attempts >= DEFAULT_RETRIES) {
                     throw new DebeziumException("Exceeded maximum number of attempts to publish event " + record);
                 }
-                Metronome.sleeper(retryInterval, Clock.SYSTEM).pause();
+                Metronome.sleeper(Duration.ofMillis(RETRY_INTERVAL), Clock.SYSTEM).pause();
             }
             committer.markProcessed(record);
         }
         committer.markBatchFinished();
     }
 
-    private boolean recordSent(ChangeEvent<Object, Object> record) throws InterruptedException {
+    private boolean recordSent(ChangeEvent<Object, Object> record) {
         boolean sent = false;
-        try {
-            Object rv = record.value();
-            if (rv == null) {
-                rv = "";
-            }
 
-            final PutRecordRequest putRecord = PutRecordRequest.builder()
-                    .partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
-                    .streamName(streamNameMapper.map(record.destination()))
-                    .data(SdkBytes.fromByteArray(getBytes(rv)))
-                    .build();
+        Object rv = record.value();
+        if (rv == null) {
+            rv = "";
+        }
+
+        final PutRecordRequest putRecord = PutRecordRequest.builder()
+                .partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
+                .streamName(streamNameMapper.map(record.destination()))
+                .data(SdkBytes.fromByteArray(getBytes(rv)))
+                .build();
+
+        try {
             client.putRecord(putRecord);
+            sent = true;
         } catch (SdkClientException exception) {
             LOGGER.error("Failed to send record to {}:", record.destination(), exception);
-            throw new DebeziumException(exception);
         }
         return sent;
     }
