@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
@@ -35,7 +36,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
-import com.google.inject.Inject;
 
 import io.debezium.DebeziumException;
 import io.debezium.doc.FixFor;

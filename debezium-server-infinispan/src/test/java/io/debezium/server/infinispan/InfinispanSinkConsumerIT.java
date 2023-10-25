@@ -9,6 +9,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 
+import jakarta.inject.Inject;
+
 import org.awaitility.Awaitility;
 import org.infinispan.Cache;
 import org.infinispan.client.hotrod.RemoteCache;
@@ -18,8 +20,6 @@ import org.infinispan.manager.DefaultCacheManager;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.inject.Inject;
 
 import io.debezium.server.DebeziumServer;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
