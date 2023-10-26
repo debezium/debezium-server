@@ -41,6 +41,12 @@
                 <version>${version.kafka}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>${version.snakeyaml}</version>
+            </dependency>
+
             <!-- Quarkus dependencies -->
             <dependency>
                 <groupId>io.quarkus</groupId>
