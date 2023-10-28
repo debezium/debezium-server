@@ -139,7 +139,8 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         try {
             client.putRecord(putRecord);
             sent = true;
-        } catch (SdkClientException exception) {
+        }
+        catch (SdkClientException exception) {
             LOGGER.error("Failed to send record to {}:", record.destination(), exception);
         }
         return sent;
