@@ -24,7 +24,7 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class HttpTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpTestResourceLifecycleManager.class);
-    public static final String WIREMOCK_IMAGE = "docker.io/wiremock/wiremock:latest";
+    public static final String WIREMOCK_IMAGE = "wiremock/wiremock:3.2.0";
     public static final int PORT = 8080; // Primary port used by wiremock
     private static final AtomicBoolean running = new AtomicBoolean(false);
     private static final GenericContainer<?> container = new GenericContainer<>(WIREMOCK_IMAGE)
