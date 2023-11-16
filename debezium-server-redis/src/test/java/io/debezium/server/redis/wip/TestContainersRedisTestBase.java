@@ -15,6 +15,7 @@ import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
 import static io.debezium.server.redis.wip.TestProperties.DEBEZIUM_SERVER_IMAGE;
 
 import java.time.Duration;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +27,6 @@ import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 
 public class TestContainersRedisTestBase {
-    protected DebeziumTestContainerWrapper postgres;
     protected DebeziumTestContainerWrapper redis;
     protected DebeziumTestContainerWrapper server;
     protected DebeziumTestContainerWrapper mysql;
@@ -67,6 +67,11 @@ public class TestContainersRedisTestBase {
         server.stop();
         mysql.stop();
         redis.stop();
+    }
+
+    protected void startServerWithEnv(List<String> env) {
+        server.setEnv(env);
+        server.start();
     }
 
 }

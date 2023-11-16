@@ -10,6 +10,7 @@ import static io.debezium.server.redis.wip.TestConstants.MYSQL_PASSWORD;
 import static io.debezium.server.redis.wip.TestConstants.MYSQL_PORT;
 import static io.debezium.server.redis.wip.TestConstants.MYSQL_USER;
 import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
+import static io.debezium.server.redis.wip.TestConstants.REDIS_SSL_PORT;
 
 import java.util.HashMap;
 import java.util.List;
@@ -32,10 +33,19 @@ public class DebeziumServerConfigBuilder {
                 .collect(Collectors.toList());
     }
 
-    public Map<String, String> baseRedisConfig(DebeziumTestContainerWrapper redis) {
+    public static Map<String, String> baseRedisConfig(DebeziumTestContainerWrapper redis) {
         return Map.of(
                 "debezium.sink.type", "redis",
                 "debezium.sink.redis.address", redis.getContainerAddress() + ":" + REDIS_PORT);
+    }
+
+    public static Map<String, String> baseSslRedisConfig(DebeziumTestContainerWrapper redis) {
+        return Map.of(
+                "debezium.sink.type", "redis",
+                "debezium.sink.redis.address", redis.getContainerAddress() + ":" + REDIS_SSL_PORT,
+                "debezium.sink.redis.ssl.enabled", "true",
+                "debezium.source.database.ssl.mode", "disabled",
+                "debezium.source.offset.storage", "io.debezium.server.redis.RedisOffsetBackingStore");
     }
 
     public Map<String, String> baseMySqlConfig(DebeziumTestContainerWrapper mysql) {
@@ -53,8 +63,14 @@ public class DebeziumServerConfigBuilder {
         return result;
     }
 
-    public DebeziumServerConfigBuilder withBaseMySqlConfig(DebeziumTestContainerWrapper redis, DebeziumTestContainerWrapper mysql) {
+    public DebeziumServerConfigBuilder withBaseMySqlRedisConfig(DebeziumTestContainerWrapper redis, DebeziumTestContainerWrapper mysql) {
         config.putAll(baseRedisConfig(redis));
+        config.putAll(baseMySqlConfig(mysql));
+        return this;
+    }
+
+    public DebeziumServerConfigBuilder withBaseMysqlSslRedisConfig(DebeziumTestContainerWrapper redis, DebeziumTestContainerWrapper mysql) {
+        config.putAll(baseSslRedisConfig(redis));
         config.putAll(baseMySqlConfig(mysql));
         return this;
     }

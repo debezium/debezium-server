@@ -33,8 +33,7 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
 
     @Test
     public void shouldStreamChanges() throws InterruptedException, IOException {
-        server.setEnv(new DebeziumServerConfigBuilder().withBaseMySqlConfig(redis, mysql).build());
-        server.start();
+        startServerWithEnv(new DebeziumServerConfigBuilder().withBaseMySqlRedisConfig(redis, mysql).build());
 
         final String STREAM_NAME = "testc.inventory.customers";
 
@@ -48,11 +47,10 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
 
     @Test
     public void shouldFailWithIncorrectRedisAddress() {
-        server.setEnv(new DebeziumServerConfigBuilder()
-                .withBaseMySqlConfig(redis, mysql)
+        startServerWithEnv(new DebeziumServerConfigBuilder()
+                .withBaseMySqlRedisConfig(redis, mysql)
                 .withValue("debezium.sink.redis.address", redis.getContainerAddress() + ":" + 1000)
                 .build());
-        server.start();
 
         server.waitForContainerLog("Failed to connect to any host resolved for DNS name");
         server.waitForStop();
@@ -62,10 +60,9 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
     @FixFor("DBZ-4510")
     public void shouldRetryAfterRedisCrash() throws Exception {
         final int SOCKET_TIMEOUT = 4000;
-        server.setEnv(new DebeziumServerConfigBuilder().withBaseMySqlConfig(redis, mysql)
+        startServerWithEnv(new DebeziumServerConfigBuilder().withBaseMySqlRedisConfig(redis, mysql)
                 .withValue("debezium.sink.redis.socket.timeout.ms", String.valueOf(SOCKET_TIMEOUT))
                 .build());
-        server.start();
 
         final String STREAM_NAME = "testc.inventory.customers";
         waitForStreamLength(jedis, STREAM_NAME, INITIAL_CUSTOMER_COUNT);
@@ -82,10 +79,9 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
     @Test
     public void shouldTimeoutAfterRedisCrash() throws Exception {
         final int SOCKET_TIMEOUT = 2000;
-        server.setEnv(new DebeziumServerConfigBuilder().withBaseMySqlConfig(redis, mysql)
+        startServerWithEnv(new DebeziumServerConfigBuilder().withBaseMySqlRedisConfig(redis, mysql)
                 .withValue("debezium.sink.redis.socket.timeout.ms", String.valueOf(SOCKET_TIMEOUT))
                 .build());
-        server.start();
 
         final String STREAM_NAME = "testc.inventory.customers";
         waitForStreamLength(jedis, STREAM_NAME, INITIAL_CUSTOMER_COUNT);
@@ -104,8 +100,7 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
     @Test
     @FixFor("DBZ-4510")
     public void shouldRetryAfterRedisOOM() throws Exception {
-        server.setEnv(new DebeziumServerConfigBuilder().withBaseMySqlConfig(redis, mysql).build());
-        server.start();
+        startServerWithEnv(new DebeziumServerConfigBuilder().withBaseMySqlRedisConfig(redis, mysql).build());
 
         final String STREAM_NAME = "testc.inventory.customers";
         final int INSERTED_RECORDS_COUNT = 1000;
@@ -137,10 +132,9 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
 
     @Test
     public void shouldStreamExtendedMessageFormat() {
-        server.setEnv(new DebeziumServerConfigBuilder().withBaseMySqlConfig(redis, mysql)
+        startServerWithEnv(new DebeziumServerConfigBuilder().withBaseMySqlRedisConfig(redis, mysql)
                 .withValue("debezium.sink.redis.message.format", "extended")
                 .build());
-        server.start();
         final String STREAM_NAME = "testc.inventory.customers";
 
         waitForStreamLength(jedis, STREAM_NAME, INITIAL_CUSTOMER_COUNT);
@@ -160,12 +154,10 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
     public void shouldStreamSchemaHistory() throws Exception {
         final String STREAM_NAME = "metadata:debezium:schema_history";
         final String TABLE_NAME = "redis_test";
-
-        server.setEnv(new DebeziumServerConfigBuilder()
-                .withBaseMySqlConfig(redis, mysql)
+        startServerWithEnv(new DebeziumServerConfigBuilder()
+                .withBaseMySqlRedisConfig(redis, mysql)
                 .withValue("debezium.source.schema.history.internal", "io.debezium.server.redis.RedisSchemaHistory")
                 .build());
-        server.start();
 
         waitForStreamLength(jedis, STREAM_NAME, INITIAL_SCHEMA_HISTORY_SIZE);
         redis.pause();
@@ -192,11 +184,10 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
     @FixFor("DBZ-4509")
     public void shouldStoreOffsetInRedis() throws Exception {
         final String OFFSETS_HASH_NAME = "metadata:debezium:offsets";
-        server.setEnv(new DebeziumServerConfigBuilder()
-                .withBaseMySqlConfig(redis, mysql)
+        startServerWithEnv(new DebeziumServerConfigBuilder()
+                .withBaseMySqlRedisConfig(redis, mysql)
                 .withValue("debezium.source.offset.storage", "io.debezium.server.redis.RedisOffsetBackingStore")
                 .build());
-        server.start();
 
         awaitHashSizeGte(jedis, OFFSETS_HASH_NAME, 1);
         jedis.del(OFFSETS_HASH_NAME);

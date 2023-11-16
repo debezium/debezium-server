@@ -17,6 +17,7 @@ public class TestConstants {
     // REDIS
     public static final String REDIS_IMAGE = "redis";
     public static final int REDIS_PORT = 6379;
+    public static final int REDIS_SSL_PORT = 6378;
 
     // MYSQL
     public static final String MYSQL_USER = "debezium";
