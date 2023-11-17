@@ -31,6 +31,7 @@ public class RedisMemoryThreshold {
 
     private RedisClient client;
     private long memoryLimit;
+    private static long maxMemory = 0;
 
     public RedisMemoryThreshold(RedisClient client, RedisStreamChangeConsumerConfig config) {
         this.client = client;
@@ -52,6 +53,13 @@ public class RedisMemoryThreshold {
      */
     public boolean checkMemory(long extraMemory, int bufferSize, int ratePerSecond) {
         Tuple2<Long, Long> memoryTuple = memoryTuple(memoryLimit);
+
+        if (maxMemory == 0) {
+            total_processed += bufferSize;
+            LOGGER.debug("Total Processed Records: {}", total_processed);
+            return true;
+        }
+
         long maxMemory = memoryTuple.getItem2();
 
         long extimatedBatchSize = extraMemory * ratePerSecond;
@@ -104,13 +112,16 @@ public class RedisMemoryThreshold {
         }
 
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
-        Long maxMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
+        Long maxMem = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
 
-        if (maxMemory == null || (defaultMaxMemory > 0 && maxMemory > defaultMaxMemory)) {
-            maxMemory = defaultMaxMemory;
-            LOGGER.debug("Setting maximum memory size {}", maxMemory);
+        if (maxMem == null || (defaultMaxMemory > 0 && maxMem > defaultMaxMemory)) {
+            maxMem = defaultMaxMemory;
+            if (maxMem > 0) {
+                LOGGER.debug("Setting maximum memory size {}", maxMem);
+            }
         }
-        return Tuple2.of(usedMemory, maxMemory);
+        maxMemory = maxMem;
+        return Tuple2.of(usedMemory, maxMem);
     }
 
     private Long parseLong(String name, String value) {
