@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,56 +25,78 @@ public class RedisMemoryThreshold {
     private static final String INFO_MEMORY = "memory";
     private static final String INFO_MEMORY_SECTION_MAXMEMORY = "maxmemory";
     private static final String INFO_MEMORY_SECTION_USEDMEMORY = "used_memory";
-
-    private static final Supplier<Boolean> MEMORY_OK = () -> true;
+    private static long accumulatedMemory = 0L;
+    private static long previouslyUsedMemory = 0L;
+    private static long totalProcessed = 0;
 
     private RedisClient client;
-
-    private int memoryThreshold;
-
-    private long memoryLimit;
-
-    private Supplier<Boolean> isMemoryOk;
+    private long memoryLimit = 0;
+    private long maximumMemory = 0;
 
     public RedisMemoryThreshold(RedisClient client, RedisStreamChangeConsumerConfig config) {
         this.client = client;
-        this.memoryThreshold = config.getMemoryThreshold();
         this.memoryLimit = 1024L * 1024 * config.getMemoryLimitMb();
-        if (memoryThreshold == 0 || memoryTuple(memoryLimit) == null) {
-            disable();
-        }
-        else {
-            this.isMemoryOk = () -> isMemoryOk();
-        }
     }
 
-    public boolean check() {
-        return isMemoryOk.get();
+    /**
+     * @param client
+     */
+    public void setRedisClient(RedisClient client) {
+        this.client = client;
     }
 
-    private boolean isMemoryOk() {
-        Tuple2<Long, Long> memoryTuple = memoryTuple(memoryLimit);
-        if (memoryTuple == null) {
-            disable();
+    /**
+     * @param extraMemory   - Estimated size of a single record.
+     * @param bufferSize    - Number of records in a batch.
+     * @param bufferFillRate - Rate in which memory can be filled.
+     * @return
+     */
+    public boolean checkMemory(long extraMemory, int bufferSize, int bufferFillRate) {
+        Tuple2<Long, Long> memoryTuple = memoryTuple();
+
+        if (maximumMemory == 0) {
+            totalProcessed += bufferSize;
+            LOGGER.debug("Total Processed Records: {}", totalProcessed);
             return true;
         }
-        long maxMemory = memoryTuple.getItem2();
-        if (maxMemory > 0) {
-            long usedMemory = memoryTuple.getItem1();
-            long percentage = usedMemory * 100 / maxMemory;
-            if (percentage >= memoryThreshold) {
-                LOGGER.info("Sink memory threshold percentage was reached. Will retry; " +
-                        "(current: {}%, configured: {}%, used_memory: {}, maxmemory: {}).",
-                        percentage, memoryThreshold,
-                        usedMemory, maxMemory);
-                return false;
-            }
+
+        maximumMemory = memoryTuple.getItem2();
+
+        long extimatedBatchSize = extraMemory * bufferFillRate;
+        long usedMemory = memoryTuple.getItem1();
+        long prevAccumulatedMemory = accumulatedMemory;
+        long diff = usedMemory - previouslyUsedMemory;
+        if (diff == 0L) {
+            accumulatedMemory += extraMemory * bufferSize;
         }
-        return true;
+        else {
+            previouslyUsedMemory = usedMemory;
+            accumulatedMemory = extraMemory * bufferSize;
+        }
+        long estimatedUsedMemory = usedMemory + accumulatedMemory + extimatedBatchSize;
+
+        if (estimatedUsedMemory >= maximumMemory) {
+            LOGGER.info(
+                    "Sink memory threshold percentage was reached. Will retry; "
+                            + "(estimated used memory size: {}, maxmemory: {}). Total Processed Records: {}",
+                    humanReadableSize(estimatedUsedMemory), humanReadableSize(maximumMemory), totalProcessed);
+            accumulatedMemory = prevAccumulatedMemory;
+            return false;
+        }
+        else {
+            LOGGER.debug(
+                    "Maximum reached: {}; Used Mem {}; Max Mem: {}; Accumulate Mem: {}; Estimated Used Mem: {}, Record Size: {}, NumRecInBuff: {}; Total Processed Records: {}",
+                    (estimatedUsedMemory >= maximumMemory), humanReadableSize(usedMemory), humanReadableSize(maximumMemory),
+                    humanReadableSize(accumulatedMemory), humanReadableSize(estimatedUsedMemory),
+                    humanReadableSize(extraMemory), bufferSize, totalProcessed + bufferSize);
+            totalProcessed += bufferSize;
+            return true;
+        }
     }
 
-    private Tuple2<Long, Long> memoryTuple(long defaultMaxMemory) {
+    private Tuple2<Long, Long> memoryTuple() {
         String memory = client.info(INFO_MEMORY);
+        LOGGER.trace(memory);
         Map<String, String> infoMemory = new HashMap<>();
         try {
             IoUtil.readLines(new ByteArrayInputStream(memory.getBytes(StandardCharsets.UTF_8)), line -> {
@@ -91,43 +112,44 @@ public class RedisMemoryThreshold {
         }
 
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
-        if (usedMemory == null) {
-            return null;
-        }
+        Long configuredMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
 
-        Long maxMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
-        if (maxMemory == null) {
-            if (defaultMaxMemory == 0) {
-                LOGGER.warn("Memory limit is disabled '{}'.", defaultMaxMemory);
-                return null;
-            }
-            LOGGER.debug("Using memory limit with value '{}'.", defaultMaxMemory);
-            maxMemory = defaultMaxMemory;
-        }
-        else if (maxMemory == 0) {
-            LOGGER.debug("Redis 'info memory' field '{}' is {}. Consider configuring it.", INFO_MEMORY_SECTION_MAXMEMORY, maxMemory);
-            if (defaultMaxMemory > 0) {
-                maxMemory = defaultMaxMemory;
-                LOGGER.debug("Using memory limit with value '{}'.", defaultMaxMemory);
+        if (configuredMemory == null || (memoryLimit > 0 && configuredMemory > memoryLimit)) {
+            configuredMemory = memoryLimit;
+            if (configuredMemory > 0) {
+                LOGGER.debug("Setting maximum memory size {}", configuredMemory);
             }
         }
-
-        return Tuple2.of(usedMemory, maxMemory);
-    }
-
-    private void disable() {
-        isMemoryOk = MEMORY_OK;
-        LOGGER.warn("Memory threshold percentage check is disabled!");
+        maximumMemory = configuredMemory;
+        return Tuple2.of(usedMemory, configuredMemory);
     }
 
     private Long parseLong(String name, String value) {
+        if (value == null) {
+            return null;
+        }
+
         try {
             return Long.valueOf(value);
         }
         catch (NumberFormatException e) {
             LOGGER.debug("Cannot parse Redis 'info memory' field '{}' with value '{}'.", name, value);
+            return null;
         }
-        return null;
     }
 
+    private String humanReadableSize(long size) {
+        if (size < 1024) {
+            return size + " B";
+        }
+        else if (size < 1024 * 1024) {
+            return String.format("%.2f KB", size / 1024.0);
+        }
+        else if (size < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", size / (1024.0 * 1024.0));
+        }
+        else {
+            return String.format("%.2f GB", size / (1024.0 * 1024.0 * 1024.0));
+        }
+    }
 }

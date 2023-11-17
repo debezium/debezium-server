@@ -15,8 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.junitpioneer.jupiter.RetryingTest;
 
 import io.debezium.config.Configuration;
-import io.debezium.connector.mysql.MySqlConnection;
-import io.debezium.connector.mysql.MySqlConnection.MySqlConnectionConfiguration;
+import io.debezium.connector.mysql.MySqlConnectorConfig;
+import io.debezium.connector.mysql.strategy.AbstractConnectorConnection;
 import io.debezium.doc.FixFor;
 import io.debezium.relational.history.AbstractSchemaHistoryTest;
 import io.debezium.relational.history.SchemaHistory;
@@ -100,7 +100,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
         Testing.print("Pausing container");
         RedisTestResourceLifecycleManager.pause();
 
-        final MySqlConnection connection = getMySqlConnection();
+        final AbstractConnectorConnection connection = getMySqlConnection();
         connection.connect();
         Testing.print("Creating new redis_test table and inserting 5 records to it");
         connection.execute("CREATE TABLE inventory.redis_test (id INT PRIMARY KEY)");
@@ -120,13 +120,14 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
         assertTrue(entries.get(INIT_HISTORY_SIZE).getFields().get("schema").contains("redis_test"));
     }
 
-    private MySqlConnection getMySqlConnection() {
-        return new MySqlConnection(new MySqlConnectionConfiguration(Configuration.create()
+    private AbstractConnectorConnection getMySqlConnection() {
+        final Configuration config = Configuration.create()
                 .with("database.user", MySqlTestResourceLifecycleManager.PRIVILEGED_USER)
                 .with("database.password", MySqlTestResourceLifecycleManager.PRIVILEGED_PASSWORD)
                 .with("database.dbname", MySqlTestResourceLifecycleManager.DBNAME)
                 .with("database.hostname", MySqlTestResourceLifecycleManager.HOST)
                 .with("database.port", MySqlTestResourceLifecycleManager.getContainer().getMappedPort(MySqlTestResourceLifecycleManager.PORT))
-                .build()));
+                .build();
+        return new MySqlConnectorConfig(config).getConnectorAdapter().createConnection(config);
     }
 }

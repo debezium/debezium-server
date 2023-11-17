@@ -17,8 +17,6 @@ import jakarta.inject.Inject;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.azure.core.util.IterableStream;
 import com.azure.messaging.eventhubs.EventHubClientBuilder;
@@ -34,6 +32,7 @@ import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 /**
  * Integration test that verifies basic reading from PostgreSQL database and
@@ -42,11 +41,9 @@ import io.quarkus.test.junit.QuarkusTest;
  * @author Abhishek Gupta
  */
 @QuarkusTest
+@TestProfile(EventHubsWithStaticPartitionIdProfile.class)
 @QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
-public class EventHubsIT {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(EventHubsIT.class);
-
+public class EventHubsWithStaticPartitionIdIT {
     private static final int MESSAGE_COUNT = 4;
     private static final String CONSUMER_GROUP = "$Default";
 
@@ -85,7 +82,7 @@ public class EventHubsIT {
     }
 
     @Test
-    public void testEventHubs() throws Exception {
+    public void testEventHubsWithFixedPartitionId() throws Exception {
         Testing.Print.enable();
 
         String finalConnectionString = String.format("%s;EntityPath=%s",

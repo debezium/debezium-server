@@ -150,12 +150,12 @@ public class HttpIT {
                 };
                 hm = om.readValue(request.getBody(), tref);
 
-                Assertions.assertEquals("/debezium/postgresql/testc", (String) hm.get("source"));
-                Assertions.assertEquals("io.debezium.postgresql.datachangeevent", (String) hm.get("type"));
-                Assertions.assertEquals("1.0", (String) hm.get("specversion"));
-                Assertions.assertEquals("postgres", (String) hm.get("iodebeziumdb"));
-                Assertions.assertEquals("inventory", (String) hm.get("iodebeziumschema"));
-                Assertions.assertEquals("customers", (String) hm.get("iodebeziumtable"));
+                Assertions.assertEquals("/debezium/postgresql/testc", hm.get("source"));
+                Assertions.assertEquals("io.debezium.connector.postgresql.DataChangeEvent", hm.get("type"));
+                Assertions.assertEquals("1.0", hm.get("specversion"));
+                Assertions.assertEquals("postgres", hm.get("iodebeziumdb"));
+                Assertions.assertEquals("inventory", hm.get("iodebeziumschema"));
+                Assertions.assertEquals("customers", hm.get("iodebeziumtable"));
                 String eventID = (String) hm.get("id");
                 Assertions.assertTrue(eventID.length() > 0);
 

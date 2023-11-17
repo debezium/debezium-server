@@ -21,6 +21,7 @@ import org.awaitility.Awaitility;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.BuiltinExchangeType;
@@ -43,6 +44,7 @@ import io.quarkus.test.junit.QuarkusTest;
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
 @QuarkusTestResource(RabbitMqTestResourceLifecycleManager.class)
+@EnabledIfSystemProperty(named = "debezium.sink.type", matches = "rabbitmq")
 public class RabbitMqIT {
 
     private static final int MESSAGE_COUNT = 4;

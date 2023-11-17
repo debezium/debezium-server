@@ -5,7 +5,10 @@
  */
 package io.debezium.server.rabbitmq;
 
+import java.time.Duration;
+
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -13,11 +16,14 @@ import org.testcontainers.utility.DockerImageName;
  */
 public class RabbitMqContainer extends GenericContainer<RabbitMqContainer> {
 
-    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("rabbitmq:3.10.19-management");
+    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("rabbitmq:3.12.9-management");
     public static final int BROKER_PORT = 5672;
+    public static final int STREAM_PORT = 5552;
 
     public RabbitMqContainer() {
         super(DEFAULT_IMAGE_NAME);
-        withExposedPorts(BROKER_PORT, 15672);
+        withExposedPorts(BROKER_PORT, STREAM_PORT, 15672);
+
+        this.waitStrategy = Wait.forLogMessage(".*Server startup complete.*", 1).withStartupTimeout(Duration.ofSeconds(60));
     }
 }

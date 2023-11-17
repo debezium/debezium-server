@@ -5,6 +5,7 @@
  */
 package io.debezium.server.rabbitmq;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,16 +21,23 @@ public class RabbitMqTestResourceLifecycleManager implements QuarkusTestResource
     public static RabbitMqContainer container = new RabbitMqContainer();
     private static final AtomicBoolean running = new AtomicBoolean(false);
 
-    private static synchronized void init() {
+    private static synchronized void init() throws IOException, InterruptedException {
         if (!running.get()) {
+
             container.start();
+            container.execInContainer("rabbitmq-plugins", "enable", "--all");
             running.set(true);
         }
     }
 
     @Override
     public Map<String, String> start() {
-        init();
+        try {
+            init();
+        }
+        catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         Map<String, String> params = new ConcurrentHashMap<>();
         params.put("debezium.sink.rabbitmq.connection.host", container.getHost());
         params.put("debezium.sink.rabbitmq.connection.port", String.valueOf(getPort()));
