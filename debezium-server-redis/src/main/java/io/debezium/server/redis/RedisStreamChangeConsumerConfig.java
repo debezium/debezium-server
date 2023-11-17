@@ -21,7 +21,7 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private static final int DEFAULT_BATCH_SIZE = 500;
     private static final Field PROP_BATCH_SIZE = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "batch.size")
             .withDefault(DEFAULT_BATCH_SIZE);
-
+    
     private static final String DEFAULT_NULL_KEY = "default";
     private static final Field PROP_NULL_KEY = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "null.key")
             .withDefault(DEFAULT_NULL_KEY);
@@ -36,14 +36,13 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
             .withAllowedValues(Set.of(MESSAGE_FORMAT_COMPACT, MESSAGE_FORMAT_EXTENDED))
             .withDefault(MESSAGE_FORMAT_COMPACT);
 
-    private static final int DEFAULT_MEMORY_THRESHOLD_PERCENTAGE = 85;
-    private static final Field PROP_MEMORY_THRESHOLD_PERCENTAGE = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "memory.threshold.percentage")
-            .withDefault(DEFAULT_MEMORY_THRESHOLD_PERCENTAGE)
-            .withValidation(RangeValidator.between(0, 100));
-
     private static final int DEFAULT_MEMORY_LIMIT_MB = 0;
+    private static final int DEFAULT_RATE_PER_SECOND = 30000;
     private static final Field PROP_MEMORY_LIMIT_MB = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "memory.limit.mb")
             .withDefault(DEFAULT_MEMORY_LIMIT_MB)
+            .withValidation(RangeValidator.atLeast(0));
+    private static final Field PROP_RATE_PER_SEC = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "rate.per.second")
+            .withDefault(DEFAULT_RATE_PER_SECOND)
             .withValidation(RangeValidator.atLeast(0));
 
     private int batchSize;
@@ -52,6 +51,8 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private String messageFormat;
     private int memoryThreshold;
     private int memoryLimitMb;
+    private int batchDelay;
+    private int ratePerSecond;
 
     public RedisStreamChangeConsumerConfig(Configuration config) {
         super(config, PROP_PREFIX);
@@ -64,19 +65,27 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
         nullKey = config.getString(PROP_NULL_KEY);
         nullValue = config.getString(PROP_NULL_VALUE);
         messageFormat = config.getString(PROP_MESSAGE_FORMAT);
-        memoryThreshold = config.getInteger(PROP_MEMORY_THRESHOLD_PERCENTAGE);
         memoryLimitMb = config.getInteger(PROP_MEMORY_LIMIT_MB);
+        ratePerSecond = config.getInteger(PROP_RATE_PER_SEC);
     }
 
     @Override
     protected List<Field> getAllConfigurationFields() {
-        List<Field> fields = Collect.arrayListOf(PROP_BATCH_SIZE, PROP_NULL_KEY, PROP_NULL_VALUE, PROP_MESSAGE_FORMAT, PROP_MEMORY_THRESHOLD_PERCENTAGE);
+        List<Field> fields = Collect.arrayListOf(PROP_BATCH_SIZE, PROP_NULL_KEY, PROP_NULL_VALUE, PROP_MESSAGE_FORMAT);
         fields.addAll(super.getAllConfigurationFields());
         return fields;
     }
 
+    public int getRatePerSecond() {
+    	return ratePerSecond;
+    }
+    
     public int getBatchSize() {
         return batchSize;
+    }
+    
+    public int getBatchDelay() {
+    	return batchDelay;
     }
 
     public String getNullKey() {
