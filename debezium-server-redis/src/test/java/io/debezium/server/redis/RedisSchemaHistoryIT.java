@@ -15,8 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.junitpioneer.jupiter.RetryingTest;
 
 import io.debezium.config.Configuration;
-import io.debezium.connector.mysql.MySqlConnection;
-import io.debezium.connector.mysql.MySqlConnection.MySqlConnectionConfiguration;
+import io.debezium.connector.mysql.MySqlTextProtocolFieldReader;
+import io.debezium.connector.mysql.strategy.mysql.MySqlConnection;
+import io.debezium.connector.mysql.strategy.mysql.MySqlConnectionConfiguration;
 import io.debezium.doc.FixFor;
 import io.debezium.relational.history.AbstractSchemaHistoryTest;
 import io.debezium.relational.history.SchemaHistory;
@@ -127,6 +128,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
                 .with("database.dbname", MySqlTestResourceLifecycleManager.DBNAME)
                 .with("database.hostname", MySqlTestResourceLifecycleManager.HOST)
                 .with("database.port", MySqlTestResourceLifecycleManager.getContainer().getMappedPort(MySqlTestResourceLifecycleManager.PORT))
-                .build()));
+                .build()),
+                new MySqlTextProtocolFieldReader(null));
     }
 }
