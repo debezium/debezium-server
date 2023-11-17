@@ -7,6 +7,7 @@ package io.debezium.server.redis;
 
 import static io.debezium.server.redis.RedisStreamChangeConsumerConfig.MESSAGE_FORMAT_COMPACT;
 import static io.debezium.server.redis.RedisStreamChangeConsumerConfig.MESSAGE_FORMAT_EXTENDED;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
@@ -52,188 +53,197 @@ import io.debezium.util.DelayStrategy;
 @Named("redis")
 @Dependent
 public class RedisStreamChangeConsumer extends BaseChangeConsumer
-		implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(RedisStreamChangeConsumer.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(RedisStreamChangeConsumer.class);
 
-	private static final String DEBEZIUM_REDIS_SINK_CLIENT_NAME = "debezium:redis:sink";
+    private static final String DEBEZIUM_REDIS_SINK_CLIENT_NAME = "debezium:redis:sink";
 
-	private static final String EXTENDED_MESSAGE_KEY_KEY = "key";
-	private static final String EXTENDED_MESSAGE_VALUE_KEY = "value";
-	private RedisClient client;
+    private static final String EXTENDED_MESSAGE_KEY_KEY = "key";
+    private static final String EXTENDED_MESSAGE_VALUE_KEY = "value";
+    private RedisClient client;
 
-	private Function<ChangeEvent<Object, Object>, Map<String, String>> recordMapFunction;
+    private Function<ChangeEvent<Object, Object>, Map<String, String>> recordMapFunction;
 
-	private RedisMemoryThreshold redisMemoryThreshold;
+    private RedisMemoryThreshold redisMemoryThreshold;
 
-	private RedisStreamChangeConsumerConfig config;
+    private RedisStreamChangeConsumerConfig config;
 
-	@PostConstruct
-	void connect() {
-		Configuration configuration = Configuration.from(getConfigSubset(ConfigProvider.getConfig(), ""));
-		config = new RedisStreamChangeConsumerConfig(configuration);
+    @PostConstruct
+    void connect() {
+        Configuration configuration = Configuration.from(getConfigSubset(ConfigProvider.getConfig(), ""));
+        config = new RedisStreamChangeConsumerConfig(configuration);
 
-		String messageFormat = config.getMessageFormat();
-		if (MESSAGE_FORMAT_EXTENDED.equals(messageFormat)) {
-			recordMapFunction = record -> {
-				Map<String, String> recordMap = new LinkedHashMap<>();
-				String key = (record.key() != null) ? getString(record.key()) : config.getNullKey();
-				String value = (record.value() != null) ? getString(record.value()) : config.getNullValue();
-				Map<String, String> headers = convertHeaders(record);
+        String messageFormat = config.getMessageFormat();
+        if (MESSAGE_FORMAT_EXTENDED.equals(messageFormat)) {
+            recordMapFunction = record -> {
+                Map<String, String> recordMap = new LinkedHashMap<>();
+                String key = (record.key() != null) ? getString(record.key()) : config.getNullKey();
+                String value = (record.value() != null) ? getString(record.value()) : config.getNullValue();
+                Map<String, String> headers = convertHeaders(record);
 
-				recordMap.put(EXTENDED_MESSAGE_KEY_KEY, key);
-				recordMap.put(EXTENDED_MESSAGE_VALUE_KEY, value);
-				for (Map.Entry<String, String> entry : headers.entrySet()) {
-					recordMap.put(entry.getKey().toUpperCase(Locale.ROOT), entry.getValue());
-				}
-				return recordMap;
-			};
-		} else if (MESSAGE_FORMAT_COMPACT.equals(messageFormat)) {
-			recordMapFunction = record -> {
-				String key = (record.key() != null) ? getString(record.key()) : config.getNullKey();
-				String value = (record.value() != null) ? getString(record.value()) : config.getNullValue();
-				return Map.of(key, value);
-			};
-		}
+                recordMap.put(EXTENDED_MESSAGE_KEY_KEY, key);
+                recordMap.put(EXTENDED_MESSAGE_VALUE_KEY, value);
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    recordMap.put(entry.getKey().toUpperCase(Locale.ROOT), entry.getValue());
+                }
+                return recordMap;
+            };
+        }
+        else if (MESSAGE_FORMAT_COMPACT.equals(messageFormat)) {
+            recordMapFunction = record -> {
+                String key = (record.key() != null) ? getString(record.key()) : config.getNullKey();
+                String value = (record.value() != null) ? getString(record.value()) : config.getNullValue();
+                return Map.of(key, value);
+            };
+        }
 
-		RedisConnection redisConnection = new RedisConnection(config.getAddress(), config.getDbIndex(),
-				config.getUser(), config.getPassword(), config.getConnectionTimeout(), config.getSocketTimeout(),
-				config.isSslEnabled());
-		client = redisConnection.getRedisClient(DEBEZIUM_REDIS_SINK_CLIENT_NAME, config.isWaitEnabled(),
-				config.getWaitTimeout(), config.isWaitRetryEnabled(), config.getWaitRetryDelay());
+        RedisConnection redisConnection = new RedisConnection(config.getAddress(), config.getDbIndex(),
+                config.getUser(), config.getPassword(), config.getConnectionTimeout(), config.getSocketTimeout(),
+                config.isSslEnabled());
+        client = redisConnection.getRedisClient(DEBEZIUM_REDIS_SINK_CLIENT_NAME, config.isWaitEnabled(),
+                config.getWaitTimeout(), config.isWaitRetryEnabled(), config.getWaitRetryDelay());
 
-		redisMemoryThreshold = new RedisMemoryThreshold(client, config);
-	}
+        redisMemoryThreshold = new RedisMemoryThreshold(client, config);
+    }
 
-	@PreDestroy
-	void close() {
-		try {
-			if (client != null) {
-				client.close();
-			}
-		} catch (Exception e) {
-			LOGGER.warn("Exception while closing Jedis: {}", client, e);
-		} finally {
-			client = null;
-		}
-	}
+    @PreDestroy
+    void close() {
+        try {
+            if (client != null) {
+                client.close();
+            }
+        }
+        catch (Exception e) {
+            LOGGER.warn("Exception while closing Jedis: {}", client, e);
+        }
+        finally {
+            client = null;
+        }
+    }
 
-	/**
-	 * Split collection to batches by batch size using a stream
-	 */
-	private <T> Stream<List<T>> batches(List<T> source, int length) {
-		if (source.isEmpty()) {
-			return Stream.empty();
-		}
+    /**
+     * Split collection to batches by batch size using a stream
+     */
+    private <T> Stream<List<T>> batches(List<T> source, int length) {
+        if (source.isEmpty()) {
+            return Stream.empty();
+        }
 
-		int size = source.size();
-		int fullChunks = (size - 1) / length;
+        int size = source.size();
+        int fullChunks = (size - 1) / length;
 
-		return IntStream.range(0, fullChunks + 1)
-				.mapToObj(n -> source.subList(n * length, n == fullChunks ? size : (n + 1) * length));
-	}
+        return IntStream.range(0, fullChunks + 1)
+                .mapToObj(n -> source.subList(n * length, n == fullChunks ? size : (n + 1) * length));
+    }
 
-	@Override
-	public void handleBatch(List<ChangeEvent<Object, Object>> records,
-			RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
-		DelayStrategy delayStrategy = DelayStrategy.exponential(Duration.ofMillis(config.getInitialRetryDelay()),
-				Duration.ofMillis(config.getMaxRetryDelay()));
+    @Override
+    public void handleBatch(List<ChangeEvent<Object, Object>> records,
+                            RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+        DelayStrategy delayStrategy = DelayStrategy.exponential(Duration.ofMillis(config.getInitialRetryDelay()),
+                Duration.ofMillis(config.getMaxRetryDelay()));
 
-		LOGGER.debug("Handling a batch of {} records", records.size());
-		batches(records, config.getBatchSize()).forEach(batch -> {
-			boolean completedSuccessfully = false;
+        LOGGER.debug("Handling a batch of {} records", records.size());
+        batches(records, config.getBatchSize()).forEach(batch -> {
+            boolean completedSuccessfully = false;
 
-			// Clone the batch and remove the records that have been successfully processed.
-			// Move to the next batch once this list is empty.
-			List<ChangeEvent<Object, Object>> clonedBatch = batch.stream().collect(Collectors.toList());
+            // Clone the batch and remove the records that have been successfully processed.
+            // Move to the next batch once this list is empty.
+            List<ChangeEvent<Object, Object>> clonedBatch = batch.stream().collect(Collectors.toList());
 
-			// As long as we failed to execute the current batch to the stream, we should
-			// retry if the reason
-			// was either a connection error or OOM in Redis.
-			while (!completedSuccessfully) {
-				if (client == null) {
-					// Try to reconnect
-					try {
-						connect();
-						continue; // Managed to establish a new connection to Redis, avoid a redundant retry
-					} catch (Exception e) {
-						close();
-						LOGGER.error("Can't connect to Redis", e);
-					}
-				} else {
-					try {
-						LOGGER.debug("Preparing a Redis Pipeline of {} records", clonedBatch.size());
+            // As long as we failed to execute the current batch to the stream, we should
+            // retry if the reason
+            // was either a connection error or OOM in Redis.
+            while (!completedSuccessfully) {
+                if (client == null) {
+                    // Try to reconnect
+                    try {
+                        connect();
+                        continue; // Managed to establish a new connection to Redis, avoid a redundant retry
+                    }
+                    catch (Exception e) {
+                        close();
+                        LOGGER.error("Can't connect to Redis", e);
+                    }
+                }
+                else {
+                    try {
+                        LOGGER.debug("Preparing a Redis Pipeline of {} records", clonedBatch.size());
 
-						List<SimpleEntry<String, Map<String, String>>> recordsMap = new ArrayList<>(clonedBatch.size());
-						for (ChangeEvent<Object, Object> record : clonedBatch) {
-							String destination = streamNameMapper.map(record.destination());
-							Map<String, String> recordMap = recordMapFunction.apply(record);
-							recordsMap.add(new SimpleEntry<>(destination, recordMap));
-						}
-						if (!redisMemoryThreshold.checkMemory(getObjectSize(recordsMap.get(0)), recordsMap.size(),
-								config.getRatePerSecond())) {
-							LOGGER.warn("Stopped consuming records!\n");
-							Thread.sleep(500);
-							continue;
-						}
-						List<String> responses = client.xadd(recordsMap);
-						List<ChangeEvent<Object, Object>> processedRecords = new ArrayList<ChangeEvent<Object, Object>>();
-						int index = 0;
-						int totalOOMResponses = 0;
+                        List<SimpleEntry<String, Map<String, String>>> recordsMap = new ArrayList<>(clonedBatch.size());
+                        for (ChangeEvent<Object, Object> record : clonedBatch) {
+                            String destination = streamNameMapper.map(record.destination());
+                            Map<String, String> recordMap = recordMapFunction.apply(record);
+                            recordsMap.add(new SimpleEntry<>(destination, recordMap));
+                        }
+                        if (!redisMemoryThreshold.checkMemory(getObjectSize(recordsMap.get(0)), recordsMap.size(),
+                                config.getRatePerSecond())) {
+                            LOGGER.warn("Stopped consuming records!\n");
+                            Thread.sleep(500);
+                            continue;
+                        }
+                        List<String> responses = client.xadd(recordsMap);
+                        List<ChangeEvent<Object, Object>> processedRecords = new ArrayList<ChangeEvent<Object, Object>>();
+                        int index = 0;
+                        int totalOOMResponses = 0;
 
-						for (String message : responses) {
-							// When Redis reaches its max memory limitation, an OOM error message will be
-							// retrieved.
-							// In this case, we will retry execute the failed commands, assuming some memory
-							// will be freed eventually as result
-							// of evicting elements from the stream by the target DB.
-							if (message.contains("OOM command not allowed when used memory > 'maxmemory'")) {
-								totalOOMResponses++;
-							} else {
-								// Mark the record as processed
-								ChangeEvent<Object, Object> currentRecord = clonedBatch.get(index);
-								committer.markProcessed(currentRecord);
-								processedRecords.add(currentRecord);
-							}
+                        for (String message : responses) {
+                            // When Redis reaches its max memory limitation, an OOM error message will be
+                            // retrieved.
+                            // In this case, we will retry execute the failed commands, assuming some memory
+                            // will be freed eventually as result
+                            // of evicting elements from the stream by the target DB.
+                            if (message.contains("OOM command not allowed when used memory > 'maxmemory'")) {
+                                totalOOMResponses++;
+                            }
+                            else {
+                                // Mark the record as processed
+                                ChangeEvent<Object, Object> currentRecord = clonedBatch.get(index);
+                                committer.markProcessed(currentRecord);
+                                processedRecords.add(currentRecord);
+                            }
 
-							index++;
-						}
+                            index++;
+                        }
 
-						clonedBatch.removeAll(processedRecords);
+                        clonedBatch.removeAll(processedRecords);
 
-						if (totalOOMResponses > 0) {
-							LOGGER.info("Redis sink currently full, will retry ({} command(s) failed)",
-									totalOOMResponses);
-						}
+                        if (totalOOMResponses > 0) {
+                            LOGGER.info("Redis sink currently full, will retry ({} command(s) failed)",
+                                    totalOOMResponses);
+                        }
 
-						if (clonedBatch.size() == 0) {
-							completedSuccessfully = true;
-						}
-					} catch (RedisClientConnectionException jce) {
-						LOGGER.error("Connection error", jce);
-						close();
-					} catch (Exception e) {
-						LOGGER.error("Unexpected Exception", e);
-						throw new DebeziumException(e);
-					}
-				}
+                        if (clonedBatch.size() == 0) {
+                            completedSuccessfully = true;
+                        }
+                    }
+                    catch (RedisClientConnectionException jce) {
+                        LOGGER.error("Connection error", jce);
+                        close();
+                    }
+                    catch (Exception e) {
+                        LOGGER.error("Unexpected Exception", e);
+                        throw new DebeziumException(e);
+                    }
+                }
 
-				// Failed to execute the transaction, retry...
-				delayStrategy.sleepWhen(!completedSuccessfully);
-			}
-		});
+                // Failed to execute the transaction, retry...
+                delayStrategy.sleepWhen(!completedSuccessfully);
+            }
+        });
 
-		// Mark the whole batch as finished once the sub batches completed
-		committer.markBatchFinished();
-	}
+        // Mark the whole batch as finished once the sub batches completed
+        committer.markBatchFinished();
+    }
 
-	private long getObjectSize(SimpleEntry<String, Map<String, String>> record) throws IOException {
-		ByteArrayOutputStream boas = new ByteArrayOutputStream();
-		ObjectOutputStream oos = new ObjectOutputStream(boas);
-		oos.writeObject(record);
-		oos.flush();
-		long size = boas.size() + 50;
-		LOGGER.debug("Single Record size {}", size);
-		return size;
-	}
+    private long getObjectSize(SimpleEntry<String, Map<String, String>> record) throws IOException {
+        ByteArrayOutputStream boas = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(boas);
+        oos.writeObject(record);
+        oos.flush();
+        long size = boas.size() + 50;
+        LOGGER.debug("Single Record size {}", size);
+        return size;
+    }
 }

@@ -21,7 +21,7 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private static final int DEFAULT_BATCH_SIZE = 500;
     private static final Field PROP_BATCH_SIZE = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "batch.size")
             .withDefault(DEFAULT_BATCH_SIZE);
-    
+
     private static final String DEFAULT_NULL_KEY = "default";
     private static final Field PROP_NULL_KEY = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "null.key")
             .withDefault(DEFAULT_NULL_KEY);
@@ -77,15 +77,15 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     }
 
     public int getRatePerSecond() {
-    	return ratePerSecond;
+        return ratePerSecond;
     }
-    
+
     public int getBatchSize() {
         return batchSize;
     }
-    
+
     public int getBatchDelay() {
-    	return batchDelay;
+        return batchDelay;
     }
 
     public String getNullKey() {
