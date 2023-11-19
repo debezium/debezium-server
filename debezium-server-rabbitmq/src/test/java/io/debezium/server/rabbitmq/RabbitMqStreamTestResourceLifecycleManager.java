@@ -15,9 +15,9 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 /**
  * Manages the lifecycle of a RabbitMQ cluster test resource.
  */
-public class RabbitMqTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
+public class RabbitMqStreamTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
-    public static final int PORT = 5672;
+    public static final int PORT = 5552;
     public static RabbitMqContainer container = new RabbitMqContainer();
     private static final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -42,8 +42,8 @@ public class RabbitMqTestResourceLifecycleManager implements QuarkusTestResource
             throw new RuntimeException(e);
         }
         Map<String, String> params = new ConcurrentHashMap<>();
-        params.put("debezium.sink.rabbitmq.connection.host", container.getHost());
-        params.put("debezium.sink.rabbitmq.connection.port", String.valueOf(getPort()));
+        params.put("debezium.sink.rabbitmqstream.connection.host", container.getHost());
+        params.put("debezium.sink.rabbitmqstream.connection.port", String.valueOf(getPort()));
         return params;
     }
 

@@ -23,7 +23,11 @@
             <artifactId>amqp-client</artifactId>
             <version>5.16.0</version>
         </dependency>
-
+        <dependency>
+            <groupId>com.rabbitmq</groupId>
+            <artifactId>stream-client</artifactId>
+            <version>0.14.0</version>
+        </dependency>
         <!-- Testing -->
         <dependency>
             <groupId>io.quarkus</groupId>
