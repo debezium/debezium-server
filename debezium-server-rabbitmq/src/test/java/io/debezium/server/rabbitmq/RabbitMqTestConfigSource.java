@@ -5,12 +5,11 @@
  */
 package io.debezium.server.rabbitmq;
 
-import java.util.HashMap;
-import java.util.Map;
-
+import io.debezium.server.TestConfigSource;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 
-import io.debezium.server.TestConfigSource;
+import java.util.HashMap;
+import java.util.Map;
 
 public class RabbitMqTestConfigSource extends TestConfigSource {
 
@@ -19,7 +18,12 @@ public class RabbitMqTestConfigSource extends TestConfigSource {
     public RabbitMqTestConfigSource() {
 
         final Map<String, String> rabbitmqConfig = new HashMap<>();
-        rabbitmqConfig.put("debezium.sink.type", "rabbitmq");
+        String sinkType = System.getProperty("debezium.sink.type");
+        if ("rabbitmqstream".equals(sinkType)) {
+            rabbitmqConfig.put("debezium.sink.type", "rabbitmqstream");
+        } else {
+            rabbitmqConfig.put("debezium.sink.type", "rabbitmq");
+        }
         rabbitmqConfig.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         rabbitmqConfig.put("debezium.source." + StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, OFFSET_STORE_PATH.toAbsolutePath().toString());
         rabbitmqConfig.put("debezium.source.offset.flush.interval.ms", "0");

@@ -5,16 +5,15 @@
  */
 package io.debezium.server;
 
+import io.debezium.data.Json;
+import io.debezium.util.Testing;
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.eclipse.microprofile.config.spi.ConfigSource;
+
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
-import org.eclipse.microprofile.config.spi.ConfigSource;
-
-import io.debezium.data.Json;
-import io.debezium.util.Testing;
 
 /**
  * A config source used during tests. Amended/overridden by values exposed from test lifecycle listeners.
