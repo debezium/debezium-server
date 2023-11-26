@@ -3,14 +3,14 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis.wip;
+package io.debezium.server.redis;
 
-import static io.debezium.server.redis.wip.TestConstants.INITIAL_CUSTOMER_COUNT;
-import static io.debezium.server.redis.wip.TestConstants.INITIAL_SCHEMA_HISTORY_SIZE;
-import static io.debezium.server.redis.wip.TestUtils.awaitHashSizeGte;
-import static io.debezium.server.redis.wip.TestUtils.getMySqlConnection;
-import static io.debezium.server.redis.wip.TestUtils.insertCustomerToMySql;
-import static io.debezium.server.redis.wip.TestUtils.waitForStreamLength;
+import static io.debezium.server.redis.TestConstants.INITIAL_CUSTOMER_COUNT;
+import static io.debezium.server.redis.TestConstants.INITIAL_SCHEMA_HISTORY_SIZE;
+import static io.debezium.server.redis.TestUtils.awaitHashSizeGte;
+import static io.debezium.server.redis.TestUtils.getMySqlConnection;
+import static io.debezium.server.redis.TestUtils.insertCustomerToMySql;
+import static io.debezium.server.redis.TestUtils.waitForStreamLength;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -142,8 +142,6 @@ public class TestContainersStreamIT extends TestContainersRedisTestBase {
         final List<StreamEntry> entries = jedis.xrange(STREAM_NAME, null, (StreamEntryID) null);
         for (StreamEntry entry : entries) {
             Map<String, String> map = entry.getFields();
-            // TODO verify, that there should really be 2 fields
-            // assertEquals(3, map.size(), "Expected map of size 3");
             assertThat(map.get("key")).startsWith("{\"schema\":");
             assertThat(map.get("value")).startsWith("{\"schema\":");
         }

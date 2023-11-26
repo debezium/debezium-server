@@ -3,15 +3,15 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis.wip;
+package io.debezium.server.redis;
 
-import static io.debezium.server.redis.wip.TestConstants.INITIAL_CUSTOMER_COUNT;
-import static io.debezium.server.redis.wip.TestConstants.INITIAL_SCHEMA_HISTORY_SIZE;
-import static io.debezium.server.redis.wip.TestConstants.LOCALHOST;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_SSL_PORT;
-import static io.debezium.server.redis.wip.TestUtils.insertCustomerToMySql;
-import static io.debezium.server.redis.wip.TestUtils.waitForStreamLength;
+import static io.debezium.server.redis.TestConstants.INITIAL_CUSTOMER_COUNT;
+import static io.debezium.server.redis.TestConstants.INITIAL_SCHEMA_HISTORY_SIZE;
+import static io.debezium.server.redis.TestConstants.LOCALHOST;
+import static io.debezium.server.redis.TestConstants.REDIS_PORT;
+import static io.debezium.server.redis.TestConstants.REDIS_SSL_PORT;
+import static io.debezium.server.redis.TestUtils.insertCustomerToMySql;
+import static io.debezium.server.redis.TestUtils.waitForStreamLength;
 
 import java.io.IOException;
 
@@ -19,8 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
-
-import io.debezium.server.redis.TestUtils;
 
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;

@@ -3,7 +3,7 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis.wip;
+package io.debezium.server.redis;
 
 public class TestConstants {
     private TestConstants() {

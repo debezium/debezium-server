@@ -3,14 +3,14 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis.wip;
+package io.debezium.server.redis;
 
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_DATABASE;
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_PASSWORD;
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_PORT;
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_USER;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_SSL_PORT;
+import static io.debezium.server.redis.TestConstants.MYSQL_DATABASE;
+import static io.debezium.server.redis.TestConstants.MYSQL_PASSWORD;
+import static io.debezium.server.redis.TestConstants.MYSQL_PORT;
+import static io.debezium.server.redis.TestConstants.MYSQL_USER;
+import static io.debezium.server.redis.TestConstants.REDIS_PORT;
+import static io.debezium.server.redis.TestConstants.REDIS_SSL_PORT;
 
 import java.util.HashMap;
 import java.util.List;
