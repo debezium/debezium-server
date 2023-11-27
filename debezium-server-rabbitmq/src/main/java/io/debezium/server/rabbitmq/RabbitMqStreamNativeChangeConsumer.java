@@ -5,32 +5,35 @@
  */
 package io.debezium.server.rabbitmq;
 
-import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.ConnectionFactoryConfigurator;
-import com.rabbitmq.stream.Environment;
-import com.rabbitmq.stream.Producer;
-import com.rabbitmq.stream.StreamException;
-import io.debezium.DebeziumException;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
-import io.debezium.engine.Header;
-import io.debezium.server.BaseChangeConsumer;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
+
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.ConnectionFactoryConfigurator;
+import com.rabbitmq.stream.Environment;
+import com.rabbitmq.stream.Producer;
+import com.rabbitmq.stream.StreamException;
+
+import io.debezium.DebeziumException;
+import io.debezium.engine.ChangeEvent;
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.engine.Header;
+import io.debezium.server.BaseChangeConsumer;
 
 /**
  * Implementation of the consumer that delivers the messages into RabbitMQ Stream destination.
