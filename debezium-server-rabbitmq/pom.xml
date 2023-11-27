@@ -113,10 +113,26 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>integration-test</id>
+                        <id>integration-test-redismq</id>
                         <goals>
                             <goal>integration-test</goal>
                         </goals>
+                        <configuration>
+                            <systemProperties>
+                                <debezium.sink.type>rabbitmq</debezium.sink.type>
+                            </systemProperties>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>integration-test-redismq-stream</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                        </goals>
+                        <configuration>
+                            <systemProperties>
+                                <debezium.sink.type>rabbitmqstream</debezium.sink.type>
+                            </systemProperties>
+                        </configuration>
                     </execution>
                     <execution>
                         <id>verify</id>

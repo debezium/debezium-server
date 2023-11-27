@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
@@ -48,17 +49,12 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamNativeChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmqstream.";
+
+    private static final String PROP_STREAM = PROP_PREFIX + "stream";
     private static final String PROP_CONNECTION_PREFIX = PROP_PREFIX + "connection.";
-    private static final String STREAM_NAME = PROP_PREFIX + "stream";
-    private String stream;
 
-    /**
-     * When true, the routing key is calculated from topic name using stream name mapper.
-     * When false the routingKey value or empty string is used.
-     */
-
-    @ConfigProperty(name = PROP_PREFIX + "deliveryMode", defaultValue = "2")
-    int deliveryMode;
+    @ConfigProperty(name = PROP_STREAM)
+    Optional<String> stream;
 
     @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
     int ackTimeout;
@@ -88,15 +84,17 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
                     .host(factory.getHost())
                     .port(factory.getPort()).build();
 
-            stream = config.getValue(STREAM_NAME, String.class);
+            if (stream.isEmpty()) {
+                throw new DebeziumException("Mandatory configration option '" + PROP_STREAM + "' is not provided");
+            }
 
-            LOGGER.info("Creating stream '{}'", stream);
+            LOGGER.info("Creating stream '{}'", stream.get());
 
-            environment.streamCreator().stream(stream).create();
+            environment.streamCreator().stream(stream.get()).create();
 
             producer = environment.producerBuilder()
                     .confirmTimeout(Duration.ofSeconds(ackTimeout))
-                    .stream(stream)
+                    .stream(stream.get())
                     .build();
 
         }

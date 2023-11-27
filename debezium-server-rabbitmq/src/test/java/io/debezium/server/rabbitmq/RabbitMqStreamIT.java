@@ -39,7 +39,7 @@ import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
-@QuarkusTestResource(value = RabbitMqStreamTestResourceLifecycleManager.class, parallel = true)
+@QuarkusTestResource(value = RabbitMqStreamTestResourceLifecycleManager.class)
 @EnabledIfSystemProperty(named = "debezium.sink.type", matches = "rabbitmqstream")
 public class RabbitMqStreamIT {
 

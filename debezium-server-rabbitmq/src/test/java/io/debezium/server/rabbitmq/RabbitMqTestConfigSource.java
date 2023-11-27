@@ -22,10 +22,12 @@ public class RabbitMqTestConfigSource extends TestConfigSource {
         String sinkType = System.getProperty("debezium.sink.type");
         if ("rabbitmqstream".equals(sinkType)) {
             rabbitmqConfig.put("debezium.sink.type", "rabbitmqstream");
+            rabbitmqConfig.put("debezium.sink.rabbitmqstream.stream", TOPIC_NAME);
         }
         else {
             rabbitmqConfig.put("debezium.sink.type", "rabbitmq");
         }
+
         rabbitmqConfig.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         rabbitmqConfig.put("debezium.source." + StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, OFFSET_STORE_PATH.toAbsolutePath().toString());
         rabbitmqConfig.put("debezium.source.offset.flush.interval.ms", "0");
