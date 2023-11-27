@@ -5,11 +5,11 @@
  */
 package io.debezium.server.rabbitmq;
 
+import java.time.Duration;
+
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
-
-import java.time.Duration;
 
 /**
  * RabbitMQ container
@@ -24,7 +24,6 @@ public class RabbitMqContainer extends GenericContainer<RabbitMqContainer> {
         super(DEFAULT_IMAGE_NAME);
         withExposedPorts(BROKER_PORT, STREAM_PORT, 15672);
 
-        this.waitStrategy =
-                Wait.forLogMessage(".*Server startup complete.*", 1).withStartupTimeout(Duration.ofSeconds(60));
+        this.waitStrategy = Wait.forLogMessage(".*Server startup complete.*", 1).withStartupTimeout(Duration.ofSeconds(60));
     }
 }

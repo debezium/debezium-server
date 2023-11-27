@@ -5,11 +5,12 @@
  */
 package io.debezium.server.rabbitmq;
 
-import io.debezium.server.TestConfigSource;
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
-
 import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+
+import io.debezium.server.TestConfigSource;
 
 public class RabbitMqTestConfigSource extends TestConfigSource {
 
@@ -21,7 +22,8 @@ public class RabbitMqTestConfigSource extends TestConfigSource {
         String sinkType = System.getProperty("debezium.sink.type");
         if ("rabbitmqstream".equals(sinkType)) {
             rabbitmqConfig.put("debezium.sink.type", "rabbitmqstream");
-        } else {
+        }
+        else {
             rabbitmqConfig.put("debezium.sink.type", "rabbitmq");
         }
         rabbitmqConfig.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
