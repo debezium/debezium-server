@@ -35,10 +35,7 @@ public class RabbitMqTestResourceLifecycleManager implements QuarkusTestResource
         try {
             init();
         }
-        catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        catch (InterruptedException e) {
+        catch (IOException | InterruptedException e) {
             throw new RuntimeException(e);
         }
         Map<String, String> params = new ConcurrentHashMap<>();
