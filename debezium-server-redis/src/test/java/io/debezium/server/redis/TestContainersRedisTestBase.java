@@ -3,16 +3,16 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.redis.wip;
+package io.debezium.server.redis;
 
-import static io.debezium.server.redis.wip.TestConstants.LOCALHOST;
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_PORT;
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_PRIVILEGED_PASSWORD;
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_PRIVILEGED_USER;
-import static io.debezium.server.redis.wip.TestConstants.MYSQL_ROOT_PASSWORD;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_IMAGE;
-import static io.debezium.server.redis.wip.TestConstants.REDIS_PORT;
-import static io.debezium.server.redis.wip.TestProperties.DEBEZIUM_SERVER_IMAGE;
+import static io.debezium.server.redis.TestConstants.LOCALHOST;
+import static io.debezium.server.redis.TestConstants.MYSQL_PORT;
+import static io.debezium.server.redis.TestConstants.MYSQL_PRIVILEGED_PASSWORD;
+import static io.debezium.server.redis.TestConstants.MYSQL_PRIVILEGED_USER;
+import static io.debezium.server.redis.TestConstants.MYSQL_ROOT_PASSWORD;
+import static io.debezium.server.redis.TestConstants.REDIS_IMAGE;
+import static io.debezium.server.redis.TestConstants.REDIS_PORT;
+import static io.debezium.server.redis.TestProperties.DEBEZIUM_SERVER_IMAGE;
 
 import java.time.Duration;
 import java.util.List;
