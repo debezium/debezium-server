@@ -27,11 +27,11 @@ public class RedisMemoryThreshold {
     private static final String INFO_MEMORY_SECTION_USEDMEMORY = "used_memory";
     private static long accumulatedMemory = 0L;
     private static long previouslyUsedMemory = 0L;
-    private static long total_processed = 0;
+    private static long totalProcessed = 0;
 
     private RedisClient client;
-    private long memoryLimit;
-    private static long maxMemory = 0;
+    private long memoryLimit = 0;
+    private long maximumMemory = 0;
 
     public RedisMemoryThreshold(RedisClient client, RedisStreamChangeConsumerConfig config) {
         this.client = client;
@@ -48,21 +48,21 @@ public class RedisMemoryThreshold {
     /**
      * @param extraMemory   - Estimated size of a single record.
      * @param bufferSize    - Number of records in a batch.
-     * @param ratePerSecond - Rate in which memory can be filled.
+     * @param bufferFillRate - Rate in which memory can be filled.
      * @return
      */
-    public boolean checkMemory(long extraMemory, int bufferSize, int ratePerSecond) {
-        Tuple2<Long, Long> memoryTuple = memoryTuple(memoryLimit);
+    public boolean checkMemory(long extraMemory, int bufferSize, int bufferFillRate) {
+        Tuple2<Long, Long> memoryTuple = memoryTuple();
 
-        if (maxMemory == 0) {
-            total_processed += bufferSize;
-            LOGGER.debug("Total Processed Records: {}", total_processed);
+        if (maximumMemory == 0) {
+            totalProcessed += bufferSize;
+            LOGGER.debug("Total Processed Records: {}", totalProcessed);
             return true;
         }
 
-        long maxMemory = memoryTuple.getItem2();
+        maximumMemory = memoryTuple.getItem2();
 
-        long extimatedBatchSize = extraMemory * ratePerSecond;
+        long extimatedBatchSize = extraMemory * bufferFillRate;
         long usedMemory = memoryTuple.getItem1();
         long prevAccumulatedMemory = accumulatedMemory;
         long diff = usedMemory - previouslyUsedMemory;
@@ -75,26 +75,26 @@ public class RedisMemoryThreshold {
         }
         long estimatedUsedMemory = usedMemory + accumulatedMemory + extimatedBatchSize;
 
-        if (estimatedUsedMemory >= maxMemory) {
+        if (estimatedUsedMemory >= maximumMemory) {
             LOGGER.info(
                     "Sink memory threshold percentage was reached. Will retry; "
                             + "(estimated used memory size: {}, maxmemory: {}). Total Processed Records: {}",
-                    humanReadableSize(estimatedUsedMemory), humanReadableSize(maxMemory), total_processed);
+                    humanReadableSize(estimatedUsedMemory), humanReadableSize(maximumMemory), totalProcessed);
             accumulatedMemory = prevAccumulatedMemory;
             return false;
         }
         else {
             LOGGER.debug(
                     "Maximum reached: {}; Used Mem {}; Max Mem: {}; Accumulate Mem: {}; Estimated Used Mem: {}, Record Size: {}, NumRecInBuff: {}; Total Processed Records: {}",
-                    (estimatedUsedMemory >= maxMemory), humanReadableSize(usedMemory), humanReadableSize(maxMemory),
+                    (estimatedUsedMemory >= maximumMemory), humanReadableSize(usedMemory), humanReadableSize(maximumMemory),
                     humanReadableSize(accumulatedMemory), humanReadableSize(estimatedUsedMemory),
-                    humanReadableSize(extraMemory), bufferSize, total_processed + bufferSize);
-            total_processed += bufferSize;
+                    humanReadableSize(extraMemory), bufferSize, totalProcessed + bufferSize);
+            totalProcessed += bufferSize;
             return true;
         }
     }
 
-    private Tuple2<Long, Long> memoryTuple(long defaultMaxMemory) {
+    private Tuple2<Long, Long> memoryTuple() {
         String memory = client.info(INFO_MEMORY);
         LOGGER.trace(memory);
         Map<String, String> infoMemory = new HashMap<>();
@@ -112,16 +112,16 @@ public class RedisMemoryThreshold {
         }
 
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
-        Long maxMem = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
+        Long configuredMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
 
-        if (maxMem == null || (defaultMaxMemory > 0 && maxMem > defaultMaxMemory)) {
-            maxMem = defaultMaxMemory;
-            if (maxMem > 0) {
-                LOGGER.debug("Setting maximum memory size {}", maxMem);
+        if (configuredMemory == null || (memoryLimit > 0 && configuredMemory > memoryLimit)) {
+            configuredMemory = memoryLimit;
+            if (configuredMemory > 0) {
+                LOGGER.debug("Setting maximum memory size {}", configuredMemory);
             }
         }
-        maxMemory = maxMem;
-        return Tuple2.of(usedMemory, maxMem);
+        maximumMemory = configuredMemory;
+        return Tuple2.of(usedMemory, configuredMemory);
     }
 
     private Long parseLong(String name, String value) {

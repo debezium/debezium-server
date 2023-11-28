@@ -37,12 +37,12 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
             .withDefault(MESSAGE_FORMAT_COMPACT);
 
     private static final int DEFAULT_MEMORY_LIMIT_MB = 0;
-    private static final int DEFAULT_RATE_PER_SECOND = 30000;
+    private static final int DEFAULT_BUFFER_FILL_RATE = 30000;
     private static final Field PROP_MEMORY_LIMIT_MB = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "memory.limit.mb")
             .withDefault(DEFAULT_MEMORY_LIMIT_MB)
             .withValidation(RangeValidator.atLeast(0));
-    private static final Field PROP_RATE_PER_SEC = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "rate.per.second")
-            .withDefault(DEFAULT_RATE_PER_SECOND)
+    private static final Field PROP_BUFFER_FILL_RATE = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "buffer.fill.rate")
+            .withDefault(DEFAULT_BUFFER_FILL_RATE)
             .withValidation(RangeValidator.atLeast(0));
 
     private int batchSize;
@@ -52,7 +52,7 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private int memoryThreshold;
     private int memoryLimitMb;
     private int batchDelay;
-    private int ratePerSecond;
+    private int bufferFillRate;
 
     public RedisStreamChangeConsumerConfig(Configuration config) {
         super(config, PROP_PREFIX);
@@ -66,7 +66,7 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
         nullValue = config.getString(PROP_NULL_VALUE);
         messageFormat = config.getString(PROP_MESSAGE_FORMAT);
         memoryLimitMb = config.getInteger(PROP_MEMORY_LIMIT_MB);
-        ratePerSecond = config.getInteger(PROP_RATE_PER_SEC);
+        bufferFillRate = config.getInteger(PROP_BUFFER_FILL_RATE);
     }
 
     @Override
@@ -76,8 +76,8 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
         return fields;
     }
 
-    public int getRatePerSecond() {
-        return ratePerSecond;
+    public int getBufferFillRate() {
+        return bufferFillRate;
     }
 
     public int getBatchSize() {

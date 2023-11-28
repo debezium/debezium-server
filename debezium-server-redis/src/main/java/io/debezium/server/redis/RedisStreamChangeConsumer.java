@@ -178,8 +178,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                             recordsMap.add(new SimpleEntry<>(destination, recordMap));
                         }
                         if (!redisMemoryThreshold.checkMemory(getObjectSize(recordsMap.get(0)), recordsMap.size(),
-                                config.getRatePerSecond())) {
-                            LOGGER.warn("Stopped consuming records!\n");
+                                config.getBufferFillRate())) {
+                            LOGGER.info("Stopped consuming records!\n");
                             Thread.sleep(500);
                             continue;
                         }
