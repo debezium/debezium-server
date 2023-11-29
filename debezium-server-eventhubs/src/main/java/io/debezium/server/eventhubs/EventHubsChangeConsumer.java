@@ -165,10 +165,14 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 }
                 else {
                     targetPartitionId = record.partition();
+
+                    if (targetPartitionId == null) {
+                        targetPartitionId = BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
+                    }
                 }
 
                 // Check that the target partition exists.
-                if (targetPartitionId < 0 || targetPartitionId > partitionCount - 1) {
+                if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID || targetPartitionId > partitionCount - 1) {
                     throw new IndexOutOfBoundsException(
                             String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, eventHubName));
                 }
