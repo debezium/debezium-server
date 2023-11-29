@@ -113,7 +113,7 @@ public class BatchManager {
                 throw new DebeziumException("Event data is too large to fit into batch");
             }
             // reached the maximum allowed size for the batch
-            LOGGER.trace("Maximum batch reached, dispatching {} events.", batch.getCount());
+            LOGGER.debug("Maximum batch size reached, dispatching {} events.", batch.getCount());
 
             // Max size reached, dispatch the batch to EventHub
             emitBatchToEventHub(records, committer, processedRecordIndices.get(partitionId), batch);

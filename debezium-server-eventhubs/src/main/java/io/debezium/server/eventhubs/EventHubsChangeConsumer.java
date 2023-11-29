@@ -169,7 +169,6 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 }
                 else {
                     partitionId = record.partition();
-                    LOGGER.warn("Routing event to partition {}", record.partition());
                 }
 
                 try {
