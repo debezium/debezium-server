@@ -16,9 +16,6 @@ public class EventHubsWithPartitionRouterProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = new HashMap<String, String>();
 
-        config.put("debezium.sink.eventhubs.partitionid", "");
-        config.put("debezium.sink.eventhubs.partitionkey", "");
-
         config.put("debezium.transforms", "PartitionRouter");
         config.put("debezium.transforms.PartitionRouter.type", "io.debezium.transforms.partitions.PartitionRouting");
         config.put("debezium.transforms.PartitionRouter.partition.payload.fields", "source.db");
