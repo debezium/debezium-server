@@ -28,6 +28,7 @@ public class BatchManager {
     private final String configuredPartitionKey;
     private final Integer maxBatchSize;
 
+    static final Integer BATCH_INDEX_FOR_NO_PARTITION_ID = -1;
     static final Integer BATCH_INDEX_FOR_PARTITION_KEY = 0;
 
     // Prepare CreateBatchOptions for N partitions
@@ -75,18 +76,26 @@ public class BatchManager {
             return;
         }
 
+        // Prepare batch for messages without partition id
+        CreateBatchOptions op = new CreateBatchOptions();
+        if (maxBatchSize != 0) {
+            op.setMaximumSizeInBytes(maxBatchSize);
+        }
+        batchOptions.put(BATCH_INDEX_FOR_NO_PARTITION_ID, op);
+
         producer.getPartitionIds().stream().forEach(partitionId -> {
-            CreateBatchOptions op = new CreateBatchOptions().setPartitionId(partitionId);
+            CreateBatchOptions createBatchOptionsForPartitionId = new CreateBatchOptions().setPartitionId(partitionId);
             if (maxBatchSize != 0) {
-                op.setMaximumSizeInBytes(maxBatchSize);
+                createBatchOptionsForPartitionId.setMaximumSizeInBytes(maxBatchSize);
             }
-            batchOptions.put(Integer.parseInt(partitionId), op);
+            batchOptions.put(Integer.parseInt(partitionId), createBatchOptionsForPartitionId);
         });
-        // Prepare batches
-        batchOptions.forEach((partitionId, batchOption) -> {
-            EventDataBatchProxy batch = new EventDataBatchProxy(producer, batchOption);
-            batches.put(partitionId, batch);
-            processedRecordIndices.put(partitionId, new ArrayList<>());
+
+        // Prepare all EventDataBatchProxies
+        batchOptions.forEach((batchIndex, createBatchOptions) -> {
+            EventDataBatchProxy batch = new EventDataBatchProxy(producer, createBatchOptions);
+            batches.put(batchIndex, batch);
+            processedRecordIndices.put(batchIndex, new ArrayList<>());
         });
 
     }
