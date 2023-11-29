@@ -69,8 +69,6 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     @CustomConsumerBuilder
     Instance<EventHubProducerClient> customProducer;
 
-    private boolean forceSinglePartitionMode = false;
-
     @PostConstruct
     void connect() {
         if (customProducer.isResolvable()) {
@@ -89,15 +87,11 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         partitionID = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         partitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
 
-        if (!partitionID.isEmpty() || !partitionKey.isEmpty()) {
-            forceSinglePartitionMode = true;
-        }
-
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
 
         try {
             producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
-            batchManager = new BatchManager(producer, forceSinglePartitionMode, partitionID, partitionKey, maxBatchSize);
+            batchManager = new BatchManager(producer, partitionID, partitionKey, maxBatchSize);
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -156,16 +150,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
                 // Derive the partition to send eventData to.
                 Integer partitionId;
-                if (forceSinglePartitionMode) {
-                    if (!partitionID.isEmpty()) {
-                        partitionId = Integer.parseInt(partitionID);
-                    }
-                    else if (!partitionKey.isEmpty()) {
-                        partitionId = 0;
-                    }
-                    else {
-                        throw new RuntimeException("Partition ID or Partition Key must be specified when forceSinglePartitionMode is enabled.");
-                    }
+
+                if (!partitionID.isEmpty()) {
+                    partitionId = Integer.parseInt(partitionID);
+                }
+                else if (!partitionKey.isEmpty()) {
+                    partitionId = 0;
                 }
                 else {
                     partitionId = record.partition();

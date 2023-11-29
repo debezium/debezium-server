@@ -24,7 +24,6 @@ import io.debezium.engine.DebeziumEngine;
 public class BatchManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(BatchManager.class);
     private final EventHubProducerClient producer;
-    private final boolean forceSinglePartitionMode;
     private final String partitionID;
     private final String partitionKey;
     private final Integer maxBatchSize;
@@ -36,10 +35,9 @@ public class BatchManager {
     private List<ChangeEvent<Object, Object>> records;
     private DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer;
 
-    public BatchManager(EventHubProducerClient producer, boolean forceSinglePartitionMode,
-                        String partitionID, String partitionKey, Integer maxBatchSize) {
+    public BatchManager(EventHubProducerClient producer, String partitionID,
+                        String partitionKey, Integer maxBatchSize) {
         this.producer = producer;
-        this.forceSinglePartitionMode = forceSinglePartitionMode;
         this.partitionID = partitionID;
         this.partitionKey = partitionKey;
         this.maxBatchSize = maxBatchSize;
@@ -50,7 +48,7 @@ public class BatchManager {
         this.records = records;
         this.committer = committer;
 
-        if (forceSinglePartitionMode) {
+        if (!partitionID.isEmpty() || !partitionKey.isEmpty()) {
             CreateBatchOptions op = new CreateBatchOptions();
 
             if (!partitionID.isEmpty()) {
@@ -60,8 +58,7 @@ public class BatchManager {
                 batches.put(Integer.parseInt(partitionID), new EventDataBatchProxy(producer, op));
                 processedRecordIndices.put(Integer.parseInt(partitionID), new ArrayList<>());
             }
-
-            if (!partitionKey.isEmpty()) {
+            else if (!partitionKey.isEmpty()) {
                 op.setPartitionKey(partitionKey);
 
                 batchOptions.put(0, op);
