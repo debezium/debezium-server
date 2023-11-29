@@ -102,6 +102,11 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         // Retrieve available partition count for the EventHub
         partitionCount = (int) producer.getPartitionIds().stream().count();
         LOGGER.trace("Event Hub '{}' has {} partitions available", producer.getEventHubName(), partitionCount);
+
+        if (!configuredPartitionId.isEmpty() && Integer.parseInt(configuredPartitionId) > partitionCount - 1) {
+            throw new IndexOutOfBoundsException(
+                    String.format("Target partition id %s does not exist in target EventHub %s", configuredPartitionId, eventHubName));
+        }
     }
 
     @PreDestroy
@@ -160,6 +165,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 }
                 else {
                     targetPartitionId = record.partition();
+                }
+
+                // Check that the target partition exists.
+                if (targetPartitionId < 0 || targetPartitionId > partitionCount - 1) {
+                    throw new IndexOutOfBoundsException(
+                            String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, eventHubName));
                 }
 
                 try {
