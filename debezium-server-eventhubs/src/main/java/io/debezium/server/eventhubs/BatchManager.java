@@ -24,9 +24,11 @@ import io.debezium.engine.DebeziumEngine;
 public class BatchManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(BatchManager.class);
     private final EventHubProducerClient producer;
-    private final String partitionID;
-    private final String partitionKey;
+    private final String configuredPartitionId;
+    private final String configuredPartitionKey;
     private final Integer maxBatchSize;
+
+    static final Integer BATCH_INDEX_FOR_PARTITION_KEY = 0;
 
     // Prepare CreateBatchOptions for N partitions
     private final HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
@@ -35,11 +37,11 @@ public class BatchManager {
     private List<ChangeEvent<Object, Object>> records;
     private DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer;
 
-    public BatchManager(EventHubProducerClient producer, String partitionID,
-                        String partitionKey, Integer maxBatchSize) {
+    public BatchManager(EventHubProducerClient producer, String configurePartitionId,
+                        String configuredPartitionKey, Integer maxBatchSize) {
         this.producer = producer;
-        this.partitionID = partitionID;
-        this.partitionKey = partitionKey;
+        this.configuredPartitionId = configurePartitionId;
+        this.configuredPartitionKey = configuredPartitionKey;
         this.maxBatchSize = maxBatchSize;
     }
 
@@ -48,22 +50,22 @@ public class BatchManager {
         this.records = records;
         this.committer = committer;
 
-        if (!partitionID.isEmpty() || !partitionKey.isEmpty()) {
+        if (!configuredPartitionId.isEmpty() || !configuredPartitionKey.isEmpty()) {
             CreateBatchOptions op = new CreateBatchOptions();
 
-            if (!partitionID.isEmpty()) {
-                op.setPartitionId(partitionID);
+            if (!configuredPartitionId.isEmpty()) {
+                op.setPartitionId(configuredPartitionId);
 
-                batchOptions.put(Integer.parseInt(partitionID), op);
-                batches.put(Integer.parseInt(partitionID), new EventDataBatchProxy(producer, op));
-                processedRecordIndices.put(Integer.parseInt(partitionID), new ArrayList<>());
+                batchOptions.put(Integer.parseInt(configuredPartitionId), op);
+                batches.put(Integer.parseInt(configuredPartitionId), new EventDataBatchProxy(producer, op));
+                processedRecordIndices.put(Integer.parseInt(configuredPartitionId), new ArrayList<>());
             }
-            else if (!partitionKey.isEmpty()) {
-                op.setPartitionKey(partitionKey);
+            else if (!configuredPartitionKey.isEmpty()) {
+                op.setPartitionKey(configuredPartitionKey);
 
-                batchOptions.put(0, op);
-                batches.put(0, new EventDataBatchProxy(producer, op));
-                processedRecordIndices.put(0, new ArrayList<>());
+                batchOptions.put(BATCH_INDEX_FOR_PARTITION_KEY, op);
+                batches.put(BATCH_INDEX_FOR_PARTITION_KEY, new EventDataBatchProxy(producer, op));
+                processedRecordIndices.put(BATCH_INDEX_FOR_PARTITION_KEY, new ArrayList<>());
             }
 
             if (maxBatchSize != 0) {

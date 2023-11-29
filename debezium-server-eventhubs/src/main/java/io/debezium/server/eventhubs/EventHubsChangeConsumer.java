@@ -53,8 +53,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
     private String connectionString;
     private String eventHubName;
-    private String partitionID;
-    private String partitionKey;
+    private String configuredPartitionId;
+    private String configuredPartitionKey;
     private Integer maxBatchSize;
     private Integer partitionCount;
 
@@ -84,14 +84,14 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
         // optional config
         maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
-        partitionID = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
-        partitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
+        configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
 
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
 
         try {
             producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
-            batchManager = new BatchManager(producer, partitionID, partitionKey, maxBatchSize);
+            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, maxBatchSize);
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -148,21 +148,22 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     continue;
                 }
 
-                // Derive the partition to send eventData to.
-                Integer partitionId;
+                // Find the partition to send eventData to.
+                Integer targetPartitionId;
 
-                if (!partitionID.isEmpty()) {
-                    partitionId = Integer.parseInt(partitionID);
+                if (!configuredPartitionId.isEmpty()) {
+                    targetPartitionId = Integer.parseInt(configuredPartitionId);
                 }
-                else if (!partitionKey.isEmpty()) {
-                    partitionId = 0;
+                else if (!configuredPartitionKey.isEmpty()) {
+                    // The BatchManager
+                    targetPartitionId = BatchManager.BATCH_INDEX_FOR_PARTITION_KEY;
                 }
                 else {
-                    partitionId = record.partition();
+                    targetPartitionId = record.partition();
                 }
 
                 try {
-                    batchManager.sendEventToPartitionId(eventData, recordIndex, partitionId);
+                    batchManager.sendEventToPartitionId(eventData, recordIndex, targetPartitionId);
                 }
                 catch (IllegalArgumentException e) {
                     // thrown by tryAdd if event data is null
