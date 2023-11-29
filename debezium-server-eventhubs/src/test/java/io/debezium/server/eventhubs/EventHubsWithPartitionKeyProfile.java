@@ -16,7 +16,6 @@ public class EventHubsWithPartitionKeyProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = new HashMap<String, String>();
 
-        config.put("debezium.sink.eventhubs.partitionid", "");
         config.put("debezium.sink.eventhubs.partitionkey", "my-fixed-partition-key");
 
         return config;
