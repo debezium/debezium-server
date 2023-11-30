@@ -196,6 +196,11 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
 
         batchManager.closeAndEmitBatches();
+
+        LOGGER.trace("Marking {} records as processed.", records.size());
+        for (ChangeEvent<Object, Object> record : records) {
+            committer.markProcessed(record);
+        }
         committer.markBatchFinished();
         LOGGER.trace("Batch marked finished");
     }

@@ -5,10 +5,8 @@
  */
 package io.debezium.server.eventhubs;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +32,6 @@ public class BatchManager {
     // Prepare CreateBatchOptions for N partitions
     private final HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
     private final HashMap<Integer, EventDataBatchProxy> batches = new HashMap<>();
-    private final HashMap<Integer, ArrayList<Integer>> processedRecordIndices = new HashMap<>();
     private List<ChangeEvent<Object, Object>> records;
     private DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer;
 
@@ -59,14 +56,12 @@ public class BatchManager {
 
                 batchOptions.put(Integer.parseInt(configuredPartitionId), op);
                 batches.put(Integer.parseInt(configuredPartitionId), new EventDataBatchProxy(producer, op));
-                processedRecordIndices.put(Integer.parseInt(configuredPartitionId), new ArrayList<>());
             }
             else if (!configuredPartitionKey.isEmpty()) {
                 op.setPartitionKey(configuredPartitionKey);
 
                 batchOptions.put(BATCH_INDEX_FOR_PARTITION_KEY, op);
                 batches.put(BATCH_INDEX_FOR_PARTITION_KEY, new EventDataBatchProxy(producer, op));
-                processedRecordIndices.put(BATCH_INDEX_FOR_PARTITION_KEY, new ArrayList<>());
             }
 
             if (maxBatchSize != 0) {
@@ -95,7 +90,6 @@ public class BatchManager {
         batchOptions.forEach((batchIndex, createBatchOptions) -> {
             EventDataBatchProxy batch = new EventDataBatchProxy(producer, createBatchOptions);
             batches.put(batchIndex, batch);
-            processedRecordIndices.put(batchIndex, new ArrayList<>());
         });
 
     }
@@ -105,7 +99,7 @@ public class BatchManager {
         batches.forEach((partitionId, batch) -> {
             if (batch.getCount() > 0) {
                 LOGGER.trace("Dispatching {} events.", batch.getCount());
-                emitBatchToEventHub(records, committer, processedRecordIndices.get(partitionId), batch);
+                emitBatchToEventHub(records, committer, batch);
             }
         });
     }
@@ -124,19 +118,15 @@ public class BatchManager {
             LOGGER.debug("Maximum batch size reached, dispatching {} events.", batch.getCount());
 
             // Max size reached, dispatch the batch to EventHub
-            emitBatchToEventHub(records, committer, processedRecordIndices.get(partitionId), batch);
+            emitBatchToEventHub(records, committer, batch);
             // Renew the batch proxy so we can continue.
             batch = new EventDataBatchProxy(producer, batchOptions.get(partitionId));
             batches.put(partitionId, batch);
-            processedRecordIndices.put(partitionId, new ArrayList<>());
         }
-
-        // Record the index of the record that was added to the batch.
-        processedRecordIndices.get(partitionId).add(recordIndex);
     }
 
     private void emitBatchToEventHub(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer,
-                                     ArrayList<Integer> processedIndices, EventDataBatchProxy batch) {
+                                     EventDataBatchProxy batch) {
         final int batchEventSize = batch.getCount();
         if (batchEventSize > 0) {
             try {
@@ -147,21 +137,6 @@ public class BatchManager {
             catch (Exception e) {
                 throw new DebeziumException(e);
             }
-
-            // this loop commits each record submitted in the event hubs batch
-            List<String> processedIndexesStrings = processedIndices.stream().map(Object::toString).collect(Collectors.toList());
-            LOGGER.trace("Marking records as processed: {}", String.join("; ", processedIndexesStrings));
-            processedIndices.forEach(
-                    index -> {
-                        ChangeEvent<Object, Object> record = records.get(index);
-                        try {
-                            committer.markProcessed(record);
-                            LOGGER.trace("Record marked processed");
-                        }
-                        catch (Exception e) {
-                            throw new DebeziumException(e);
-                        }
-                    });
         }
     }
 }
