@@ -58,6 +58,7 @@
         <module>debezium-server-infinispan</module>
         <module>debezium-server-rabbitmq</module>
         <module>debezium-server-rocketmq</module>
+        <module>debezium-server-sqs</module>
     </modules>
 
     <dependencyManagement>
