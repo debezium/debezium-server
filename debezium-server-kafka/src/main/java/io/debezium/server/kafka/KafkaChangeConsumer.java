@@ -85,12 +85,12 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
         for (ChangeEvent<Object, Object> record : records) {
             try {
                 LOGGER.trace("Received event '{}'", record);
-
                 Headers headers = convertKafkaHeaders(record);
 
-                producer.send(new ProducerRecord<>(record.destination(), null, null, record.key(), record.value(), headers), (metadata, exception) -> {
+                String topicName = streamNameMapper.map(record.destination());
+                producer.send(new ProducerRecord<>(topicName, null, null, record.key(), record.value(), headers), (metadata, exception) -> {
                     if (exception != null) {
-                        LOGGER.error("Failed to send record to {}:", record.destination(), exception);
+                        LOGGER.error("Failed to send record to {}:", topicName, exception);
                         throw new DebeziumException(exception);
                     }
                     else {
