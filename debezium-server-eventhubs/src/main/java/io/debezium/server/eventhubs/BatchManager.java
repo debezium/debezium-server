@@ -29,12 +29,14 @@ public class BatchManager {
     // Prepare CreateBatchOptions for N partitions
     private final HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
     private final HashMap<Integer, EventDataBatchProxy> batches = new HashMap<>();
+    private final Integer partitionCount;
 
     public BatchManager(EventHubProducerClient producer, String configurePartitionId,
-                        String configuredPartitionKey, Integer maxBatchSize) {
+                        String configuredPartitionKey, Integer partitionCount, Integer maxBatchSize) {
         this.producer = producer;
         this.configuredPartitionId = configurePartitionId;
         this.configuredPartitionKey = configuredPartitionKey;
+        this.partitionCount = partitionCount;
         this.maxBatchSize = maxBatchSize;
     }
 
@@ -114,6 +116,18 @@ public class BatchManager {
             batch = new EventDataBatchProxy(producer, batchOptions.get(partitionId));
             batches.put(partitionId, batch);
         }
+    }
+
+    public Integer getPartitionCount() {
+        return partitionCount;
+    }
+
+    public String getEventHubName() {
+        return producer.getEventHubName();
+    }
+
+    public void closeProducer() {
+        producer.close();
     }
 
     private void emitBatchToEventHub(EventDataBatchProxy batch) {

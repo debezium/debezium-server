@@ -5,7 +5,9 @@
  */
 package io.debezium.server.eventhubs;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -46,6 +48,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private static final String PROP_PREFIX = "debezium.sink.eventhubs.";
     private static final String PROP_CONNECTION_STRING_NAME = PROP_PREFIX + "connectionstring";
     private static final String PROP_EVENTHUB_NAME = PROP_PREFIX + "hubname";
+    private static final String PROP_EVENTHUB_NAME_LIST = PROP_PREFIX + "hubname.list";
     private static final String PROP_PARTITION_ID = PROP_PREFIX + "partitionid";
     private static final String PROP_PARTITION_KEY = PROP_PREFIX + "partitionkey";
     // maximum size for the batch of events (bytes)
@@ -53,17 +56,15 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
     private String connectionString;
     private String eventHubName;
+    private String[] eventHubNameList;
     private String configuredPartitionId;
     private String configuredPartitionKey;
     private Integer maxBatchSize;
-    private Integer partitionCount;
 
     // connection string format -
     // Endpoint=sb://<NAMESPACE>/;SharedAccessKeyName=<KEY_NAME>;SharedAccessKey=<ACCESS_KEY>;EntityPath=<HUB_NAME>
     private static final String CONNECTION_STRING_FORMAT = "%s;EntityPath=%s";
-
-    private EventHubProducerClient producer = null;
-    private BatchManager batchManager = null;
+    private Map<String, BatchManager> batchManagers = new HashMap<>();
 
     @Inject
     @CustomConsumerBuilder
@@ -73,53 +74,76 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     void connect() {
         final Config config = ConfigProvider.getConfig();
 
-        // optional config
-        maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
-        configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
-        configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
-
-        if (customProducer.isResolvable()) {
-            producer = customProducer.get();
-            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, maxBatchSize);
-            LOGGER.info("Obtained custom configured Event Hubs client for namespace '{}'",
-                    customProducer.get().getFullyQualifiedNamespace());
-            return;
-        }
-
-        // required config
+        // Required config
         connectionString = config.getValue(PROP_CONNECTION_STRING_NAME, String.class);
         eventHubName = config.getValue(PROP_EVENTHUB_NAME, String.class);
 
-        String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
+        // Optional config
+        maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
+        configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
+        configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        eventHubNameList = config.getOptionalValue(PROP_EVENTHUB_NAME_LIST, String.class).orElse("").split(",");
 
         try {
-            producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
-            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, maxBatchSize);
+            createDefaultProducerAndBatchManager();
+            createBatchManagersFromEventHubNameList();
         }
         catch (Exception e) {
             throw new DebeziumException(e);
         }
+    }
 
-        LOGGER.info("Using default Event Hubs client for namespace '{}'", producer.getFullyQualifiedNamespace());
+    private void createDefaultProducerAndBatchManager() {
+        EventHubProducerClient defaultProducer;
+        BatchManager defaultBatchManager;
 
-        // Retrieve available partition count for the EventHub
-        partitionCount = (int) producer.getPartitionIds().stream().count();
-        LOGGER.trace("Event Hub '{}' has {} partitions available", producer.getEventHubName(), partitionCount);
+        if (customProducer.isResolvable()) {
+            defaultProducer = customProducer.get();
+            int partitionCount = (int) defaultProducer.getPartitionIds().stream().count();
+            validatePartitionId(partitionCount);
 
-        if (!configuredPartitionId.isEmpty() && Integer.parseInt(configuredPartitionId) > partitionCount - 1) {
-            throw new IndexOutOfBoundsException(
-                    String.format("Target partition id %s does not exist in target EventHub %s", configuredPartitionId, eventHubName));
+            defaultBatchManager = new BatchManager(defaultProducer, configuredPartitionId, configuredPartitionKey, partitionCount, maxBatchSize);
+            LOGGER.info("Obtained custom configured Event Hubs client ({} partitions in hub) for namespace '{}'",
+                    partitionCount,
+                    customProducer.get().getFullyQualifiedNamespace());
+        }
+        else {
+            String defaultConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
+            defaultProducer = new EventHubClientBuilder().connectionString(defaultConnectionString).buildProducerClient();
+            int partitionCount = (int) defaultProducer.getPartitionIds().stream().count();
+            validatePartitionId(partitionCount);
+
+            defaultBatchManager = new BatchManager(defaultProducer, configuredPartitionId, configuredPartitionKey, partitionCount, maxBatchSize);
+            LOGGER.info("Obtained default configured Event Hubs client for event hub '{}' ({} partitions)", eventHubName, partitionCount);
+        }
+
+        batchManagers.put(eventHubName, defaultBatchManager);
+    }
+
+    private void createBatchManagersFromEventHubNameList() {
+        for (String hubName : eventHubNameList) {
+            if (!hubName.equals(eventHubName)) {
+                String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, hubName);
+                EventHubProducerClient producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
+
+                int partitionCount = (int) producer.getPartitionIds().stream().count();
+                validatePartitionId(partitionCount);
+
+                BatchManager batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, partitionCount, maxBatchSize);
+                batchManagers.put(hubName, batchManager);
+                LOGGER.info("Obtained Event Hubs client for event hub '{}' ({} partitions)", hubName, partitionCount);
+            }
         }
     }
 
     @PreDestroy
     void close() {
         try {
-            producer.close();
-            LOGGER.info("Closed Event Hubs producer client");
+            batchManagers.values().forEach(BatchManager::closeProducer);
+            LOGGER.info("Closed Event Hubs producer clients");
         }
         catch (Exception e) {
-            LOGGER.warn("Exception while closing Event Hubs producer: {}", e);
+            LOGGER.warn("Exception while closing Event Hubs producers: {}", e);
         }
     }
 
@@ -129,7 +153,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             throws InterruptedException {
         LOGGER.trace("Event Hubs sink adapter processing change events");
 
-        batchManager.initializeBatch();
+        batchManagers.values().forEach(BatchManager::initializeBatch);
 
         for (int recordIndex = 0; recordIndex < records.size();) {
             int start = recordIndex;
@@ -174,13 +198,25 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     }
                 }
 
-                // Check that the target partition exists.
-                if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID || targetPartitionId > partitionCount - 1) {
-                    throw new IndexOutOfBoundsException(
-                            String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, eventHubName));
-                }
-
                 try {
+                    String destinationHub = record.destination();
+                    BatchManager batchManager = batchManagers.get(destinationHub);
+
+                    if (batchManager == null) {
+                        batchManager = batchManagers.get(eventHubName);
+
+                        if (batchManager == null) {
+                            throw new DebeziumException(String.format("Could not find batch manager for destination hub {}, nor for the default configured event hub {}",
+                                    destinationHub, eventHubName));
+                        }
+                    }
+
+                    // Check that the target partition exists.
+                    if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID || targetPartitionId > batchManager.getPartitionCount() - 1) {
+                        throw new IndexOutOfBoundsException(
+                                String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, batchManager.getEventHubName()));
+                    }
+
                     batchManager.sendEventToPartitionId(eventData, recordIndex, targetPartitionId);
                 }
                 catch (IllegalArgumentException e) {
@@ -198,7 +234,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             }
         }
 
-        batchManager.closeAndEmitBatches();
+        batchManagers.values().forEach(BatchManager::closeAndEmitBatches);
 
         LOGGER.trace("Marking {} records as processed.", records.size());
         for (ChangeEvent<Object, Object> record : records) {
@@ -206,5 +242,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
         committer.markBatchFinished();
         LOGGER.trace("Batch marked finished");
+    }
+
+    private void validatePartitionId(int partitionCount) {
+        if (!configuredPartitionId.isEmpty() && Integer.parseInt(configuredPartitionId) > partitionCount - 1) {
+            throw new IndexOutOfBoundsException(
+                    String.format("Target partition id %s does not exist in target EventHub %s", configuredPartitionId, eventHubName));
+        }
     }
 }
