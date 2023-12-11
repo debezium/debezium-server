@@ -71,21 +71,24 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
     @PostConstruct
     void connect() {
-        if (customProducer.isResolvable()) {
-            producer = customProducer.get();
-            LOGGER.info("Obtained custom configured Event Hubs client for namespace '{}'",
-                    customProducer.get().getFullyQualifiedNamespace());
-            return;
-        }
-
         final Config config = ConfigProvider.getConfig();
-        connectionString = config.getValue(PROP_CONNECTION_STRING_NAME, String.class);
-        eventHubName = config.getValue(PROP_EVENTHUB_NAME, String.class);
 
         // optional config
         maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
         configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+
+        if (customProducer.isResolvable()) {
+            producer = customProducer.get();
+            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, maxBatchSize);
+            LOGGER.info("Obtained custom configured Event Hubs client for namespace '{}'",
+                    customProducer.get().getFullyQualifiedNamespace());
+            return;
+        }
+
+        // required config
+        connectionString = config.getValue(PROP_CONNECTION_STRING_NAME, String.class);
+        eventHubName = config.getValue(PROP_EVENTHUB_NAME, String.class);
 
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
 
