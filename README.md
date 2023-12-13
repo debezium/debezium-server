@@ -1,6 +1,6 @@
 # Debezium Server
 
-Debezium Server is a standalone Java application built on Qurkus framework.
+Debezium Server is a standalone Java application built on Quarkus framework.
 The application itself contains the `core` module and a set of modules responsible for communication with different target systems.
 ## Building and Packaging
 
