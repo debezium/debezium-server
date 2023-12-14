@@ -11,10 +11,6 @@
     <name>Debezium Server Amazon SQS Sink Adapter</name>
     <packaging>jar</packaging>
 
-    <properties>
-        <skipITs>true</skipITs>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>io.debezium</groupId>
