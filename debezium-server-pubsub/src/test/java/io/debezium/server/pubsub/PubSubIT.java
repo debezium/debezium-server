@@ -18,6 +18,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +42,10 @@ import com.google.pubsub.v1.PushConfig;
 import com.google.pubsub.v1.Topic;
 import com.google.pubsub.v1.TopicName;
 
+import io.debezium.config.CommonConnectorConfig;
+import io.debezium.config.Configuration;
+import io.debezium.connector.postgresql.connection.PostgresConnection;
+import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.server.DebeziumServer;
 import io.debezium.server.TestConfigSource;
 import io.debezium.server.events.ConnectorCompletedEvent;
@@ -99,6 +104,9 @@ public class PubSubIT {
 
     @Inject
     DebeziumServer server;
+
+    @ConfigProperty(name = "debezium.source.database.port")
+    String postgresPort;
 
     private static final List<PubsubMessage> messages = Collections.synchronizedList(new ArrayList<>());
 
@@ -188,11 +196,35 @@ public class PubSubIT {
     }
 
     @Test
-    public void testPubSub() {
+    public void testPubSub() throws Exception {
         Awaitility.await()
                 .atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
                 .until(() -> messages.size() >= MESSAGE_COUNT);
-
         assertThat(messages.size()).isGreaterThanOrEqualTo(MESSAGE_COUNT);
+
+        messages.clear();
+
+        try (PostgresConnection conn = new PostgresConnection(
+                defaultJdbcConfig(), "debezium-server-test")) {
+            conn.execute(
+                    "INSERT INTO inventory.customers VALUES (10000, 'Test', 'PubSub', 'testpubsub@example.org')",
+                    "DELETE FROM inventory.customers WHERE id = 10000");
+        }
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
+                .until(() -> messages.size() >= 2);
+        assertThat(messages.size()).isEqualTo(2);
+    }
+
+    private JdbcConfiguration defaultJdbcConfig() {
+        return JdbcConfiguration.copy(Configuration.fromSystemProperties("database."))
+                .with(CommonConnectorConfig.TOPIC_PREFIX, "dbserver1")
+                .withDefault(JdbcConfiguration.DATABASE, "postgres")
+                .withDefault(JdbcConfiguration.HOSTNAME, "localhost")
+                .withDefault(JdbcConfiguration.PORT, Integer.parseInt(postgresPort))
+                .withDefault(JdbcConfiguration.USER, "postgres")
+                .withDefault(JdbcConfiguration.PASSWORD, "postgres")
+                .build();
     }
 }
