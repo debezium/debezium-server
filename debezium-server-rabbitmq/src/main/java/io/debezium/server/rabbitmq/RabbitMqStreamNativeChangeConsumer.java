@@ -144,11 +144,6 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
         committer.markBatchFinished();
     }
 
-    @Override
-    public boolean supportsTombstoneEvents() {
-        return false;
-    }
-
     private Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
         List<Header<Object>> headers = record.headers();
         Map<String, Object> rabbitMqHeaders = new HashMap<>();
