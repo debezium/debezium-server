@@ -46,6 +46,9 @@ public class RedisMemoryThreshold {
     }
 
     /**
+     * Redis Enterprise samples the Redis database memory usage in an interval. Since the throughput of Redis is very big,
+     * it is impossible to rely on delayed memory usage reading to prevent OOM.
+     * In order to protect the Redis database and throttle down the sink we have created this mechanism:...
      * @param extraMemory   - Estimated size of a single record.
      * @param bufferSize    - Number of records in a batch.
      * @param bufferFillRate - Rate in which memory can be filled.
@@ -54,13 +57,13 @@ public class RedisMemoryThreshold {
     public boolean checkMemory(long extraMemory, int bufferSize, int bufferFillRate) {
         Tuple2<Long, Long> memoryTuple = memoryTuple();
 
+        maximumMemory = memoryTuple.getItem2();
+
         if (maximumMemory == 0) {
             totalProcessed += bufferSize;
             LOGGER.debug("Total Processed Records: {}", totalProcessed);
             return true;
         }
-
-        maximumMemory = memoryTuple.getItem2();
 
         long extimatedBatchSize = extraMemory * bufferFillRate;
         long usedMemory = memoryTuple.getItem1();
@@ -96,7 +99,6 @@ public class RedisMemoryThreshold {
 
     private Tuple2<Long, Long> memoryTuple() {
         String memory = client.info(INFO_MEMORY);
-        LOGGER.trace(memory);
         Map<String, String> infoMemory = new HashMap<>();
         try {
             IoUtil.readLines(new ByteArrayInputStream(memory.getBytes(StandardCharsets.UTF_8)), line -> {
@@ -113,14 +115,12 @@ public class RedisMemoryThreshold {
 
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
         Long configuredMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
-
         if (configuredMemory == null || (memoryLimit > 0 && configuredMemory > memoryLimit)) {
             configuredMemory = memoryLimit;
             if (configuredMemory > 0) {
-                LOGGER.debug("Setting maximum memory size {}", configuredMemory);
+                LOGGER.debug("Setting maximum memory size {}", humanReadableSize(configuredMemory));
             }
         }
-        maximumMemory = configuredMemory;
         return Tuple2.of(usedMemory, configuredMemory);
     }
 
@@ -138,18 +138,31 @@ public class RedisMemoryThreshold {
         }
     }
 
-    private String humanReadableSize(long size) {
-        if (size < 1024) {
-            return size + " B";
+    /**
+     * Formats a raw file size value into a human-readable string with appropriate units (B, KB, MB, GB).
+     *
+     * @param size The size value to be formatted.
+     * @return A human-readable string representing the file size with units (B, KB, MB, GB).
+     */
+    public static String humanReadableSize(Long size) {
+        if (size == null) {
+            return "Not configured";
         }
-        else if (size < 1024 * 1024) {
-            return String.format("%.2f KB", size / 1024.0);
+
+        final String[] units = { "B", "KB", "MB", "GB" };
+        int unitIndex = 0;
+
+        double sizeInUnit = size;
+
+        if (size == 0) {
+            return "0 B";
         }
-        else if (size < 1024 * 1024 * 1024) {
-            return String.format("%.2f MB", size / (1024.0 * 1024.0));
+
+        while (sizeInUnit >= 1024 && unitIndex < units.length - 1) {
+            sizeInUnit /= 1024.0;
+            unitIndex++;
         }
-        else {
-            return String.format("%.2f GB", size / (1024.0 * 1024.0 * 1024.0));
-        }
+
+        return String.format("%.2f %s", sizeInUnit, units[unitIndex]);
     }
 }

@@ -8,9 +8,6 @@ package io.debezium.server.redis;
 import static io.debezium.server.redis.RedisStreamChangeConsumerConfig.MESSAGE_FORMAT_COMPACT;
 import static io.debezium.server.redis.RedisStreamChangeConsumerConfig.MESSAGE_FORMAT_EXTENDED;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.time.Duration;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -144,6 +141,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
         DelayStrategy delayStrategy = DelayStrategy.exponential(Duration.ofMillis(config.getInitialRetryDelay()),
                 Duration.ofMillis(config.getMaxRetryDelay()));
 
+        DelayStrategy delayStrategyOnRecordsConsumption = DelayStrategy.constant(Duration.ofMillis(config.getWaitRetryDelay()));
+
         LOGGER.debug("Handling a batch of {} records", records.size());
         batches(records, config.getBatchSize()).forEach(batch -> {
             boolean completedSuccessfully = false;
@@ -177,10 +176,15 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                             Map<String, String> recordMap = recordMapFunction.apply(record);
                             recordsMap.add(new SimpleEntry<>(destination, recordMap));
                         }
+
+                        if (recordsMap.size() == 0) {
+                            continue;
+                        }
+
                         if (!redisMemoryThreshold.checkMemory(getObjectSize(recordsMap.get(0)), recordsMap.size(),
                                 config.getBufferFillRate())) {
                             LOGGER.info("Stopped consuming records!\n");
-                            Thread.sleep(500);
+                            delayStrategyOnRecordsConsumption.sleepWhen(true);
                             continue;
                         }
                         List<String> responses = client.xadd(recordsMap);
@@ -237,13 +241,16 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
         committer.markBatchFinished();
     }
 
-    private long getObjectSize(SimpleEntry<String, Map<String, String>> record) throws IOException {
-        ByteArrayOutputStream boas = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(boas);
-        oos.writeObject(record);
-        oos.flush();
-        long size = boas.size() + 50;
-        LOGGER.debug("Single Record size {}", size);
-        return size;
+    private static long getObjectSize(SimpleEntry<String, Map<String, String>> record) {
+        long approximateSize = 0;
+        approximateSize += record.getKey().getBytes().length;
+        Map<String, String> value = record.getValue();
+        for (Map.Entry<String, String> entry : value.entrySet()) {
+            approximateSize += entry.getKey().getBytes().length +
+                    entry.getValue().getBytes().length;
+        }
+        LOGGER.info("Estimated record size is {}", approximateSize);
+
+        return approximateSize;
     }
 }
