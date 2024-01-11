@@ -46,8 +46,8 @@ public class RedisMemoryThreshold {
     }
 
     /**
-     * Redis Enterprise samples the Redis database memory usage in an interval. Since the throughput of Redis is very big, 
-     * it is impossible to rely on delayed memory usage reading to prevent OOM. 
+     * Redis Enterprise samples the Redis database memory usage in an interval. Since the throughput of Redis is very big,
+     * it is impossible to rely on delayed memory usage reading to prevent OOM.
      * In order to protect the Redis database and throttle down the sink we have created this mechanism:...
      * @param extraMemory   - Estimated size of a single record.
      * @param bufferSize    - Number of records in a batch.
@@ -106,7 +106,7 @@ public class RedisMemoryThreshold {
             LOGGER.error("Cannot parse Redis 'info memory' result '{}'.", memory, e);
             return null;
         }
-        
+
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
         Long configuredMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
         if (configuredMemory == null || (memoryLimit > 0 && configuredMemory > memoryLimit)) {
@@ -139,19 +139,19 @@ public class RedisMemoryThreshold {
      * @return A human-readable string representing the file size with units (B, KB, MB, GB).
      */
     public static String humanReadableSize(Long size) {
-    	if(size == null) {
-    		return "Not configured";
-    	}
-    	
-        final String[] units = {"B", "KB", "MB", "GB"};
+        if (size == null) {
+            return "Not configured";
+        }
+
+        final String[] units = { "B", "KB", "MB", "GB" };
         int unitIndex = 0;
 
         double sizeInUnit = size;
 
-        if(size == 0) {
-        	return "0 B";
+        if (size == 0) {
+            return "0 B";
         }
-        
+
         while (sizeInUnit >= 1024 && unitIndex < units.length - 1) {
             sizeInUnit /= 1024.0;
             unitIndex++;
