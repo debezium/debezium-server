@@ -59,6 +59,12 @@ public class RedisMemoryThreshold {
 
         maximumMemory = memoryTuple.getItem2();
 
+        if (maximumMemory == 0) {
+            totalProcessed += bufferSize;
+            LOGGER.debug("Total Processed Records: {}", totalProcessed);
+            return true;
+        }
+
         long extimatedBatchSize = extraMemory * bufferFillRate;
         long usedMemory = memoryTuple.getItem1();
         long prevAccumulatedMemory = accumulatedMemory;

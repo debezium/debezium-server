@@ -8,9 +8,6 @@ package io.debezium.server.redis;
 import static io.debezium.server.redis.RedisStreamChangeConsumerConfig.MESSAGE_FORMAT_COMPACT;
 import static io.debezium.server.redis.RedisStreamChangeConsumerConfig.MESSAGE_FORMAT_EXTENDED;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.time.Duration;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -18,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -144,7 +140,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
             throws InterruptedException {
         DelayStrategy delayStrategy = DelayStrategy.exponential(Duration.ofMillis(config.getInitialRetryDelay()),
                 Duration.ofMillis(config.getMaxRetryDelay()));
-        
+
         DelayStrategy delayStrategyOnRecordsConsumption = DelayStrategy.constant(Duration.ofMillis(config.getWaitRetryDelay()));
 
         LOGGER.debug("Handling a batch of {} records", records.size());
@@ -180,11 +176,11 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                             Map<String, String> recordMap = recordMapFunction.apply(record);
                             recordsMap.add(new SimpleEntry<>(destination, recordMap));
                         }
-                        
-                        if(recordsMap.size() == 0) {
-                        	continue;
+
+                        if (recordsMap.size() == 0) {
+                            continue;
                         }
-                        
+
                         if (!redisMemoryThreshold.checkMemory(getObjectSize(recordsMap.get(0)), recordsMap.size(),
                                 config.getBufferFillRate())) {
                             LOGGER.info("Stopped consuming records!\n");
@@ -244,17 +240,16 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
         // Mark the whole batch as finished once the sub batches completed
         committer.markBatchFinished();
     }
-    
+
     private static long getObjectSize(SimpleEntry<String, Map<String, String>> record) {
-    	long approximateSize = 0;
-    	approximateSize += record.getKey().getBytes().length;
-    	Map<String, String> value = record.getValue();
-    	for(Map.Entry<String, String> entry: value.entrySet()) {
-    		approximateSize += 
-    				entry.getKey().getBytes().length + 
-    				entry.getValue().getBytes().length;
-    	}
-    	LOGGER.error("Estimated record size is {}", approximateSize);
-    	return approximateSize;
+        long approximateSize = 0;
+        approximateSize += record.getKey().getBytes().length;
+        Map<String, String> value = record.getValue();
+        for (Map.Entry<String, String> entry : value.entrySet()) {
+            approximateSize += entry.getKey().getBytes().length +
+                    entry.getValue().getBytes().length;
+        }
+        LOGGER.info("Estimated record size is {}", approximateSize);
+        return approximateSize;
     }
 }
