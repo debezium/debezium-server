@@ -57,6 +57,10 @@ public class RedisMemoryThreshold {
     public boolean checkMemory(long extraMemory, int bufferSize, int bufferFillRate) {
         Tuple2<Long, Long> memoryTuple = memoryTuple();
 
+        if(totalProcessed + bufferSize >= Long. MAX_VALUE) {
+        	LOGGER.warn("Resetting the total processed records counter as it has reached its maximum value: {}", totalProcessed);
+        	totalProcessed = 0;
+        }
         maximumMemory = memoryTuple.getItem2();
 
         if (maximumMemory == 0) {
@@ -82,16 +86,16 @@ public class RedisMemoryThreshold {
             LOGGER.info(
                     "Sink memory threshold percentage was reached. Will retry; "
                             + "(estimated used memory size: {}, maxmemory: {}). Total Processed Records: {}",
-                    humanReadableSize(estimatedUsedMemory), humanReadableSize(maximumMemory), totalProcessed);
+                    getSizeInHumanReadableFormat(estimatedUsedMemory), getSizeInHumanReadableFormat(maximumMemory), totalProcessed);
             accumulatedMemory = prevAccumulatedMemory;
             return false;
         }
         else {
             LOGGER.debug(
                     "Maximum reached: {}; Used Mem {}; Max Mem: {}; Accumulate Mem: {}; Estimated Used Mem: {}, Record Size: {}, NumRecInBuff: {}; Total Processed Records: {}",
-                    (estimatedUsedMemory >= maximumMemory), humanReadableSize(usedMemory), humanReadableSize(maximumMemory),
-                    humanReadableSize(accumulatedMemory), humanReadableSize(estimatedUsedMemory),
-                    humanReadableSize(extraMemory), bufferSize, totalProcessed + bufferSize);
+                    (estimatedUsedMemory >= maximumMemory), getSizeInHumanReadableFormat(usedMemory), getSizeInHumanReadableFormat(maximumMemory),
+                    getSizeInHumanReadableFormat(accumulatedMemory), getSizeInHumanReadableFormat(estimatedUsedMemory),
+                    getSizeInHumanReadableFormat(extraMemory), bufferSize, totalProcessed + bufferSize);
             totalProcessed += bufferSize;
             return true;
         }
@@ -114,11 +118,14 @@ public class RedisMemoryThreshold {
         }
 
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
+        if(usedMemory == null) {
+        	usedMemory = 0L;
+        }
         Long configuredMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
         if (configuredMemory == null || (memoryLimit > 0 && configuredMemory > memoryLimit)) {
             configuredMemory = memoryLimit;
             if (configuredMemory > 0) {
-                LOGGER.debug("Setting maximum memory size {}", humanReadableSize(configuredMemory));
+                LOGGER.debug("Setting maximum memory size {}", getSizeInHumanReadableFormat(configuredMemory));
             }
         }
         return Tuple2.of(usedMemory, configuredMemory);
@@ -144,7 +151,7 @@ public class RedisMemoryThreshold {
      * @param size The size value to be formatted.
      * @return A human-readable string representing the file size with units (B, KB, MB, GB).
      */
-    public static String humanReadableSize(Long size) {
+    public static String getSizeInHumanReadableFormat(Long size) {
         if (size == null) {
             return "Not configured";
         }
