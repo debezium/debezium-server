@@ -36,14 +36,13 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
             .withAllowedValues(Set.of(MESSAGE_FORMAT_COMPACT, MESSAGE_FORMAT_EXTENDED))
             .withDefault(MESSAGE_FORMAT_COMPACT);
 
-    private static final int DEFAULT_MEMORY_THRESHOLD_PERCENTAGE = 85;
-    private static final Field PROP_MEMORY_THRESHOLD_PERCENTAGE = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "memory.threshold.percentage")
-            .withDefault(DEFAULT_MEMORY_THRESHOLD_PERCENTAGE)
-            .withValidation(RangeValidator.between(0, 100));
-
     private static final int DEFAULT_MEMORY_LIMIT_MB = 0;
+    private static final int DEFAULT_BUFFER_FILL_RATE = 30000;
     private static final Field PROP_MEMORY_LIMIT_MB = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "memory.limit.mb")
             .withDefault(DEFAULT_MEMORY_LIMIT_MB)
+            .withValidation(RangeValidator.atLeast(0));
+    private static final Field PROP_BUFFER_FILL_RATE = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "buffer.fill.rate")
+            .withDefault(DEFAULT_BUFFER_FILL_RATE)
             .withValidation(RangeValidator.atLeast(0));
 
     private int batchSize;
@@ -52,6 +51,8 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private String messageFormat;
     private int memoryThreshold;
     private int memoryLimitMb;
+    private int batchDelay;
+    private int bufferFillRate;
 
     public RedisStreamChangeConsumerConfig(Configuration config) {
         super(config, PROP_PREFIX);
@@ -64,19 +65,27 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
         nullKey = config.getString(PROP_NULL_KEY);
         nullValue = config.getString(PROP_NULL_VALUE);
         messageFormat = config.getString(PROP_MESSAGE_FORMAT);
-        memoryThreshold = config.getInteger(PROP_MEMORY_THRESHOLD_PERCENTAGE);
         memoryLimitMb = config.getInteger(PROP_MEMORY_LIMIT_MB);
+        bufferFillRate = config.getInteger(PROP_BUFFER_FILL_RATE);
     }
 
     @Override
     protected List<Field> getAllConfigurationFields() {
-        List<Field> fields = Collect.arrayListOf(PROP_BATCH_SIZE, PROP_NULL_KEY, PROP_NULL_VALUE, PROP_MESSAGE_FORMAT, PROP_MEMORY_THRESHOLD_PERCENTAGE);
+        List<Field> fields = Collect.arrayListOf(PROP_BATCH_SIZE, PROP_NULL_KEY, PROP_NULL_VALUE, PROP_MESSAGE_FORMAT);
         fields.addAll(super.getAllConfigurationFields());
         return fields;
     }
 
+    public int getBufferFillRate() {
+        return bufferFillRate;
+    }
+
     public int getBatchSize() {
         return batchSize;
+    }
+
+    public int getBatchDelay() {
+        return batchDelay;
     }
 
     public String getNullKey() {
