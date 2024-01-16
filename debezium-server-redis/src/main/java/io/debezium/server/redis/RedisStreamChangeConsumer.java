@@ -249,7 +249,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
             approximateSize += entry.getKey().getBytes().length +
                     entry.getValue().getBytes().length;
         }
-        LOGGER.info("Estimated record size is {}", approximateSize);
+        LOGGER.debug("Estimated record size is {}", approximateSize);
         return approximateSize;
     }
 }
