@@ -41,7 +41,8 @@ import io.debezium.storage.redis.RedisConnection;
 import io.debezium.util.DelayStrategy;
 
 /**
- * Implementation of the consumer that delivers the messages into Redis (stream) destination.
+ * Implementation of the consumer that delivers the messages into Redis (stream)
+ * destination.
  *
  * @author M Sazzadul Hoque
  * @author Yossi Shirizli
@@ -57,12 +58,11 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
 
     private static final String EXTENDED_MESSAGE_KEY_KEY = "key";
     private static final String EXTENDED_MESSAGE_VALUE_KEY = "value";
-
     private RedisClient client;
 
     private Function<ChangeEvent<Object, Object>, Map<String, String>> recordMapFunction;
 
-    private RedisMemoryThreshold isMemoryOk;
+    private RedisMemoryThreshold redisMemoryThreshold;
 
     private RedisStreamChangeConsumerConfig config;
 
@@ -95,13 +95,13 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
             };
         }
 
-        RedisConnection redisConnection = new RedisConnection(config.getAddress(), config.getDbIndex(), config.getUser(), config.getPassword(),
-                config.getConnectionTimeout(),
-                config.getSocketTimeout(), config.isSslEnabled());
-        client = redisConnection.getRedisClient(DEBEZIUM_REDIS_SINK_CLIENT_NAME, config.isWaitEnabled(), config.getWaitTimeout(), config.isWaitRetryEnabled(),
-                config.getWaitRetryDelay());
+        RedisConnection redisConnection = new RedisConnection(config.getAddress(), config.getDbIndex(),
+                config.getUser(), config.getPassword(), config.getConnectionTimeout(), config.getSocketTimeout(),
+                config.isSslEnabled());
+        client = redisConnection.getRedisClient(DEBEZIUM_REDIS_SINK_CLIENT_NAME, config.isWaitEnabled(),
+                config.getWaitTimeout(), config.isWaitRetryEnabled(), config.getWaitRetryDelay());
 
-        isMemoryOk = new RedisMemoryThreshold(client, config);
+        redisMemoryThreshold = new RedisMemoryThreshold(client, config);
     }
 
     @PreDestroy
@@ -120,8 +120,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
     }
 
     /**
-    * Split collection to batches by batch size using a stream
-    */
+     * Split collection to batches by batch size using a stream
+     */
     private <T> Stream<List<T>> batches(List<T> source, int length) {
         if (source.isEmpty()) {
             return Stream.empty();
@@ -130,17 +130,20 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
         int size = source.size();
         int fullChunks = (size - 1) / length;
 
-        return IntStream.range(0, fullChunks + 1).mapToObj(
-                n -> source.subList(n * length, n == fullChunks ? size : (n + 1) * length));
+        return IntStream.range(0, fullChunks + 1)
+                .mapToObj(n -> source.subList(n * length, n == fullChunks ? size : (n + 1) * length));
     }
 
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records,
                             RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
-        DelayStrategy delayStrategy = DelayStrategy.exponential(Duration.ofMillis(config.getInitialRetryDelay()), Duration.ofMillis(config.getMaxRetryDelay()));
+        DelayStrategy delayStrategy = DelayStrategy.exponential(Duration.ofMillis(config.getInitialRetryDelay()),
+                Duration.ofMillis(config.getMaxRetryDelay()));
 
-        LOGGER.trace("Handling a batch of {} records", records.size());
+        DelayStrategy delayStrategyOnRecordsConsumption = DelayStrategy.constant(Duration.ofMillis(config.getWaitRetryDelay()));
+
+        LOGGER.debug("Handling a batch of {} records", records.size());
         batches(records, config.getBatchSize()).forEach(batch -> {
             boolean completedSuccessfully = false;
 
@@ -148,7 +151,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
             // Move to the next batch once this list is empty.
             List<ChangeEvent<Object, Object>> clonedBatch = batch.stream().collect(Collectors.toList());
 
-            // As long as we failed to execute the current batch to the stream, we should retry if the reason
+            // As long as we failed to execute the current batch to the stream, we should
+            // retry if the reason
             // was either a connection error or OOM in Redis.
             while (!completedSuccessfully) {
                 if (client == null) {
@@ -162,9 +166,9 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         LOGGER.error("Can't connect to Redis", e);
                     }
                 }
-                else if (isMemoryOk.check()) {
+                else {
                     try {
-                        LOGGER.trace("Preparing a Redis Pipeline of {} records", clonedBatch.size());
+                        LOGGER.debug("Preparing a Redis Pipeline of {} records", clonedBatch.size());
 
                         List<SimpleEntry<String, Map<String, String>>> recordsMap = new ArrayList<>(clonedBatch.size());
                         for (ChangeEvent<Object, Object> record : clonedBatch) {
@@ -172,14 +176,27 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                             Map<String, String> recordMap = recordMapFunction.apply(record);
                             recordsMap.add(new SimpleEntry<>(destination, recordMap));
                         }
+
+                        if (recordsMap.size() == 0) {
+                            continue;
+                        }
+
+                        if (!redisMemoryThreshold.checkMemory(getObjectSize(recordsMap.get(0)), recordsMap.size(),
+                                config.getBufferFillRate())) {
+                            LOGGER.info("Stopped consuming records!\n");
+                            delayStrategyOnRecordsConsumption.sleepWhen(true);
+                            continue;
+                        }
                         List<String> responses = client.xadd(recordsMap);
                         List<ChangeEvent<Object, Object>> processedRecords = new ArrayList<ChangeEvent<Object, Object>>();
                         int index = 0;
                         int totalOOMResponses = 0;
 
                         for (String message : responses) {
-                            // When Redis reaches its max memory limitation, an OOM error message will be retrieved.
-                            // In this case, we will retry execute the failed commands, assuming some memory will be freed eventually as result
+                            // When Redis reaches its max memory limitation, an OOM error message will be
+                            // retrieved.
+                            // In this case, we will retry execute the failed commands, assuming some memory
+                            // will be freed eventually as result
                             // of evicting elements from the stream by the target DB.
                             if (message.contains("OOM command not allowed when used memory > 'maxmemory'")) {
                                 totalOOMResponses++;
@@ -197,7 +214,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         clonedBatch.removeAll(processedRecords);
 
                         if (totalOOMResponses > 0) {
-                            LOGGER.info("Redis sink currently full, will retry ({} command(s) failed)",
+                            LOGGER.info("Redis sink currently full, will retry ({} command(s) will be retried)",
                                     totalOOMResponses);
                         }
 
@@ -214,9 +231,6 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         throw new DebeziumException(e);
                     }
                 }
-                else {
-                    LOGGER.warn("Stopped consuming records!");
-                }
 
                 // Failed to execute the transaction, retry...
                 delayStrategy.sleepWhen(!completedSuccessfully);
@@ -225,5 +239,17 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
 
         // Mark the whole batch as finished once the sub batches completed
         committer.markBatchFinished();
+    }
+
+    private static long getObjectSize(SimpleEntry<String, Map<String, String>> record) {
+        long approximateSize = 0;
+        approximateSize += record.getKey().getBytes().length;
+        Map<String, String> value = record.getValue();
+        for (Map.Entry<String, String> entry : value.entrySet()) {
+            approximateSize += entry.getKey().getBytes().length +
+                    entry.getValue().getBytes().length;
+        }
+        LOGGER.debug("Estimated record size is {}", approximateSize);
+        return approximateSize;
     }
 }

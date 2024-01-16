@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,55 +25,83 @@ public class RedisMemoryThreshold {
     private static final String INFO_MEMORY = "memory";
     private static final String INFO_MEMORY_SECTION_MAXMEMORY = "maxmemory";
     private static final String INFO_MEMORY_SECTION_USEDMEMORY = "used_memory";
-
-    private static final Supplier<Boolean> MEMORY_OK = () -> true;
+    private static long accumulatedMemory = 0L;
+    private static long previouslyUsedMemory = 0L;
+    private static long totalProcessed = 0;
 
     private RedisClient client;
-
-    private int memoryThreshold;
-
-    private long memoryLimit;
-
-    private Supplier<Boolean> isMemoryOk;
+    private long memoryLimit = 0;
+    private long maximumMemory = 0;
 
     public RedisMemoryThreshold(RedisClient client, RedisStreamChangeConsumerConfig config) {
         this.client = client;
-        this.memoryThreshold = config.getMemoryThreshold();
         this.memoryLimit = 1024L * 1024 * config.getMemoryLimitMb();
-        if (memoryThreshold == 0 || memoryTuple(memoryLimit) == null) {
-            disable();
-        }
-        else {
-            this.isMemoryOk = () -> isMemoryOk();
-        }
     }
 
-    public boolean check() {
-        return isMemoryOk.get();
+    /**
+     * @param client
+     */
+    public void setRedisClient(RedisClient client) {
+        this.client = client;
     }
 
-    private boolean isMemoryOk() {
-        Tuple2<Long, Long> memoryTuple = memoryTuple(memoryLimit);
-        if (memoryTuple == null) {
-            disable();
+    /**
+     * Redis Enterprise samples the Redis database memory usage in an interval. Since the throughput of Redis is very big,
+     * it is impossible to rely on delayed memory usage reading to prevent OOM.
+     * In order to protect the Redis database and throttle down the sink we have created this mechanism:...
+     * @param extraMemory   - Estimated size of a single record.
+     * @param bufferSize    - Number of records in a batch.
+     * @param bufferFillRate - Rate in which memory can be filled.
+     * @return
+     */
+    public boolean checkMemory(long extraMemory, int bufferSize, int bufferFillRate) {
+        Tuple2<Long, Long> memoryTuple = memoryTuple();
+
+        if (totalProcessed + bufferSize >= Long.MAX_VALUE) {
+            LOGGER.warn("Resetting the total processed records counter as it has reached its maximum value: {}", totalProcessed);
+            totalProcessed = 0;
+        }
+        maximumMemory = memoryTuple.getItem2();
+
+        if (maximumMemory == 0) {
+            totalProcessed += bufferSize;
+            LOGGER.debug("Total Processed Records: {}", totalProcessed);
             return true;
         }
-        long maxMemory = memoryTuple.getItem2();
-        if (maxMemory > 0) {
-            long usedMemory = memoryTuple.getItem1();
-            long percentage = usedMemory * 100 / maxMemory;
-            if (percentage >= memoryThreshold) {
-                LOGGER.info("Sink memory threshold percentage was reached. Will retry; " +
-                        "(current: {}%, configured: {}%, used_memory: {}, maxmemory: {}).",
-                        percentage, memoryThreshold,
-                        usedMemory, maxMemory);
-                return false;
-            }
+
+        long extimatedBatchSize = extraMemory * bufferFillRate;
+        long usedMemory = memoryTuple.getItem1();
+        long prevAccumulatedMemory = accumulatedMemory;
+        long diff = usedMemory - previouslyUsedMemory;
+        if (diff == 0L) {
+            accumulatedMemory += extraMemory * bufferSize;
         }
-        return true;
+        else {
+            previouslyUsedMemory = usedMemory;
+            accumulatedMemory = extraMemory * bufferSize;
+        }
+        long estimatedUsedMemory = usedMemory + accumulatedMemory + extimatedBatchSize;
+
+        if (estimatedUsedMemory >= maximumMemory) {
+            LOGGER.info(
+                    "Sink memory threshold percentage was reached. Will retry; "
+                            + "(estimated used memory size: {}, maxmemory: {}). Total Processed Records: {}",
+                    getSizeInHumanReadableFormat(estimatedUsedMemory), getSizeInHumanReadableFormat(maximumMemory), totalProcessed);
+            accumulatedMemory = prevAccumulatedMemory;
+            return false;
+        }
+        else {
+            LOGGER.debug(
+                    "Maximum reached: {}; Used Mem {}; Max Mem: {}; Accumulate Mem: {}; Estimated Used Mem: {}, Record Size: {}, NumRecInBuff: {}; Total Processed Records: {}",
+                    (estimatedUsedMemory >= maximumMemory), getSizeInHumanReadableFormat(usedMemory), getSizeInHumanReadableFormat(maximumMemory),
+                    getSizeInHumanReadableFormat(accumulatedMemory), getSizeInHumanReadableFormat(estimatedUsedMemory),
+                    getSizeInHumanReadableFormat(extraMemory), bufferSize, totalProcessed + bufferSize);
+            totalProcessed += bufferSize;
+            return true;
+        }
     }
 
-    private Tuple2<Long, Long> memoryTuple(long defaultMaxMemory) {
+    private Tuple2<Long, Long> memoryTuple() {
         String memory = client.info(INFO_MEMORY);
         Map<String, String> infoMemory = new HashMap<>();
         try {
@@ -92,42 +119,57 @@ public class RedisMemoryThreshold {
 
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
         if (usedMemory == null) {
-            return null;
+            usedMemory = 0L;
         }
-
-        Long maxMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
-        if (maxMemory == null) {
-            if (defaultMaxMemory == 0) {
-                LOGGER.warn("Memory limit is disabled '{}'.", defaultMaxMemory);
-                return null;
-            }
-            LOGGER.debug("Using memory limit with value '{}'.", defaultMaxMemory);
-            maxMemory = defaultMaxMemory;
-        }
-        else if (maxMemory == 0) {
-            LOGGER.debug("Redis 'info memory' field '{}' is {}. Consider configuring it.", INFO_MEMORY_SECTION_MAXMEMORY, maxMemory);
-            if (defaultMaxMemory > 0) {
-                maxMemory = defaultMaxMemory;
-                LOGGER.debug("Using memory limit with value '{}'.", defaultMaxMemory);
+        Long configuredMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
+        if (configuredMemory == null || (memoryLimit > 0 && configuredMemory > memoryLimit)) {
+            configuredMemory = memoryLimit;
+            if (configuredMemory > 0) {
+                LOGGER.debug("Setting maximum memory size {}", getSizeInHumanReadableFormat(configuredMemory));
             }
         }
-
-        return Tuple2.of(usedMemory, maxMemory);
-    }
-
-    private void disable() {
-        isMemoryOk = MEMORY_OK;
-        LOGGER.warn("Memory threshold percentage check is disabled!");
+        return Tuple2.of(usedMemory, configuredMemory);
     }
 
     private Long parseLong(String name, String value) {
+        if (value == null) {
+            return null;
+        }
+
         try {
             return Long.valueOf(value);
         }
         catch (NumberFormatException e) {
             LOGGER.debug("Cannot parse Redis 'info memory' field '{}' with value '{}'.", name, value);
+            return null;
         }
-        return null;
     }
 
+    /**
+     * Formats a raw file size value into a human-readable string with appropriate units (B, KB, MB, GB).
+     *
+     * @param size The size value to be formatted.
+     * @return A human-readable string representing the file size with units (B, KB, MB, GB).
+     */
+    public static String getSizeInHumanReadableFormat(Long size) {
+        if (size == null) {
+            return "Not configured";
+        }
+
+        final String[] units = { "B", "KB", "MB", "GB" };
+        int unitIndex = 0;
+
+        double sizeInUnit = size;
+
+        if (size == 0) {
+            return "0 B";
+        }
+
+        while (sizeInUnit >= 1024 && unitIndex < units.length - 1) {
+            sizeInUnit /= 1024.0;
+            unitIndex++;
+        }
+
+        return String.format("%.2f %s", sizeInUnit, units[unitIndex]);
+    }
 }
