@@ -57,9 +57,9 @@ public class RedisMemoryThreshold {
     public boolean checkMemory(long extraMemory, int bufferSize, int bufferFillRate) {
         Tuple2<Long, Long> memoryTuple = memoryTuple();
 
-        if(totalProcessed + bufferSize >= Long. MAX_VALUE) {
-        	LOGGER.warn("Resetting the total processed records counter as it has reached its maximum value: {}", totalProcessed);
-        	totalProcessed = 0;
+        if (totalProcessed + bufferSize >= Long.MAX_VALUE) {
+            LOGGER.warn("Resetting the total processed records counter as it has reached its maximum value: {}", totalProcessed);
+            totalProcessed = 0;
         }
         maximumMemory = memoryTuple.getItem2();
 
@@ -118,8 +118,8 @@ public class RedisMemoryThreshold {
         }
 
         Long usedMemory = parseLong(INFO_MEMORY_SECTION_USEDMEMORY, infoMemory.get(INFO_MEMORY_SECTION_USEDMEMORY));
-        if(usedMemory == null) {
-        	usedMemory = 0L;
+        if (usedMemory == null) {
+            usedMemory = 0L;
         }
         Long configuredMemory = parseLong(INFO_MEMORY_SECTION_MAXMEMORY, infoMemory.get(INFO_MEMORY_SECTION_MAXMEMORY));
         if (configuredMemory == null || (memoryLimit > 0 && configuredMemory > memoryLimit)) {
