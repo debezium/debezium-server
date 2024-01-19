@@ -214,7 +214,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         clonedBatch.removeAll(processedRecords);
 
                         if (totalOOMResponses > 0) {
-                            LOGGER.info("Redis sink currently full, will retry ({} command(s) failed)",
+                            LOGGER.info("Redis sink currently full, will retry ({} command(s) will be retried)",
                                     totalOOMResponses);
                         }
 
