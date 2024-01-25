@@ -194,7 +194,11 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
             r = client.send(request, HttpResponse.BodyHandlers.ofString());
         }
         catch (IOException ioe) {
-            throw new InterruptedException(ioe.toString());
+            if (!ioe.getMessage().contains("GOAWAY")) {
+                throw new InterruptedException(ioe.toString());
+            }
+            LOGGER.info("HTTP/2 GOAWAY received: {}", ioe.getMessage());
+            return false;
         }
 
         if ((r.statusCode() == HTTP_OK) || (r.statusCode() == HTTP_NO_CONTENT) || (r.statusCode() == HTTP_ACCEPTED)) {
