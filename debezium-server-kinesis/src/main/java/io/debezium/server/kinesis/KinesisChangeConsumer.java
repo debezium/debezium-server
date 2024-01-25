@@ -34,10 +34,10 @@ import io.debezium.util.Metronome;
 
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisClientBuilder;
+import software.amazon.awssdk.services.kinesis.model.KinesisException;
 import software.amazon.awssdk.services.kinesis.model.PutRecordRequest;
 
 /**
@@ -138,8 +138,8 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
             client.putRecord(putRecord);
             return true;
         }
-        catch (SdkClientException exception) {
-            LOGGER.error("Failed to send record to {}", record.destination(), exception);
+        catch (KinesisException exception) {
+            LOGGER.warn("Failed to send record to {}", record.destination(), exception);
             return false;
         }
     }
