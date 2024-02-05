@@ -258,9 +258,11 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
             if (orderingKey == null) {
                 if (record.key() == null) {
                     pubsubMessage.setOrderingKey(nullKey);
-                } else if (record.key() instanceof String) {
+                }
+                else if (record.key() instanceof String) {
                     pubsubMessage.setOrderingKey((String) record.key());
-                } else if (record.key() instanceof byte[]) {
+                }
+                else if (record.key() instanceof byte[]) {
                     pubsubMessage.setOrderingKeyBytes(ByteString.copyFrom((byte[]) record.key()));
                 }
             }
