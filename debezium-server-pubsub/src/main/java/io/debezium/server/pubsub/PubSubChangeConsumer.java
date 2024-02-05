@@ -84,7 +84,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     boolean orderingEnabled;
 
     @ConfigProperty(name = PROP_PREFIX + "ordering.key")
-    String orderingKey;
+    Optional<String> orderingKey;
 
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
@@ -255,7 +255,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
 
         if (orderingEnabled) {
-            if (orderingKey == null) {
+            if (orderingKey.isEmpty()) {
                 if (record.key() == null) {
                     pubsubMessage.setOrderingKey(nullKey);
                 }
@@ -267,7 +267,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
                 }
             }
             else {
-                pubsubMessage.setOrderingKey(orderingKey);
+                pubsubMessage.setOrderingKey(orderingKey.get());
             }
         }
 
