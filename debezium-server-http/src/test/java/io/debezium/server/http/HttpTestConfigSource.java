@@ -30,6 +30,7 @@ public class HttpTestConfigSource extends TestConfigSource {
         httpTest.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
         httpTest.put("debezium.transforms.addheader.header", "headerKey");
         httpTest.put("debezium.transforms.addheader.value.literal", "headerValue");
+        httpTest.put("debezium.engine.factory", "io.debezium.embedded.async.ConvertingAsyncEngineBuilderFactory");
 
         config = httpTest;
     }
