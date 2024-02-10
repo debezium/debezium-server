@@ -82,6 +82,8 @@ public class DebeziumServer {
     private static final String PROP_VALUE_FORMAT = PROP_FORMAT_PREFIX + "value";
     private static final String PROP_TERMINATION_WAIT = PROP_PREFIX + "termination.wait";
 
+    private static final String PROP_ENGINE_FACTORY = PROP_PREFIX + "engine.factory";
+
     private static final String FORMAT_JSON = Json.class.getSimpleName().toLowerCase();
     private static final String FORMAT_JSON_BYTE_ARRAY = JsonByteArray.class.getSimpleName().toLowerCase();
     private static final String FORMAT_CLOUDEVENT = CloudEvents.class.getSimpleName().toLowerCase();
@@ -158,7 +160,8 @@ public class DebeziumServer {
         props.setProperty("name", name);
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
-        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat)
+        final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
+        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(null))
                 .using(props)
                 .using((DebeziumEngine.ConnectorCallback) health)
                 .using((DebeziumEngine.CompletionCallback) health)
