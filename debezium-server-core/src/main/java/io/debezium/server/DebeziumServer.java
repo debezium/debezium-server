@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.embedded.async.ConvertingAsyncEngineBuilderFactory;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.ChangeConsumer;
@@ -161,7 +162,7 @@ public class DebeziumServer {
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
         final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
-        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(null))
+        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
                 .using(props)
                 .using((DebeziumEngine.ConnectorCallback) health)
                 .using((DebeziumEngine.CompletionCallback) health)
