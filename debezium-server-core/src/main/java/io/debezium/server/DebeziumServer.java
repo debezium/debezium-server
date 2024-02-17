@@ -40,6 +40,8 @@ import io.debezium.engine.format.CloudEvents;
 import io.debezium.engine.format.Json;
 import io.debezium.engine.format.JsonByteArray;
 import io.debezium.engine.format.Protobuf;
+import io.debezium.engine.format.Binary;
+import io.debezium.engine.format.SimpleString;
 import io.debezium.relational.history.SchemaHistory;
 import io.debezium.server.events.ConnectorCompletedEvent;
 import io.quarkus.runtime.Quarkus;
@@ -90,6 +92,8 @@ public class DebeziumServer {
     private static final String FORMAT_CLOUDEVENT = CloudEvents.class.getSimpleName().toLowerCase();
     private static final String FORMAT_AVRO = Avro.class.getSimpleName().toLowerCase();
     private static final String FORMAT_PROTOBUF = Protobuf.class.getSimpleName().toLowerCase();
+    private static final String FORMAT_BINARY = Binary.class.getSimpleName().toLowerCase();
+    private static final String FORMAT_STRING = SimpleString.class.getSimpleName().toLowerCase();
 
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
 
@@ -217,6 +221,12 @@ public class DebeziumServer {
         }
         else if (FORMAT_PROTOBUF.equals(formatName)) {
             return Protobuf.class;
+        }
+        else if (FORMAT_BINARY.equals(formatName)) {
+            return Binary.class;
+        }
+        else if (FORMAT_STRING.equals(formatName)) {
+            return SimpleString.class;
         }
         throw new DebeziumException("Unknown format '" + formatName + "' for option " + "'" + property + "'");
     }
