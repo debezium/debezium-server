@@ -49,6 +49,8 @@ public class TestConfigSource implements ConfigSource {
             integrationTest.put("debezium.format.key", format);
             integrationTest.put("debezium.format.value", format);
             integrationTest.put("debezium.format.header", formatHeader);
+            // TODO remove once https://github.com/Apicurio/apicurio-registry/issues/4351 is fixed
+            integrationTest.put("debezium.source.record.processing.threads", "1");
         }
         else {
             formatKey = (formatKey != null) ? formatKey : Json.class.getSimpleName().toLowerCase();
