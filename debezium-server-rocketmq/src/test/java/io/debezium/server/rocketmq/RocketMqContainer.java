@@ -44,6 +44,7 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
         updateBrokerConfigCommands.add(updateBrokerConfig("brokerIP1", getHost()));
         updateBrokerConfigCommands.add(updateBrokerConfig("listenPort", getMappedPort(BROKER_PORT)));
         updateBrokerConfigCommands.add(updateBrokerConfig("brokerPermission", defaultBrokerPermission));
+        updateBrokerConfigCommands.add(updateBrokerConfig("diskMaxUsedSpaceRatio", 100));
         final String command = String.join(" && ", updateBrokerConfigCommands);
         ExecResult result = null;
         try {
