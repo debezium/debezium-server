@@ -14,12 +14,15 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
 
+import io.debezium.testing.testcontainers.util.ContainerImageVersions;
+
 /**
  * rocketmq container
  */
 public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
 
-    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("apache/rocketmq:4.9.4");
+    private static final String ROCKETMQ_VERSION = ContainerImageVersions.getStableVersion("apache/rocketmq", ContainerImageVersions.NUMBERS_ONLY_VERSION_REGEX_PATTERN);
+    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("apache/rocketmq:" + ROCKETMQ_VERSION);
     private static final int defaultBrokerPermission = 6;
     public static final int NAMESRV_PORT = 9876;
     public static final int BROKER_PORT = 10911;
