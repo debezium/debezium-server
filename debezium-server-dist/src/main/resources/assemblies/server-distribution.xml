@@ -31,6 +31,20 @@
           </excludes>
       </dependencySet>
       <dependencySet>
+          <outputDirectory>${project.parent.artifactId}/lib</outputDirectory>
+          <unpack>false</unpack>
+          <scope>runtime</scope>
+          <useProjectArtifact>false</useProjectArtifact>
+          <useTransitiveFiltering>true</useTransitiveFiltering>
+          <includes>
+              <include>jakarta.ws.rs:*:*</include>
+              <include>jakarta.annotation:*:*</include>
+              <include>jakarta.xml.bind:*:*</include>
+              <include>jakarta.activation:*:*</include>
+              <include>jakarta.validation:*:*</include>
+          </includes>
+      </dependencySet>
+      <dependencySet>
           <outputDirectory>${project.parent.artifactId}/lib_opt</outputDirectory>
           <unpack>false</unpack>
           <scope>runtime</scope>
