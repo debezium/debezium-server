@@ -9,13 +9,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 
 import io.debezium.server.TestConfigSource;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RedisTestResourceLifecycleManager.class);
 
     static final String READY_MESSAGE = "Ready to accept connections";
     public static final int REDIS_PORT = 6379;
@@ -36,6 +40,7 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
     @Override
     public Map<String, String> start() {
         start(true);
+        container.followOutput(new Slf4jLogConsumer(LOGGER));
         Testing.Files.delete(TestConfigSource.OFFSET_STORE_PATH);
         Testing.Files.createTestingFile(TestConfigSource.OFFSET_STORE_PATH);
 
