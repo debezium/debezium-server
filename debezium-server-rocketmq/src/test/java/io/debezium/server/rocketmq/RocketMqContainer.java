@@ -9,7 +9,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.utility.DockerImageName;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
@@ -20,6 +23,7 @@ import io.debezium.testing.testcontainers.util.ContainerImageVersions;
  * rocketmq container
  */
 public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RocketMqContainer.class);
 
     private static final String ROCKETMQ_VERSION = ContainerImageVersions.getStableVersion("apache/rocketmq", ContainerImageVersions.NUMBERS_ONLY_VERSION_REGEX_PATTERN);
     private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("apache/rocketmq:" + ROCKETMQ_VERSION);
@@ -43,6 +47,7 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
     @Override
 
     protected void containerIsStarted(InspectContainerResponse containerInfo) {
+        followOutput(new Slf4jLogConsumer(LOGGER));
         List<String> updateBrokerConfigCommands = new ArrayList<>();
         updateBrokerConfigCommands.add(updateBrokerConfig("brokerIP1", getHost()));
         updateBrokerConfigCommands.add(updateBrokerConfig("listenPort", getMappedPort(BROKER_PORT)));
