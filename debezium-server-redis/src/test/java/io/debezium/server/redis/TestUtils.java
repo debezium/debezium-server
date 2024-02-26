@@ -16,6 +16,7 @@ import io.debezium.server.TestConfigSource;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class TestUtils {
 
@@ -37,7 +38,14 @@ public class TestUtils {
     }
 
     public static void awaitHashSizeGte(Jedis jedis, String hashName, int expectedSize) {
-        waitBoolean(() -> jedis.hgetAll(hashName).size() >= expectedSize);
+        waitBoolean(() -> {
+            try {
+                return jedis.hgetAll(hashName).size() >= expectedSize;
+            }
+            catch (JedisConnectionException e) {
+                return false;
+            }
+        });
     }
 
     public static void waitBoolean(Supplier<Boolean> bool) {
