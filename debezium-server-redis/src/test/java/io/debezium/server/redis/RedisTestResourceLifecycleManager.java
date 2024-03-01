@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.FixedHostPortGenericContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 
 import io.debezium.server.TestConfigSource;
@@ -23,11 +23,12 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
 
     static final String READY_MESSAGE = "Ready to accept connections";
     public static final int REDIS_PORT = 6379;
+    public static final int HOST_PORT = 16379;
     public static final String REDIS_IMAGE = "redis";
 
     private static final AtomicBoolean running = new AtomicBoolean(false);
-    private static final GenericContainer<?> container = new GenericContainer<>(REDIS_IMAGE)
-            .withExposedPorts(REDIS_PORT);
+    private static final FixedHostPortGenericContainer<?> container = new FixedHostPortGenericContainer<>(REDIS_IMAGE)
+            .withFixedExposedPort(HOST_PORT, REDIS_PORT);
 
     private static synchronized void start(boolean ignored) {
         if (!running.get()) {
