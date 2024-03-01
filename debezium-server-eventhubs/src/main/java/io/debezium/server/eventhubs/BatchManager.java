@@ -113,6 +113,11 @@ public class BatchManager {
             // Renew the batch proxy so we can continue.
             batch = new EventDataBatchProxy(producer, batchOptions.get(partitionId));
             batches.put(partitionId, batch);
+            // Add event which we failed to add to the previous batch which was already full.
+            if (!batch.tryAdd(eventData)) {
+                // This is the first event in the batch, if we failed to add it, it has to be too large.
+                throw new DebeziumException("Event data is too large to fit into batch");
+            }
         }
     }
 
