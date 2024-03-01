@@ -126,7 +126,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             throws InterruptedException {
         LOGGER.trace("Event Hubs sink adapter processing change events");
 
-        batchManager.initializeBatch(records, committer);
+        batchManager.initializeBatch();
 
         for (int recordIndex = 0; recordIndex < records.size();) {
             int start = recordIndex;
