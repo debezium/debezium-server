@@ -43,7 +43,7 @@ import redis.clients.jedis.resps.StreamEntry;
 public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
 
     private static final String STREAM_NAME = "metadata:debezium:schema_history";
-    private static final int INIT_HISTORY_SIZE = 16; // Initial number of entries in the schema history stream.
+    private static final int INIT_HISTORY_SIZE = 21; // Initial number of entries in the schema history stream.
 
     protected static Jedis jedis;
 
@@ -103,7 +103,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
         final AbstractConnectorConnection connection = getMySqlConnection();
         connection.connect();
         Testing.print("Creating new redis_test table and inserting 5 records to it");
-        connection.execute("CREATE TABLE inventory.redis_test (id INT PRIMARY KEY)");
+        connection.execute("CREATE TABLE IF NOT EXISTS inventory.redis_test (id INT PRIMARY KEY)");
         connection.close();
 
         Testing.print("Sleeping for 2 seconds to flush records");
