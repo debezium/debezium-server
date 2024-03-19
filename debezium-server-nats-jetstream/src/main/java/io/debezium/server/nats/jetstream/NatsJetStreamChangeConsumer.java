@@ -7,6 +7,7 @@ package io.debezium.server.nats.jetstream;
 
 import java.util.List;
 
+import io.nats.client.*;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -26,10 +27,6 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
-import io.nats.client.Connection;
-import io.nats.client.JetStream;
-import io.nats.client.JetStreamManagement;
-import io.nats.client.Nats;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 
@@ -51,11 +48,20 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private static final String PROP_SUBJECTS = PROP_PREFIX + "subjects";
     private static final String PROP_STORAGE = PROP_PREFIX + "storage";
 
+    private static final String PROP_AUTH_JWT = PROP_PREFIX + "auth.jwt";
+    private static final String PROP_AUTH_SEED = PROP_PREFIX + "auth.seed";
+
     private Connection nc;
     private JetStream js;
 
     @ConfigProperty(name = PROP_CREATE_STREAM, defaultValue = "false")
     boolean createStream;
+
+    @ConfigProperty(name = PROP_AUTH_JWT, defaultValue = "")
+    String jwt;
+
+    @ConfigProperty(name = PROP_AUTH_SEED, defaultValue = "")
+    String seed;
 
     @Inject
     @CustomConsumerBuilder
@@ -75,11 +81,15 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
         try {
             // Setup NATS connection
-            io.nats.client.Options natsOptions = new io.nats.client.Options.Builder()
+            Options.Builder natsOptionsBuilder = new io.nats.client.Options.Builder()
                     .servers(url.split(","))
-                    .noReconnect()
-                    .build();
-            nc = Nats.connect(natsOptions);
+                    .noReconnect();
+
+            if (!jwt.isEmpty() && !seed.isEmpty()) {
+                natsOptionsBuilder.authHandler(Nats.staticCredentials(jwt.toCharArray(), seed.toCharArray()));
+            }
+
+            nc = Nats.connect(natsOptionsBuilder.build());
 
             // Creating a basic stream, mostly for testing. If a user wants to configure their stream, it can be done
             // via the nats cli.
