@@ -5,6 +5,7 @@
  */
 package io.debezium.server.redis;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,10 +68,12 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
     @FixFor("DBZ-4771")
     public void testSchemaHistoryIsSaved() {
         jedis = new Jedis(HostAndPort.from(RedisTestResourceLifecycleManager.getRedisContainerAddress()));
-        TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, INIT_HISTORY_SIZE + 1);
+        TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, INIT_HISTORY_SIZE);
 
         final List<StreamEntry> entries = jedis.xrange(STREAM_NAME, (StreamEntryID) null, (StreamEntryID) null);
-        assertEquals(INIT_HISTORY_SIZE + 1, entries.size());
+        // If the test is run alone, number of entries in schema history is INIT_HISTORY_SIZE.
+        // If the whole test case is run, number of entries is INIT_HISTORY_SIZE + 1 as the is one more entry from testRedisConnectionRetry test.
+        assertThat(entries.size()).isIn(INIT_HISTORY_SIZE, INIT_HISTORY_SIZE + 1);
         assertTrue(entries.stream().anyMatch(item -> item.getFields().get("schema").contains("CREATE TABLE `customers`")));
     }
 
