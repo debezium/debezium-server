@@ -12,7 +12,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junitpioneer.jupiter.RetryingTest;
 
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
@@ -87,7 +86,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
     * 2. Create a new table named redis_test in MySQL
     * 3. Bring Redis up again and make sure the database schema  has been written successfully
     */
-    @RetryingTest(3)
+    @Test
     @FixFor("DBZ-4509")
     public void testRedisConnectionRetry() throws Exception {
         Testing.Print.enable();
