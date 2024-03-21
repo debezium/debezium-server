@@ -43,7 +43,7 @@ import redis.clients.jedis.resps.StreamEntry;
 public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
 
     private static final String STREAM_NAME = "metadata:debezium:schema_history";
-    private static final int INIT_HISTORY_SIZE = 21; // Initial number of entries in the schema history stream.
+    private static final int INIT_HISTORY_SIZE = 16; // Initial number of entries in the schema history stream.
 
     protected static Jedis jedis;
 
