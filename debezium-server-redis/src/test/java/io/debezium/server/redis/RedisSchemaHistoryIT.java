@@ -106,6 +106,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
         connection.connect();
         Testing.print("Creating new redis_test table and inserting 5 records to it");
         connection.execute("CREATE TABLE IF NOT EXISTS inventory.redis_test (id INT PRIMARY KEY)");
+        Testing.print("Table created");
         connection.close();
 
         Testing.print("Sleeping for 2 seconds to flush records");
@@ -129,6 +130,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
                 .with("database.dbname", MySqlTestResourceLifecycleManager.DBNAME)
                 .with("database.hostname", MySqlTestResourceLifecycleManager.HOST)
                 .with("database.port", MySqlTestResourceLifecycleManager.getContainer().getMappedPort(MySqlTestResourceLifecycleManager.PORT))
+                .with("driver.protocol", "tcp")
                 .build();
         return new MySqlConnectorConfig(config).getConnectorAdapter().createConnection(config);
     }
