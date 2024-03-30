@@ -5,20 +5,21 @@
  */
 package io.debezium.server.redis;
 
+import static io.debezium.jdbc.JdbcConnection.patternBasedFactory;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
-import io.debezium.connector.mysql.strategy.AbstractConnectorConnection;
 import io.debezium.doc.FixFor;
-import io.debezium.relational.history.AbstractSchemaHistoryTest;
+import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.history.SchemaHistory;
 import io.debezium.relational.history.SchemaHistoryMetrics;
 import io.debezium.testing.testcontainers.MySqlTestResourceLifecycleManager;
@@ -40,28 +41,30 @@ import redis.clients.jedis.resps.StreamEntry;
 @QuarkusIntegrationTest
 @TestProfile(RedisSchemaHistoryTestProfile.class)
 @QuarkusTestResource(RedisTestResourceLifecycleManager.class)
-public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
+public class RedisSchemaHistoryIT {
 
     private static final String STREAM_NAME = "metadata:debezium:schema_history";
     private static final int INIT_HISTORY_SIZE = 16; // Initial number of entries in the schema history stream.
 
     protected static Jedis jedis;
+    protected SchemaHistory history;
 
-    @Override
     @BeforeEach
     public void beforeEach() {
-        super.beforeEach();
-    }
-
-    @Override
-    protected SchemaHistory createHistory() {
-        SchemaHistory history = new RedisSchemaHistory();
+        this.history = new RedisSchemaHistory();
 
         history.configure(Configuration.create()
-                .with("schema.history.internal.redis.address", HostAndPort.from(RedisTestResourceLifecycleManager.getRedisContainerAddress()))
+                .with("schema.history.internal.redis.address",
+                        HostAndPort.from(RedisTestResourceLifecycleManager.getRedisContainerAddress()))
                 .build(), null, SchemaHistoryMetrics.NOOP, true);
         history.start();
-        return history;
+    }
+
+    @AfterEach
+    public void afterEach() {
+        if (this.history != null) {
+            this.history.stop();
+        }
     }
 
     @Test
@@ -75,12 +78,6 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
         // If the whole test case is run, number of entries is INIT_HISTORY_SIZE + 1 as the is one more entry from testRedisConnectionRetry test.
         assertThat(entries.size()).isIn(INIT_HISTORY_SIZE, INIT_HISTORY_SIZE + 1);
         assertTrue(entries.stream().anyMatch(item -> item.getFields().get("schema").contains("CREATE TABLE `customers`")));
-    }
-
-    @Test
-    @FixFor("DBZ-4771")
-    public void shouldRecordChangesAndRecoverToVariousPoints() {
-        super.shouldRecordChangesAndRecoverToVariousPoints();
     }
 
     /**
@@ -102,7 +99,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
         Testing.print("Pausing container");
         RedisTestResourceLifecycleManager.pause();
 
-        final AbstractConnectorConnection connection = getMySqlConnection();
+        final JdbcConnection connection = getMySqlConnection();
         connection.connect();
         Testing.print("Creating new redis_test table and inserting 5 records to it");
         connection.execute("CREATE TABLE IF NOT EXISTS inventory.redis_test (id INT PRIMARY KEY)");
@@ -123,7 +120,7 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
         assertTrue(entries.get(INIT_HISTORY_SIZE).getFields().get("schema").contains("redis_test"));
     }
 
-    private AbstractConnectorConnection getMySqlConnection() {
+    private JdbcConnection getMySqlConnection() {
         final Configuration config = Configuration.create()
                 .with("database.user", MySqlTestResourceLifecycleManager.PRIVILEGED_USER)
                 .with("database.password", MySqlTestResourceLifecycleManager.PRIVILEGED_PASSWORD)
@@ -132,6 +129,21 @@ public class RedisSchemaHistoryIT extends AbstractSchemaHistoryTest {
                 .with("database.port", MySqlTestResourceLifecycleManager.getContainer().getMappedPort(MySqlTestResourceLifecycleManager.PORT))
                 .with("driver.protocol", "tcp")
                 .build();
-        return new MySqlConnectorConfig(config).getConnectorAdapter().createConnection(config);
+
+        // Intentionally set URI protocol as "jdbc:mysql" to avoid conflict with driver.protocol specified above
+        final String url = "jdbc:mysql://${hostname}:${port}/?useInformationSchema=true&nullCatalogMeansCurrent=false"
+                + "&useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8&zeroDateTimeBehavior=CONVERT_TO_NULL"
+                + "&connectTimeout=30000";
+
+        // Using JdbcConnection here to avoid the need to depend on internals of the MySQL
+        // connector which could be refactored or changed at various points.
+        final MySqlConnectorConfig connectorConfig = new MySqlConnectorConfig(config);
+
+        // Creating the JdbcConnection directly
+        return new JdbcConnection(
+                connectorConfig.getJdbcConfig(),
+                patternBasedFactory(url, MySqlConnectorConfig.JDBC_PROTOCOL),
+                "`",
+                "`");
     }
 }
