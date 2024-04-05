@@ -62,6 +62,7 @@
         <module>debezium-server-rabbitmq</module>
         <module>debezium-server-rocketmq</module>
         <module>debezium-server-sqs</module>
+        <module>debezium-system-tests</module>
     </modules>
 
     <dependencyManagement>
