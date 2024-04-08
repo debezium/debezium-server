@@ -252,6 +252,12 @@
 
             <!-- Testing -->
             <dependency>
+                <groupId>io.debezium</groupId>
+                <artifactId>debezium-testing-system</artifactId>
+                <version>${project.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
                 <groupId>org.junit-pioneer</groupId>
                 <artifactId>junit-pioneer</artifactId>
                 <version>${version.junit.pioneer}</version>
