@@ -5,19 +5,20 @@
  */
 package io.debezium.server;
 
-import io.debezium.DebeziumException;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
-import io.debezium.util.Testing;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import io.debezium.DebeziumException;
+import io.debezium.engine.ChangeEvent;
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.util.Testing;
 
 @Dependent
 @Named("test")
@@ -36,8 +37,8 @@ public class TestConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<O
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) {
+
         records.forEach(record -> {
             Testing.print(record);
             values.add(record.value());
