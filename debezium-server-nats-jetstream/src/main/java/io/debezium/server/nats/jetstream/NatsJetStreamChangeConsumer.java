@@ -6,6 +6,7 @@
 package io.debezium.server.nats.jetstream;
 
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -61,11 +62,11 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     @ConfigProperty(name = PROP_CREATE_STREAM, defaultValue = "false")
     boolean createStream;
 
-    @ConfigProperty(name = PROP_AUTH_JWT, defaultValue = "")
-    String jwt;
+    @ConfigProperty(name = PROP_AUTH_JWT)
+    Optional<String> jwt;
 
-    @ConfigProperty(name = PROP_AUTH_SEED, defaultValue = "")
-    String seed;
+    @ConfigProperty(name = PROP_AUTH_SEED)
+    Optional<String> seed;
 
     @Inject
     @CustomConsumerBuilder
@@ -89,8 +90,9 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                     .servers(url.split(","))
                     .noReconnect();
 
-            if (!jwt.isEmpty() && !seed.isEmpty()) {
-                natsOptionsBuilder.authHandler(Nats.staticCredentials(jwt.toCharArray(), seed.toCharArray()));
+            if (jwt.isPresent() && seed.isPresent()) {
+                natsOptionsBuilder
+                        .authHandler(Nats.staticCredentials(jwt.get().toCharArray(), seed.get().toCharArray()));
             }
 
             nc = Nats.connect(natsOptionsBuilder.build());
