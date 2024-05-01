@@ -17,7 +17,7 @@
         <version.pubsub>26.17.0</version.pubsub>
         <version.pulsar>2.10.1</version.pulsar>
         <version.eventhubs>5.12.1</version.eventhubs>
-        <version.pravega>0.9.1</version.pravega>
+        <version.pravega>0.13.0</version.pravega>
         <version.nats>2.16.3</version.nats>
         <version.stan>2.2.3</version.stan>
         <version.commons.logging>1.2</version.commons.logging>
