@@ -176,6 +176,12 @@
                 <artifactId>apicurio-registry-client</artifactId>
                 <version>${version.apicurio}</version>
             </dependency>
+            <!-- This makes sure that any version of apicurio that differs from Quarkus aligns here -->
+            <dependency>
+                <groupId>io.apicurio</groupId>
+                <artifactId>apicurio-registry-serdes-jsonschema-serde</artifactId>
+                <version>${version.apicurio}</version>
+            </dependency>
 
             <!-- Target systems -->
             <dependency>
