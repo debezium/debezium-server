@@ -28,7 +28,7 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
  */
 public class PravegaTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private static final String PRAVEGA_VERSION = "0.13.0";
+    private static final String PRAVEGA_VERSION = "0.9.0";
     public static final int CONTROLLER_PORT = 9090;
     public static final int SEGMENT_STORE_PORT = 12345;
     public static final String PRAVEGA_IMAGE = "pravega/pravega:" + PRAVEGA_VERSION;
