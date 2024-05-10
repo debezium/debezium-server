@@ -14,8 +14,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +60,7 @@ public class JWTAuthenticator implements Authenticator {
     private final ObjectMapper mapper;
 
     private AuthenticationState authenticationState;
-    private DateTime expirationDateTime;
+    private Instant expirationDateTime;
 
     JWTAuthenticator(URI authUri, URI refreshUri, String username, String password, long tokenExpirationDuration, long refreshTokenExpirationDuration,
                      Duration httpTimeoutDuration) {
@@ -77,7 +78,7 @@ public class JWTAuthenticator implements Authenticator {
 
         authenticationState = AuthenticationState.NOT_AUTHENTICATED;
         // initialize to value before now to correspond to not authenticated state
-        expirationDateTime = DateTime.now().minusDays(1);
+        expirationDateTime = Instant.now().minus(1, ChronoUnit.DAYS);
     }
 
     @VisibleForTesting
@@ -115,7 +116,7 @@ public class JWTAuthenticator implements Authenticator {
 
     private void checkAuthenticationExpired() {
         if (authenticationState == AuthenticationState.ACTIVE) {
-            if (expirationDateTime.isBeforeNow()) {
+            if (expirationDateTime.isBefore(Instant.now())) {
                 authenticationState = AuthenticationState.EXPIRED;
             }
         }
@@ -200,7 +201,7 @@ public class JWTAuthenticator implements Authenticator {
 
             // in ms
             long expirationDuration = (long) (EXPIRATION_DURATION_MULTIPLIER * response.getExpiresIn());
-            expirationDateTime = DateTime.now().plus(expirationDuration);
+            expirationDateTime = Instant.now().plus(expirationDuration, ChronoUnit.MILLIS);
 
             authenticationState = AuthenticationState.ACTIVE;
 
