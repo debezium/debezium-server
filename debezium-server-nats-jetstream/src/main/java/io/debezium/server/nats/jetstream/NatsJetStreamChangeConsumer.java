@@ -55,6 +55,8 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     private static final String PROP_AUTH_JWT = PROP_PREFIX + "auth.jwt";
     private static final String PROP_AUTH_SEED = PROP_PREFIX + "auth.seed";
+    private static final String PROP_AUTH_USER = PROP_PREFIX + "auth.user";
+    private static final String PROP_AUTH_PASSWORD = PROP_PREFIX + "auth.password";
 
     private Connection nc;
     private JetStream js;
@@ -67,6 +69,12 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     @ConfigProperty(name = PROP_AUTH_SEED)
     Optional<String> seed;
+
+    @ConfigProperty(name = PROP_AUTH_USER)
+    Optional<String> user;
+
+    @ConfigProperty(name = PROP_AUTH_PASSWORD)
+    Optional<String> password;
 
     @Inject
     @CustomConsumerBuilder
@@ -93,6 +101,9 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             if (jwt.isPresent() && seed.isPresent()) {
                 natsOptionsBuilder
                         .authHandler(Nats.staticCredentials(jwt.get().toCharArray(), seed.get().toCharArray()));
+            }
+            else if (user.isPresent() && password.isPresent()) {
+                natsOptionsBuilder.userInfo(user.get(), password.get());
             }
 
             nc = Nats.connect(natsOptionsBuilder.build());
