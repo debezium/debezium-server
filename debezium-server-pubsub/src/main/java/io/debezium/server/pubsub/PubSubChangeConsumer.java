@@ -213,7 +213,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
                 publisher.shutdown();
             }
             catch (Exception e) {
-                LOGGER.warn("Exception while closing publisher: {}", e);
+                LOGGER.warn("Exception while closing publisher: {}", e.getMessage(), e);
             }
         });
 
