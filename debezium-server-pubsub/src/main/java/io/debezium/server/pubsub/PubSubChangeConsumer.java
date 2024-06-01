@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.*;
 
+import io.debezium.util.Threads;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -221,8 +222,10 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     }
 
     void shutdownChannel(ManagedChannel channel) {
+
         if (channel != null && !channel.isShutdown()) {
-            ExecutorService executor = Executors.newSingleThreadExecutor();
+            ExecutorService executor = Threads.newSingleThreadExecutor(this.getClass(), projectId, "managed-channel-shutdown-coordinator");
+
             Future<?> future = executor.submit(() -> {
                 channel.shutdown();
                 try {
