@@ -21,6 +21,7 @@
         <version.nats>2.16.3</version.nats>
         <version.stan>2.2.3</version.stan>
         <version.commons.logging>1.2</version.commons.logging>
+        <version.jmx.exporter>1.0.1</version.jmx.exporter>
 
         <!-- Testing -->
         <version.junit.pioneer>2.0.1</version.junit.pioneer>
@@ -28,6 +29,12 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Prometheus JMX exporter -->
+            <dependency>
+                <groupId>io.prometheus.jmx</groupId>
+                <artifactId>jmx_prometheus_javaagent</artifactId>
+                <version>${version.jmx.exporter}</version>
+            </dependency>
             <!-- Aligning versions/fixing scopes -->
             <dependency>
                 <groupId>commons-logging</groupId>

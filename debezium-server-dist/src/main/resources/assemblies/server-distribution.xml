@@ -28,6 +28,7 @@
             <exclude>io.debezium:debezium-connector-cassandra-3</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-4</exclude>
             <exclude>io.debezium:debezium-connector-dse</exclude>
+            <exclude>io.prometheus.jmx:jmx_prometheus_javaagent:*</exclude>
           </excludes>
       </dependencySet>
       <dependencySet>
@@ -42,6 +43,16 @@
               <include>jakarta.xml.bind:*:*</include>
               <include>jakarta.activation:*:*</include>
               <include>jakarta.validation:*:*</include>
+          </includes>
+      </dependencySet>
+      <dependencySet>
+          <outputDirectory>${project.parent.artifactId}/lib_metrics</outputDirectory>
+          <unpack>false</unpack>
+          <scope>runtime</scope>
+          <useProjectArtifact>false</useProjectArtifact>
+          <useTransitiveFiltering>true</useTransitiveFiltering>
+          <includes>
+              <include>io.prometheus.jmx:jmx_prometheus_javaagent:*</include>
           </includes>
       </dependencySet>
       <dependencySet>
