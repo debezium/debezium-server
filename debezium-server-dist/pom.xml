@@ -55,6 +55,10 @@
             </activation>
             <dependencies>
                 <dependency>
+                    <groupId>io.prometheus.jmx</groupId>
+                    <artifactId>jmx_prometheus_javaagent</artifactId>
+                </dependency>
+                <dependency>
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-connector-mysql</artifactId>
                 </dependency>

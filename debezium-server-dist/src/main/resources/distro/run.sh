@@ -46,6 +46,7 @@ if [[ "${ENABLE_DEBEZIUM_SCRIPTING}" == "true" ]]; then
 fi
 
 source ./jmx/enable_jmx.sh
+source ./lib_metrics/enable_exporter.sh
 
 exec "$JAVA_BINARY" $DEBEZIUM_OPTS $JAVA_OPTS -cp \
     $RUNNER$PATH_SEP"conf"$PATH_SEP$LIB_PATH io.debezium.server.Main
