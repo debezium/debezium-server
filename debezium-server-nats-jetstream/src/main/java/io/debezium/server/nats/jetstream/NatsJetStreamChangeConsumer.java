@@ -5,6 +5,10 @@
  */
 package io.debezium.server.nats.jetstream;
 
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.security.KeyStore;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,6 +18,10 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -57,6 +65,9 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private static final String PROP_AUTH_SEED = PROP_PREFIX + "auth.seed";
     private static final String PROP_AUTH_USER = PROP_PREFIX + "auth.user";
     private static final String PROP_AUTH_PASSWORD = PROP_PREFIX + "auth.password";
+    private static final String PROP_AUTH_TLS_KEYSTORE = PROP_PREFIX + "auth.tls.keystore";
+    private static final String PROP_AUTH_TLS_KEYSTORE_PASSWORD = PROP_PREFIX + "auth.tls.keystore.password";
+    private static final String PROP_AUTH_TLS_PASSWORD = PROP_PREFIX + "auth.tls.password";
 
     private Connection nc;
     private JetStream js;
@@ -75,6 +86,15 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     @ConfigProperty(name = PROP_AUTH_PASSWORD)
     Optional<String> password;
+
+    @ConfigProperty(name = PROP_AUTH_TLS_KEYSTORE)
+    Optional<String> tlsKeyStore;
+
+    @ConfigProperty(name = PROP_AUTH_TLS_KEYSTORE_PASSWORD)
+    Optional<String> tlsKeyStorePassword;
+
+    @ConfigProperty(name = PROP_AUTH_TLS_PASSWORD)
+    Optional<String> tlsPassword;
 
     @Inject
     @CustomConsumerBuilder
@@ -104,6 +124,10 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             }
             else if (user.isPresent() && password.isPresent()) {
                 natsOptionsBuilder.userInfo(user.get(), password.get());
+            }
+            else if (tlsKeyStore.isPresent() && tlsKeyStorePassword.isPresent() && tlsPassword.isPresent()) {
+                var ctx = sslAuthContext(tlsKeyStore.get(), tlsKeyStorePassword.get(), tlsPassword.get());
+                natsOptionsBuilder.sslContext(ctx);
             }
 
             nc = Nats.connect(natsOptionsBuilder.build());
@@ -169,5 +193,26 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             committer.markProcessed(rec);
         }
         committer.markBatchFinished();
+    }
+
+    private static SSLContext sslAuthContext(String keystorePath, String keystorePassword,
+                                             String password)
+            throws Exception {
+
+        var keystore = KeyStore.getInstance(KeyStore.getDefaultType());
+        try (var in = new BufferedInputStream(new FileInputStream(keystorePath))) {
+            keystore.load(in, keystorePassword.toCharArray());
+        }
+
+        var kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keystore, password.toCharArray());
+
+        var tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(keystore);
+
+        var ctx = SSLContext.getInstance(Options.DEFAULT_SSL_PROTOCOL);
+        ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), new SecureRandom());
+
+        return ctx;
     }
 }
