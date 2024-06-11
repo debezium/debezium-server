@@ -193,7 +193,7 @@ public class DebeziumServer {
             if (updatedPropertyName != null && updatedPropertyName.startsWith(oldPrefix)) {
                 String finalPropertyName = newPrefix + updatedPropertyName.substring(oldPrefix.length());
                 if (overwrite || !props.containsKey(finalPropertyName)) {
-                    props.setProperty(finalPropertyName, config.getValue(name, String.class));
+                    props.setProperty(finalPropertyName, config.getOptionalValue(name, String.class).orElse(""));
                 }
             }
             else if (name.startsWith(oldPrefix)) {
