@@ -15,7 +15,7 @@
         <version.kinesis>2.13.13</version.kinesis>
         <version.sqs>2.13.13</version.sqs>
         <version.pubsub>26.17.0</version.pubsub>
-        <version.pulsar>2.10.1</version.pulsar>
+        <version.pulsar>2.11.4</version.pulsar>
         <version.eventhubs>5.12.1</version.eventhubs>
         <version.pravega>0.9.1</version.pravega>
         <version.nats>2.16.3</version.nats>
