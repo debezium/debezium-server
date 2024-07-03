@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -53,6 +55,7 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.util.Threads;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 
@@ -127,6 +130,9 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
     Integer waitMessageDeliveryTimeout;
+
+    @ConfigProperty(name = PROP_PREFIX + "channel.shutdown.timeout.ms", defaultValue = "30000")
+    Integer channelShutdownTimeout;
 
     @ConfigProperty(name = PROP_PREFIX + "address")
     Optional<String> address;
@@ -210,12 +216,36 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
                 publisher.shutdown();
             }
             catch (Exception e) {
-                LOGGER.warn("Exception while closing publisher: {}", e);
+                LOGGER.warn("Exception while closing publisher: {}", e.getMessage(), e);
             }
         });
+        shutdownChannel(channel);
+    }
+
+    void shutdownChannel(ManagedChannel channel) {
 
         if (channel != null && !channel.isShutdown()) {
-            channel.shutdown();
+            ExecutorService executor = Threads.newSingleThreadExecutor(this.getClass(), projectId, "managed-channel-shutdown-coordinator");
+
+            Future<?> future = executor.submit(() -> {
+                channel.shutdown();
+                try {
+                    channel.awaitTermination(channelShutdownTimeout, TimeUnit.MILLISECONDS);
+                }
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+            try {
+                future.get(channelShutdownTimeout, TimeUnit.MILLISECONDS);
+            }
+            catch (Exception e) {
+                LOGGER.warn("Exception while shutting down the managed channel {}", e.getMessage(), e);
+            }
+            finally {
+                executor.shutdownNow();
+            }
         }
     }
 
