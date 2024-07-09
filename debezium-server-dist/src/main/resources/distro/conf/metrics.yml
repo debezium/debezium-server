@@ -3,6 +3,23 @@ ssl: false
 lowercaseOutputName: false
 lowercaseOutputLabelNames: false
 rules:
+- pattern: "kafka.producer<type=producer-metrics, client-id=([^>]+)><>([^:]+)"
+  name: "kafka_producer_metrics_$2"
+  type: GAUGE
+  labels:
+    client: "$1"
+- pattern: "kafka.producer<type=producer-node-metrics, client-id=([^>]+), node-id=([^>]+)><>([^:]+)"
+  name: "kafka_producer_node_metrics_$3"
+  type: GAUGE
+  labels:
+    client: "$1"
+    node: "$2"
+- pattern: "kafka.producer<type=producer-topic-metrics, client-id=([^>]+), topic=([^>]+)><>([^:]+)"
+  name: "kafka_producer_topic_metrics_$3"
+  type: GAUGE
+  labels:
+    client: "$1"
+    topic: "$2"
 - pattern: "kafka.connect<type=connect-worker-metrics>([^:]+):"
   name: "kafka_connect_worker_metrics_$1"
   type: GAUGE
