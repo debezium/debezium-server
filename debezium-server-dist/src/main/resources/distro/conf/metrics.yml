@@ -3,14 +3,17 @@ ssl: false
 lowercaseOutputName: false
 lowercaseOutputLabelNames: false
 rules:
-- pattern : "kafka.connect<type=connect-worker-metrics>([^:]+):"
+- pattern: "kafka.connect<type=connect-worker-metrics>([^:]+):"
   name: "kafka_connect_worker_metrics_$1"
-- pattern : "kafka.connect<type=connect-metrics, client-id=([^:]+)><>([^:]+)"
+  type: GAUGE
+- pattern: "kafka.connect<type=connect-metrics, client-id=([^:]+)><>([^:]+)"
   name: "kafka_connect_metrics_$2"
+  type: GAUGE
   labels:
     client: "$1"
 - pattern: "debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^,]+), key=([^>]+)><>RowsScanned"
   name: "debezium_metrics_RowsScanned"
+  type: GAUGE
   labels:
     plugin: "$1"
     name: "$3"
@@ -18,6 +21,7 @@ rules:
     table: "$4"
 - pattern: "debezium.([^:]+)<type=connector-metrics, server=([^,]+), task=([^,]+), context=([^,]+), database=([^>]+)>([^:]+)"
   name: "debezium_metrics_$6"
+  type: GAUGE
   labels:
     plugin: "$1"
     name: "$2"
@@ -26,6 +30,7 @@ rules:
     database: "$5"
 - pattern: "debezium.([^:]+)<type=connector-metrics, server=([^,]+), task=([^,]+), context=([^>]+)>([^:]+)"
   name: "debezium_metrics_$5"
+  type: GAUGE
   labels:
     plugin: "$1"
     name: "$2"
@@ -33,6 +38,7 @@ rules:
     context: "$4"
 - pattern: "debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^>]+)>([^:]+)"
   name: "debezium_metrics_$4"
+  type: GAUGE
   labels:
     plugin: "$1"
     name: "$3"
