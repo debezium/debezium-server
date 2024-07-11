@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.embedded.ClientProvided;
 import io.debezium.embedded.async.ConvertingAsyncEngineBuilderFactory;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
@@ -94,6 +95,7 @@ public class DebeziumServer {
     private static final String FORMAT_PROTOBUF = Protobuf.class.getSimpleName().toLowerCase();
     private static final String FORMAT_BINARY = Binary.class.getSimpleName().toLowerCase();
     private static final String FORMAT_STRING = SimpleString.class.getSimpleName().toLowerCase();
+    private static final String FORMAT_CLIENT_PROVIDED = ClientProvided.class.getSimpleName().toLowerCase();
 
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
 
@@ -228,6 +230,9 @@ public class DebeziumServer {
         else if (FORMAT_STRING.equals(formatName)) {
             return SimpleString.class;
         }
+        else if (FORMAT_CLIENT_PROVIDED.equals(formatName)) {
+            return ClientProvided.class;
+        }
         throw new DebeziumException("Unknown format '" + formatName + "' for option " + "'" + property + "'");
     }
 
@@ -238,6 +243,9 @@ public class DebeziumServer {
         }
         else if (FORMAT_JSON_BYTE_ARRAY.equals(formatName)) {
             return JsonByteArray.class;
+        }
+        else if (FORMAT_CLIENT_PROVIDED.equals(formatName)) {
+            return ClientProvided.class;
         }
         throw new DebeziumException("Unknown format '" + formatName + "' for option " + "'" + PROP_HEADER_FORMAT + "'");
     }
