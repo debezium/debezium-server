@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.Dependent;
@@ -38,6 +39,7 @@ import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
+import io.debezium.server.http.standard_webhooks.StandardWebhooksAuthenticatorBuilder;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
 
@@ -62,6 +64,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     public static final String PROP_AUTHENTICATION_PREFIX = PROP_PREFIX + "authentication.";
     public static final String PROP_AUTHENTICATION_TYPE = "type";
     public static final String JWT_AUTHENTICATION = "jwt";
+    public static final String STANDARD_WEBHOOKS_AUTHENTICATION = "standard-webhooks";
 
     private static final Long HTTP_TIMEOUT = Integer.toUnsignedLong(60000); // Default to 60s
     private static final int DEFAULT_RETRIES = 5;
@@ -142,6 +145,10 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                 JWTAuthenticatorBuilder builder = JWTAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
                 authenticator = builder.build();
             }
+            else if (t.equalsIgnoreCase(STANDARD_WEBHOOKS_AUTHENTICATION)) {
+                StandardWebhooksAuthenticatorBuilder builder = StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
+                authenticator = builder.build();
+            }
             else {
                 throw new DebeziumException("Unknown value '" + t + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
             }
@@ -159,9 +166,12 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
+            UUID messageId = UUID.randomUUID();
+            LOGGER.trace("Using message ID '{}'", messageId);
+
             if (record.value() != null) {
                 int attempts = 0;
-                while (!recordSent(record)) {
+                while (!recordSent(record, messageId)) {
                     attempts++;
                     if (attempts >= retries) {
                         throw new DebeziumException("Exceeded maximum number of attempts to publish event " + record);
@@ -175,7 +185,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         committer.markBatchFinished();
     }
 
-    private boolean recordSent(ChangeEvent<Object, Object> record) throws InterruptedException {
+    private boolean recordSent(ChangeEvent<Object, Object> record, UUID messageId) throws InterruptedException {
         boolean sent = false;
         HttpResponse<String> r;
 
@@ -186,7 +196,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                 if (!authenticator.authenticate()) {
                     throw new DebeziumException("Failed to authenticate successfully.  Cannot continue.");
                 }
-                authenticator.setAuthorizationHeader(requestBuilder);
+                authenticator.setAuthorizationHeader(requestBuilder, (String) record.value(), messageId);
             }
 
             HttpRequest request = requestBuilder.build();

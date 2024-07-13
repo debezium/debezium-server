@@ -6,9 +6,10 @@
 package io.debezium.server.http;
 
 import java.net.http.HttpRequest;
+import java.util.UUID;
 
 public interface Authenticator {
-    void setAuthorizationHeader(HttpRequest.Builder httpRequestBuilder);
+    void setAuthorizationHeader(HttpRequest.Builder httpRequestBuilder, String bodyContent, UUID messageId);
 
     boolean authenticate() throws InterruptedException;
 }
