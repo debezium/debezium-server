@@ -39,7 +39,7 @@ import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
-import io.debezium.server.http.standard_webhooks.StandardWebhooksAuthenticatorBuilder;
+import io.debezium.server.http.webhooks.StandardWebhooksAuthenticatorBuilder;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
 
@@ -136,23 +136,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                 contentType = "application/json";
         }
 
-        // Need to be able to throw an exception
-        // so not using ifPresent() syntax
-        Optional<String> authenticationType = config.getOptionalValue(PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE, String.class);
-        if (authenticationType.isPresent()) {
-            String t = authenticationType.get();
-            if (t.equalsIgnoreCase(JWT_AUTHENTICATION)) {
-                JWTAuthenticatorBuilder builder = JWTAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
-                authenticator = builder.build();
-            }
-            else if (t.equalsIgnoreCase(STANDARD_WEBHOOKS_AUTHENTICATION)) {
-                StandardWebhooksAuthenticatorBuilder builder = StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
-                authenticator = builder.build();
-            }
-            else {
-                throw new DebeziumException("Unknown value '" + t + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
-            }
-        }
+        authenticator = buildAuthenticator(config);
 
         LOGGER.info("Using http content-type type {}", contentType);
         LOGGER.info("Using sink URL: {}", sinkUrl);
@@ -183,6 +167,28 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         }
 
         committer.markBatchFinished();
+    }
+
+    private Authenticator buildAuthenticator(Config config) {
+        // Need to be able to throw an exception
+        // so not using ifPresent() syntax
+        Optional<String> authenticationType = config.getOptionalValue(PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE, String.class);
+        if (authenticationType.isPresent()) {
+            String t = authenticationType.get();
+            if (t.equalsIgnoreCase(JWT_AUTHENTICATION)) {
+                JWTAuthenticatorBuilder builder = JWTAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
+                return builder.build();
+            }
+            else if (t.equalsIgnoreCase(STANDARD_WEBHOOKS_AUTHENTICATION)) {
+                StandardWebhooksAuthenticatorBuilder builder = StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
+                return builder.build();
+            }
+            else {
+                throw new DebeziumException("Unknown value '" + t + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
+            }
+        }
+
+        return null;
     }
 
     private boolean recordSent(ChangeEvent<Object, Object> record, UUID messageId) throws InterruptedException {

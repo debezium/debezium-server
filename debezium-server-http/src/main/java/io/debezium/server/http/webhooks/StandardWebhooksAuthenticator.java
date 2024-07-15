@@ -3,12 +3,13 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.http.standard_webhooks;
+package io.debezium.server.http.webhooks;
 
 import java.net.http.HttpRequest.Builder;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
@@ -27,10 +28,18 @@ public class StandardWebhooksAuthenticator implements Authenticator {
     static final String UNBRANDED_MSG_TIMESTAMP_KEY = "webhook-timestamp";
     private static final String HMAC_SHA256 = "HmacSHA256";
 
-    private final byte[] key;
+    private final Clock clock;
+    private final Mac sha512Hmac;
 
     public StandardWebhooksAuthenticator(final String secret) {
+        this(secret, Clock.systemUTC());
+    }
+
+    @VisibleForTesting
+    StandardWebhooksAuthenticator(final String secret, Clock clock) {
         super();
+
+        this.clock = clock;
 
         String sec = secret;
         if (sec.startsWith(StandardWebhooksAuthenticator.SECRET_PREFIX)) {
@@ -44,17 +53,25 @@ public class StandardWebhooksAuthenticator implements Authenticator {
             throw new DebeziumException("Webhook secret must be between 24 and 64 bytes");
         }
 
-        this.key = key;
+        try {
+            this.sha512Hmac = Mac.getInstance(HMAC_SHA256);
+            SecretKeySpec keySpec = new SecretKeySpec(key, HMAC_SHA256);
+            sha512Hmac.init(keySpec);
+        }
+        catch (InvalidKeyException | NoSuchAlgorithmException e) {
+            throw new DebeziumException("Failed to initialize HMAC-SHA256 signing algorithm", e);
+        }
+
     }
 
     @Override
     public void setAuthorizationHeader(Builder httpRequestBuilder, final String bodyContent, final UUID messageId) {
-        final long timestamp = Instant.now().getEpochSecond();
+        final long timestamp = Instant.now(this.clock).getEpochSecond();
         final String msgId = "msg_" + messageId;
         final String signature = sign(msgId, timestamp, bodyContent);
-        httpRequestBuilder.header(StandardWebhooksAuthenticator.UNBRANDED_MSG_ID_KEY, msgId);
-        httpRequestBuilder.header(StandardWebhooksAuthenticator.UNBRANDED_MSG_SIGNATURE_KEY, signature);
-        httpRequestBuilder.header(StandardWebhooksAuthenticator.UNBRANDED_MSG_TIMESTAMP_KEY, Long.toString(timestamp));
+        httpRequestBuilder.setHeader(StandardWebhooksAuthenticator.UNBRANDED_MSG_ID_KEY, msgId);
+        httpRequestBuilder.setHeader(StandardWebhooksAuthenticator.UNBRANDED_MSG_SIGNATURE_KEY, signature);
+        httpRequestBuilder.setHeader(StandardWebhooksAuthenticator.UNBRANDED_MSG_TIMESTAMP_KEY, Long.toString(timestamp));
     }
 
     @Override
@@ -64,17 +81,10 @@ public class StandardWebhooksAuthenticator implements Authenticator {
 
     @VisibleForTesting
     String sign(final String msgId, final long timestamp, final String payload) {
-        try {
-            String toSign = String.format("%s.%s.%s", msgId, timestamp, payload);
-            Mac sha512Hmac = Mac.getInstance(HMAC_SHA256);
-            SecretKeySpec keySpec = new SecretKeySpec(this.key, HMAC_SHA256);
-            sha512Hmac.init(keySpec);
-            byte[] macData = sha512Hmac.doFinal(toSign.getBytes(StandardCharsets.UTF_8));
-            String signature = Base64.getEncoder().encodeToString(macData);
-            return String.format("v1,%s", signature);
-        }
-        catch (InvalidKeyException | NoSuchAlgorithmException e) {
-            throw new DebeziumException(e.getMessage());
-        }
+        // https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md#signature-scheme
+        final String toSign = String.format("%s.%s.%s", msgId, timestamp, payload);
+        byte[] macData = sha512Hmac.doFinal(toSign.getBytes(StandardCharsets.UTF_8));
+        final String signature = Base64.getEncoder().encodeToString(macData);
+        return String.format("v1,%s", signature);
     }
 }

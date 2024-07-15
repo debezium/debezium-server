@@ -3,7 +3,7 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.http.standard_webhooks;
+package io.debezium.server.http.webhooks;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.eclipse.microprofile.config.Config;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 public class StandardWebhooksAuthenticatorBuilderTest {
@@ -24,12 +25,14 @@ public class StandardWebhooksAuthenticatorBuilderTest {
         StandardWebhooksAuthenticatorBuilder builder = new StandardWebhooksAuthenticatorBuilder();
         builder.setSecret("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
 
-        StandardWebhooksAuthenticator authenticator = builder.build();
+        Assertions.assertDoesNotThrow(() -> {
+            builder.build();
+        });
     }
 
     @Test
     public void verifyBuildFromConfig() throws URISyntaxException {
-        Map<String, Object> configValues = Map.of("debezium.sink.http.webhook.secret", "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+        Map<String, Object> configValues = Map.of("debezium.sink.http.authentication.webhook.secret", "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
 
         Config result = mock(Config.class);
 
@@ -39,9 +42,10 @@ public class StandardWebhooksAuthenticatorBuilderTest {
             when(result.getOptionalValue(eq(entry.getKey()), any())).thenReturn(Optional.of(value));
         }
 
-        StandardWebhooksAuthenticatorBuilder builder = StandardWebhooksAuthenticatorBuilder.fromConfig(result, "debezium.sink.http.");
-        builder.setSecret("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+        StandardWebhooksAuthenticatorBuilder builder = StandardWebhooksAuthenticatorBuilder.fromConfig(result, "debezium.sink.http.authentication.");
 
-        StandardWebhooksAuthenticator authenticator = builder.build();
+        Assertions.assertDoesNotThrow(() -> {
+            builder.build();
+        });
     }
 }
