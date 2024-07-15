@@ -3,13 +3,13 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server.http.standard_webhooks;
-
-import java.util.NoSuchElementException;
+package io.debezium.server.http.webhooks;
 
 import org.eclipse.microprofile.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.debezium.DebeziumException;
 
 public class StandardWebhooksAuthenticatorBuilder {
     private static final Logger LOGGER = LoggerFactory.getLogger(StandardWebhooksAuthenticatorBuilder.class);
@@ -34,7 +34,7 @@ public class StandardWebhooksAuthenticatorBuilder {
         if (secret == null) {
             String msg = "Cannot build StandardWebhooksAuthenticator.  Secret must be set.";
             LOGGER.error(msg);
-            throw new NoSuchElementException(msg);
+            throw new DebeziumException(msg);
         }
 
         return new StandardWebhooksAuthenticator(secret);
