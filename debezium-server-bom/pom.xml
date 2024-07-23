@@ -49,6 +49,16 @@
                 <version>${version.kafka}</version>
             </dependency>
 
+            <!-- This needs to be defined before Quarkus to guarantee that the
+                 right Infinispan dependencies are imported -->
+            <dependency>
+                <groupId>org.infinispan</groupId>
+                <artifactId>infinispan-bom</artifactId>
+                <version>${version.infinispan}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Quarkus dependencies -->
             <dependency>
                 <groupId>io.quarkus</groupId>
@@ -254,13 +264,6 @@
                         <artifactId>commons-cli</artifactId>
                     </exclusion>
                 </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>org.infinispan</groupId>
-                <artifactId>infinispan-bom</artifactId>
-                <version>${version.infinispan}</version>
-                <type>pom</type>
-                <scope>import</scope>
             </dependency>
 
             <!-- Testing -->
