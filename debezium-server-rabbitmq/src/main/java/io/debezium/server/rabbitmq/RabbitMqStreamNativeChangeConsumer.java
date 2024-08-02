@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.ConnectionFactoryConfigurator;
+import com.rabbitmq.stream.Address;
 import com.rabbitmq.stream.Environment;
 import com.rabbitmq.stream.Producer;
 import com.rabbitmq.stream.StreamException;
@@ -80,9 +81,12 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
         LOGGER.info("Using connection to {}:{}", factory.getHost(), factory.getPort());
 
         try {
+            Address entryPoint = new Address(factory.getHost(), factory.getPort());
             environment = Environment.builder()
-                    .host(factory.getHost())
-                    .port(factory.getPort()).build();
+                    .host(entryPoint.host())
+                    .port(entryPoint.port())
+                    .addressResolver(address -> entryPoint)
+                    .build();
 
             if (stream.isEmpty()) {
                 throw new DebeziumException("Mandatory configration option '" + PROP_STREAM + "' is not provided");
