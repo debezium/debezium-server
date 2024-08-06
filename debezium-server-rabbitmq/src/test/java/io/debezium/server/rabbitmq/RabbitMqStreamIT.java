@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
+import com.rabbitmq.stream.Address;
 import jakarta.enterprise.event.Observes;
 
 import org.awaitility.Awaitility;
@@ -76,9 +77,15 @@ public class RabbitMqStreamIT {
         factory.setHost(RabbitMqStreamTestResourceLifecycleManager.container.getHost());
         factory.setPort(RabbitMqStreamTestResourceLifecycleManager.getPort());
 
+        Address entryPoint = new Address(factory.getHost(), factory.getPort());
         environment = Environment.builder()
-                .host(factory.getHost())
-                .port(factory.getPort()).build();
+                .host(entryPoint.host())
+                .port(entryPoint.port())
+                .addressResolver(address -> entryPoint)
+                .username(factory.getUsername())
+                .password(factory.getPassword())
+                .virtualHost(factory.getVirtualHost())
+                .build();
 
         environment.streamCreator().stream(RabbitMqTestConfigSource.TOPIC_NAME).create();
 
