@@ -25,10 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.ConnectionFactoryConfigurator;
-import com.rabbitmq.stream.Address;
-import com.rabbitmq.stream.Environment;
-import com.rabbitmq.stream.Producer;
-import com.rabbitmq.stream.StreamException;
+import com.rabbitmq.stream.*;
 
 import io.debezium.DebeziumException;
 import io.debezium.engine.ChangeEvent;
@@ -57,6 +54,15 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     @ConfigProperty(name = PROP_STREAM)
     Optional<String> stream;
 
+    @ConfigProperty(name = PROP_PREFIX + "stream.config.maxAge")
+    Optional<Duration> streamMaxAge;
+
+    @ConfigProperty(name = PROP_PREFIX + "stream.config.maxLength")
+    Optional<String> streamMaxLength;
+
+    @ConfigProperty(name = PROP_PREFIX + "stream.config.maxSegmentSize")
+    Optional<String> streamMaxSegmentSize;
+
     @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
     int ackTimeout;
 
@@ -65,7 +71,17 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     Environment environment;
 
-    Producer producer;
+    Map<String, Producer> streamProducers = new HashMap<>();;
+
+    private void createStream(Environment env, String name) {
+        StreamCreator stream = env.streamCreator().stream(name);
+
+        streamMaxAge.ifPresent(stream::maxAge);
+        streamMaxLength.map(ByteCapacity::from).ifPresent(stream::maxLengthBytes);
+        streamMaxSegmentSize.map(ByteCapacity::from).ifPresent(stream::maxSegmentSizeBytes);
+
+        stream.create();
+    }
 
     @PostConstruct
     void connect() {
@@ -86,21 +102,10 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
                     .host(entryPoint.host())
                     .port(entryPoint.port())
                     .addressResolver(address -> entryPoint)
+                    .username(factory.getUsername())
+                    .password(factory.getPassword())
+                    .virtualHost(factory.getVirtualHost())
                     .build();
-
-            if (stream.isEmpty()) {
-                throw new DebeziumException("Mandatory configration option '" + PROP_STREAM + "' is not provided");
-            }
-
-            LOGGER.info("Creating stream '{}'", stream.get());
-
-            environment.streamCreator().stream(stream.get()).create();
-
-            producer = environment.producerBuilder()
-                    .confirmTimeout(Duration.ofSeconds(ackTimeout))
-                    .stream(stream.get())
-                    .build();
-
         }
         catch (StreamException | IllegalArgumentException e) {
             throw new DebeziumException(e);
@@ -111,11 +116,13 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     void close() {
 
         try {
-            if (producer != null) {
-                producer.close();
-            }
             if (environment != null) {
                 environment.close();
+            }
+            if (streamProducers != null) {
+                for (Producer producer : streamProducers.values()) {
+                    producer.close();
+                }
             }
         }
         catch (Exception e) {
@@ -127,15 +134,32 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
+
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
+
             try {
+                String topic = stream.orElse(streamNameMapper.map(record.destination()));
+
+                Producer producer = streamProducers.get(topic);
+                if (producer == null) {
+                    if (!environment.streamExists(topic)) {
+                        createStream(environment, topic);
+                    }
+
+                    producer = environment.producerBuilder()
+                            .confirmTimeout(Duration.ofSeconds(ackTimeout))
+                            .stream(topic)
+                            .build();
+
+                    streamProducers.put(topic, producer);
+                }
+
                 final Object value = (record.value() != null) ? record.value() : nullValue;
                 producer.send(
                         producer.messageBuilder().addData(getBytes(value)).build(),
                         confirmationStatus -> {
                         });
-
             }
             catch (StreamException e) {
                 throw new DebeziumException(e);
@@ -156,4 +180,5 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
         }
         return rabbitMqHeaders;
     }
+
 }
