@@ -14,7 +14,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-import com.rabbitmq.stream.Address;
 import jakarta.enterprise.event.Observes;
 
 import org.awaitility.Awaitility;
@@ -24,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.stream.Address;
 import com.rabbitmq.stream.Consumer;
 import com.rabbitmq.stream.Environment;
 import com.rabbitmq.stream.OffsetSpecification;

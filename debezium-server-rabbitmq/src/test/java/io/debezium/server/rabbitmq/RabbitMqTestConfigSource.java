@@ -22,7 +22,6 @@ public class RabbitMqTestConfigSource extends TestConfigSource {
         String sinkType = System.getProperty("debezium.sink.type");
         if ("rabbitmqstream".equals(sinkType)) {
             rabbitmqConfig.put("debezium.sink.type", "rabbitmqstream");
-            rabbitmqConfig.put("debezium.sink.rabbitmqstream.stream", TOPIC_NAME);
         }
         else {
             rabbitmqConfig.put("debezium.sink.type", "rabbitmq");

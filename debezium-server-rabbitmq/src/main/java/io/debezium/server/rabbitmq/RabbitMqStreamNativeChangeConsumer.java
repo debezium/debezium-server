@@ -25,7 +25,12 @@ import org.slf4j.LoggerFactory;
 
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.ConnectionFactoryConfigurator;
-import com.rabbitmq.stream.*;
+import com.rabbitmq.stream.Address;
+import com.rabbitmq.stream.ByteCapacity;
+import com.rabbitmq.stream.Environment;
+import com.rabbitmq.stream.Producer;
+import com.rabbitmq.stream.StreamCreator;
+import com.rabbitmq.stream.StreamException;
 
 import io.debezium.DebeziumException;
 import io.debezium.engine.ChangeEvent;
@@ -54,13 +59,13 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     @ConfigProperty(name = PROP_STREAM)
     Optional<String> stream;
 
-    @ConfigProperty(name = PROP_PREFIX + "stream.config.maxAge")
+    @ConfigProperty(name = PROP_PREFIX + "stream.maxAge")
     Optional<Duration> streamMaxAge;
 
-    @ConfigProperty(name = PROP_PREFIX + "stream.config.maxLength")
+    @ConfigProperty(name = PROP_PREFIX + "stream.maxLength")
     Optional<String> streamMaxLength;
 
-    @ConfigProperty(name = PROP_PREFIX + "stream.config.maxSegmentSize")
+    @ConfigProperty(name = PROP_PREFIX + "stream.maxSegmentSize")
     Optional<String> streamMaxSegmentSize;
 
     @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
@@ -71,9 +76,10 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     Environment environment;
 
-    Map<String, Producer> streamProducers = new HashMap<>();;
+    Map<String, Producer> streamProducers = new HashMap<>();
 
     private void createStream(Environment env, String name) {
+        LOGGER.info("Creating stream '{}'", name);
         StreamCreator stream = env.streamCreator().stream(name);
 
         streamMaxAge.ifPresent(stream::maxAge);
