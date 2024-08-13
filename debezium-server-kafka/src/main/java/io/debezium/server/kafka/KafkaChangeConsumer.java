@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -25,6 +27,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +49,11 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.kafka.";
+
     private static final String PROP_PREFIX_PRODUCER = PROP_PREFIX + "producer.";
+
+    @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
+    Integer waitMessageDeliveryTimeout;
 
     private KafkaProducer<Object, Object> producer;
 
@@ -91,15 +98,16 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
                 Headers headers = convertKafkaHeaders(record);
 
                 String topicName = streamNameMapper.map(record.destination());
-                Future<RecordMetadata> recordMetadataFuture = producer.send(new ProducerRecord<>(topicName, null, null, record.key(), record.value(), headers), (metadata, exception) -> {
-                    if (exception != null) {
-                        LOGGER.error("Failed to send record to {}:", topicName, exception);
-                        throw new DebeziumException(exception);
-                    }
-                    else {
-                        LOGGER.trace("Sent message with offset: {}", metadata.offset());
-                    }
-                });
+                Future<RecordMetadata> recordMetadataFuture = producer.send(new ProducerRecord<>(topicName, null, null, record.key(), record.value(), headers),
+                        (metadata, exception) -> {
+                            if (exception != null) {
+                                LOGGER.error("Failed to send record to {}:", topicName, exception);
+                                throw new DebeziumException(exception);
+                            }
+                            else {
+                                LOGGER.trace("Sent message with offset: {}", metadata.offset());
+                            }
+                        });
                 futures.add(recordMetadataFuture);
                 committer.markProcessed(record);
             }
@@ -110,8 +118,9 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
 
         for (Future<RecordMetadata> future : futures) {
             try {
-                future.get();
-            } catch (ExecutionException e) {
+                future.get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
+            }
+            catch (TimeoutException | ExecutionException e) {
                 throw new DebeziumException("Error while waiting for Kafka send operations to complete", e);
             }
         }
