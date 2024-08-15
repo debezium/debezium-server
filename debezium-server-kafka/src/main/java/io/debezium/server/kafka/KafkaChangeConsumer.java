@@ -118,7 +118,12 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
 
         for (Future<RecordMetadata> future : futures) {
             try {
-                future.get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
+                if (waitMessageDeliveryTimeout == 0) {
+                    future.get();
+                }
+                else {
+                    future.get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
+                }
             }
             catch (TimeoutException | ExecutionException e) {
                 throw new DebeziumException("Error while waiting for Kafka send operations to complete", e);
