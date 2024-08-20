@@ -6,12 +6,9 @@
 package io.debezium.server.kafka;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -91,7 +88,6 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
     public void handleBatch(final List<ChangeEvent<Object, Object>> records,
                             final RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
-        List<Future<RecordMetadata>> futures = new ArrayList<>();
         for (ChangeEvent<Object, Object> record : records) {
             try {
                 LOGGER.trace("Received event '{}'", record);
@@ -108,7 +104,12 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
                                 LOGGER.trace("Sent message with offset: {}", metadata.offset());
                             }
                         });
-                futures.add(recordMetadataFuture);
+                if (waitMessageDeliveryTimeout == 0) {
+                    recordMetadataFuture.get();
+                }
+                else {
+                    recordMetadataFuture.get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
+                }
                 committer.markProcessed(record);
             }
             catch (Exception e) {
@@ -116,19 +117,6 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
             }
         }
 
-        for (Future<RecordMetadata> future : futures) {
-            try {
-                if (waitMessageDeliveryTimeout == 0) {
-                    future.get();
-                }
-                else {
-                    future.get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
-                }
-            }
-            catch (TimeoutException | ExecutionException e) {
-                throw new DebeziumException("Error while waiting for Kafka send operations to complete", e);
-            }
-        }
         committer.markBatchFinished();
     }
 
