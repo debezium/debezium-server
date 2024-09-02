@@ -296,4 +296,8 @@ public class DebeziumServer {
     public Properties getProps() {
         return props;
     }
+
+    public DebeziumEngine.Signaler getSignaler() {
+        return engine.getSignaler();
+    }
 }
