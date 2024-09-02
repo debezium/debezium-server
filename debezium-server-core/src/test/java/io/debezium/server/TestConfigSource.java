@@ -39,6 +39,7 @@ public class TestConfigSource implements ConfigSource {
         integrationTest.put("debezium.source.topic.prefix", "testc");
         integrationTest.put("debezium.source.schema.include.list", "inventory");
         integrationTest.put("debezium.source.table.include.list", "inventory.customers");
+        integrationTest.put("debezium.source.signal.enabled.channels", "source,in-process");
 
         String format = System.getProperty("test.apicurio.converter.format");
         String formatKey = System.getProperty("debezium.format.key");
