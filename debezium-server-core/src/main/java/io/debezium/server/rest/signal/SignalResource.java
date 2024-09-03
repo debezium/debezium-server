@@ -13,9 +13,13 @@ import jakarta.ws.rs.core.Response;
 
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.server.DebeziumServer;
+import io.debezium.server.DebeziumServerConfig;
 
 @Path("/signals")
 public class SignalResource {
+
+    @Inject
+    DebeziumServerConfig config;
 
     @Inject
     DebeziumServer server;
@@ -23,7 +27,7 @@ public class SignalResource {
     @POST
     public Response post(@NotNull DSSignal dsSignal) {
         var signaler = server.getSignaler();
-        if (signaler == null) {
+        if (signaler == null || !config.api().enabled()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
         }
 
