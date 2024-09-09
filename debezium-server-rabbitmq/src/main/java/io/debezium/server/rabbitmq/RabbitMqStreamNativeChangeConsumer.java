@@ -111,6 +111,7 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
                     .username(factory.getUsername())
                     .password(factory.getPassword())
                     .virtualHost(factory.getVirtualHost())
+                    .requestedMaxFrameSize(factory.getRequestedFrameMax())
                     .build();
         }
         catch (StreamException | IllegalArgumentException e) {
