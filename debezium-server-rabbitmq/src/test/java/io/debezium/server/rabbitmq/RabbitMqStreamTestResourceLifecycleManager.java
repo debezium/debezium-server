@@ -42,8 +42,8 @@ public class RabbitMqStreamTestResourceLifecycleManager implements QuarkusTestRe
             throw new RuntimeException(e);
         }
         Map<String, String> params = new ConcurrentHashMap<>();
-        params.put("debezium.sink.rabbitmqstream.connection.host", container.getHost());
-        params.put("debezium.sink.rabbitmqstream.connection.port", String.valueOf(getPort()));
+        params.put("debezium.sink.rabbitmqstream.host", container.getHost());
+        params.put("debezium.sink.rabbitmqstream.port", String.valueOf(getPort()));
         return params;
     }
 
