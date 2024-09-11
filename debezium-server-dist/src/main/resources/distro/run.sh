@@ -8,6 +8,8 @@
 # Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
 #
 LIB_PATH="lib/*"
+# Configuration files and directories that need to be on the classpath
+LIB_CONFIG_PATH="config/lib"
 
 if [ "$OSTYPE" = "msys" ] || [ "$OSTYPE" = "cygwin" ]; then
   PATH_SEP=";"
@@ -49,4 +51,4 @@ source ./jmx/enable_jmx.sh
 source ./lib_metrics/enable_exporter.sh
 
 exec "$JAVA_BINARY" $DEBEZIUM_OPTS $JAVA_OPTS -cp \
-    $RUNNER$PATH_SEP"conf"$PATH_SEP$LIB_PATH io.debezium.server.Main
+    $RUNNER$PATH_SEP$LIB_CONFIG_PATH$PATH_SEP$LIB_PATH io.debezium.server.Main
