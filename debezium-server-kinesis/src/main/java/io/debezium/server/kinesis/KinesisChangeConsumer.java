@@ -131,11 +131,11 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
             }
 
             // Handle Error
-            boolean notSuccesfull = true;
+            boolean notSuccesful = true;
             int attempts = 0;
             List<PutRecordsRequestEntry> batchRequest = putRecordsRequestEntryList;
 
-            while (notSuccesfull) {
+            while (notSuccesful) {
 
                 if (attempts >= DEFAULT_RETRIES) {
                     throw new DebeziumException("Exceeded maximum number of attempts to publish event");
@@ -160,7 +160,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
                     }
                     else {
-                        notSuccesfull = false;
+                        notSuccesful = false;
                     }
 
                 }
