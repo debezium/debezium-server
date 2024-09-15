@@ -8,7 +8,9 @@ package io.debezium.server.kinesis;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import jakarta.annotation.PostConstruct;
@@ -119,11 +121,12 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
             throws InterruptedException {
 
         // Split the records into batches of size 500
-        String streamName = records.get(0).destination();
-        List<List<ChangeEvent<Object, Object>>> batchRecords = batchList(records, batchSize);
+        String streamName;
+        List<List<ChangeEvent<Object, Object>>> batchRecords = createBatches(records, batchSize);
         // Process each batch to PutRecordsRequestEntry
         for (List<ChangeEvent<Object, Object>> batch : batchRecords) {
             List<PutRecordsRequestEntry> putRecordsRequestEntryList = new ArrayList<>();
+            streamName = batch.get(0).destination();
             for (ChangeEvent<Object, Object> record : batch) {
 
                 Object rv = record.value();
@@ -186,13 +189,25 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         committer.markBatchFinished();
     }
 
-    private List<List<ChangeEvent<Object, Object>>> batchList(List<ChangeEvent<Object, Object>> inputList, final int maxSize) {
-        List<List<ChangeEvent<Object, Object>>> batches = new ArrayList<>();
-        final int size = inputList.size();
-        for (int i = 0; i < size; i += maxSize) {
-            batches.add(new ArrayList<>(inputList.subList(i, Math.min(size, i + maxSize))));
+    private List<List<ChangeEvent<Object, Object>>> createBatches(List<ChangeEvent<Object, Object>> records, final int maxSize) {
+        Map<String, List<ChangeEvent<Object, Object>>> segmentedRecords = new HashMap<>();
+
+        // Segment the records by destination
+        for (ChangeEvent<Object, Object> record : records) {
+            String destination = record.destination();
+            segmentedRecords.computeIfAbsent(destination, k -> new ArrayList<>()).add(record);
         }
-        return batches;
+
+        List<List<ChangeEvent<Object, Object>>> batchedRecords = new ArrayList<>();
+
+        // Divide each segment into batches of the specified size
+        for (List<ChangeEvent<Object, Object>> segment : segmentedRecords.values()) {
+            for (int i = 0; i < segment.size(); i += batchSize) {
+                batchedRecords.add(segment.subList(i, Math.min(i + batchSize, segment.size())));
+            }
+        }
+
+        return batchedRecords;
     }
 
     private PutRecordsResponse recordsSent(List<PutRecordsRequestEntry> putRecordsRequestEntryList, String streamName) {
