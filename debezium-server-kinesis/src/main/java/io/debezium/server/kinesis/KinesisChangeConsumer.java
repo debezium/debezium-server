@@ -199,26 +199,4 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         LOGGER.trace("Response Receieved: " + putRecordsResponse);
         return putRecordsResponse;
     }
-
-    private boolean recordSent(ChangeEvent<Object, Object> record) {
-        Object rv = record.value();
-        if (rv == null) {
-            rv = "";
-        }
-
-        final PutRecordRequest putRecord = PutRecordRequest.builder()
-                .partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
-                .streamName(streamNameMapper.map(record.destination()))
-                .data(SdkBytes.fromByteArray(getBytes(rv)))
-                .build();
-
-        try {
-            client.putRecord(putRecord);
-            return true;
-        }
-        catch (KinesisException exception) {
-            LOGGER.warn("Failed to send record to {}", record.destination(), exception);
-            return false;
-        }
-    }
 }
