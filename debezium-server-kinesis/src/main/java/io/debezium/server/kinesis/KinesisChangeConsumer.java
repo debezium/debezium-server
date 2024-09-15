@@ -39,7 +39,6 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisClientBuilder;
 import software.amazon.awssdk.services.kinesis.model.KinesisException;
-import software.amazon.awssdk.services.kinesis.model.PutRecordRequest;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsRequestEntry;
 import software.amazon.awssdk.services.kinesis.model.PutRecordsResponse;
@@ -62,8 +61,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     private static final String PROP_ENDPOINT_NAME = PROP_PREFIX + "endpoint";
     private static final String PROP_CREDENTIALS_PROFILE = PROP_PREFIX + "credentials.profile";
     private static final String PROP_BATCH_SIZE = PROP_PREFIX + "batch.size";
-    private static final String PROP_DEFAULT_RETRIES = PROP_PREFIX + "default.retries";
-
+    private static final String PROP_RETRIES = PROP_PREFIX + "default.retries";
 
     private String region;
     private Optional<String> endpointOverride;
@@ -76,8 +74,8 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     @ConfigProperty(name = PROP_BATCH_SIZE, defaultValue = "500")
     int batchSize;
 
-    @ConfigProperty(name = PROP_DEFAULT_RETRIES, defaultValue = "5")
-    int defaultRetries;
+    @ConfigProperty(name = PROP_RETRIES, defaultValue = "5")
+    int RETRIES;
 
     private KinesisClient client = null;
 
@@ -144,7 +142,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
             while (notSuccesful) {
 
-                if (attempts >= DEFAULT_RETRIES) {
+                if (attempts >= RETRIES) {
                     throw new DebeziumException("Exceeded maximum number of attempts to publish event");
                 }
 
