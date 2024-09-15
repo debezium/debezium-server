@@ -120,6 +120,12 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
 
+        // Guard if records are empty
+        if (records.isEmpty()) {
+            committer.markBatchFinished();
+            return;
+        }
+
         // Split the records into batches of size 500
         String streamName;
         List<List<ChangeEvent<Object, Object>>> batchRecords = createBatches(records, batchSize);
