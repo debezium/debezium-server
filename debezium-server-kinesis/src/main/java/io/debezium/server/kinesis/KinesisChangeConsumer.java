@@ -61,16 +61,23 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     private static final String PROP_REGION_NAME = PROP_PREFIX + "region";
     private static final String PROP_ENDPOINT_NAME = PROP_PREFIX + "endpoint";
     private static final String PROP_CREDENTIALS_PROFILE = PROP_PREFIX + "credentials.profile";
+    private static final String PROP_BATCH_SIZE = PROP_PREFIX + "batch.size";
+    private static final String PROP_DEFAULT_RETRIES = PROP_PREFIX + "default.retries";
+
 
     private String region;
     private Optional<String> endpointOverride;
     private Optional<String> credentialsProfile;
-    private static final int DEFAULT_RETRIES = 5;
-    private static final int batchSize = 500;
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
 
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
+
+    @ConfigProperty(name = PROP_BATCH_SIZE, defaultValue = "500")
+    int batchSize;
+
+    @ConfigProperty(name = PROP_DEFAULT_RETRIES, defaultValue = "5")
+    int defaultRetries;
 
     private KinesisClient client = null;
 
@@ -145,6 +152,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
                     PutRecordsResponse response = recordsSent(batchRequest, streamName);
                     attempts++;
                     if (response.failedRecordCount() > 0) {
+                        LOGGER.warn("Failed to send {} number of records, retrying", response.failedRecordCount());
                         Metronome.sleeper(RETRY_INTERVAL, Clock.SYSTEM).pause();
 
                         final List<PutRecordsResultEntry> putRecordsResults = response.records();
