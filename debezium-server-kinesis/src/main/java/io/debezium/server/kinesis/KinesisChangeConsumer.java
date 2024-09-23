@@ -135,7 +135,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         // Iterate over the segmentedBatches
         for (List<ChangeEvent<Object, Object>> segmentedBatch : segmentedBatches.values()) {
             // Iterate over the batch
-            
+
             for (int i = 0; i < segmentedBatch.size(); i += batchSize) {
 
                 // Create a sublist of the batch given the batchSize
@@ -149,7 +149,8 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
                     if (rv == null) {
                         rv = "";
                     }
-                    PutRecordsRequestEntry putRecordsRequestEntry = PutRecordsRequestEntry.builder().partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
+                    PutRecordsRequestEntry putRecordsRequestEntry = PutRecordsRequestEntry.builder()
+                            .partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
                             .data(SdkBytes.fromByteArray(getBytes(rv))).build();
                     putRecordsRequestEntryList.add(putRecordsRequestEntry);
                 }

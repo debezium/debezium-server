@@ -331,5 +331,5 @@ public class KinesisUnitTest {
         assertEquals(500, numRecordsBatchOne.get());
         assertEquals(500, numRecordsBatchTwo.get());
     }
-        
+
 }
