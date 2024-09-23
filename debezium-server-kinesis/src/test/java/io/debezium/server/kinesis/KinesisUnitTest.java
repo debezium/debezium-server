@@ -58,7 +58,7 @@ public class KinesisUnitTest {
     public void setup() {
         counter = new AtomicInteger(0);
         threwException = new AtomicBoolean(false);
-        changeEvents = createChangeEvents(500);
+        changeEvents = createChangeEvents(500, "destination");
         committer = RecordCommitter();
         spyClient = spy(KinesisClient.builder().region(Region.of(KinesisTestConfigSource.KINESIS_REGION))
                 .credentialsProvider(ProfileCredentialsProvider.create("default")).build());
@@ -69,6 +69,8 @@ public class KinesisUnitTest {
 
         kinesisChangeConsumer = new KinesisChangeConsumer();
         kinesisChangeConsumer.customClient = mockInstance;
+        kinesisChangeConsumer.batchSize = 500;
+        kinesisChangeConsumer.RETRIES = 5;
     }
 
     @AfterEach
@@ -77,13 +79,13 @@ public class KinesisUnitTest {
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    private static List<ChangeEvent<Object, Object>> createChangeEvents(int size) {
+    private static List<ChangeEvent<Object, Object>> createChangeEvents(int size, String destination) {
         List<ChangeEvent<Object, Object>> changeEvents = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             ChangeEvent<Object, Object> result = mock(ChangeEvent.class);
             when(result.key()).thenReturn("key");
             when(result.value()).thenReturn(Integer.toString(i));
-            when(result.destination()).thenReturn("dest");
+            when(result.destination()).thenReturn(destination);
             Header header = mock(Header.class);
             when(header.getKey()).thenReturn("h1Key");
             when(header.getValue()).thenReturn("h1Value");
@@ -210,4 +212,40 @@ public class KinesisUnitTest {
             assertEquals(failedRecordsFromFirstCall.get(i).data(), recordsFromSecondCall.get(i).data());
         }
     }
+
+    @Test
+    public void testBatchesAreCorrect() throws Exception {
+        // Arrange
+        AtomicInteger numRecordsDestinationOne = new AtomicInteger(0);
+        AtomicInteger numRrecordsDestinationTwo = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            List<PutRecordsResultEntry> response = new ArrayList<>();
+            PutRecordsRequest request = invocation.getArgument(0);
+            List<PutRecordsRequestEntry> records = request.records();
+            counter.incrementAndGet();
+
+            else {
+                for (PutRecordsRequestEntry record : records) {
+                    recordsFromSecondCall.add(record);
+                    PutRecordsResultEntry recordResult = PutRecordsResultEntry.builder().shardId("shardId").sequenceNumber("sequenceNumber").build();
+                    response.add(recordResult);
+                }
+                return PutRecordsResponse.builder().failedRecordCount(0).records(response).build();
+            }
+        }).when(spyClient).putRecords(any(PutRecordsRequest.class));
+
+        // Act
+        try {
+            kinesisChangeConsumer.connect();
+            kinesisChangeConsumer.handleBatch(changeEvents, committer);
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertTrue(threwException.get());
+        // DEFAULT_RETRIES is 5 times
+        assertEquals(5, counter.get());
 }

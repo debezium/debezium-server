@@ -8,10 +8,10 @@ package io.debezium.server.kinesis;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -129,6 +129,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         // Split the records into batches of size 500
         String streamName;
         List<List<ChangeEvent<Object, Object>>> batchRecords = createBatches(records, batchSize);
+
         // Process each batch to PutRecordsRequestEntry
         for (List<ChangeEvent<Object, Object>> batch : batchRecords) {
             List<PutRecordsRequestEntry> putRecordsRequestEntryList = new ArrayList<>();
@@ -196,13 +197,9 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     }
 
     private List<List<ChangeEvent<Object, Object>>> createBatches(List<ChangeEvent<Object, Object>> records, final int maxSize) {
-        Map<String, List<ChangeEvent<Object, Object>>> segmentedRecords = new HashMap<>();
 
         // Segment the records by destination
-        for (ChangeEvent<Object, Object> record : records) {
-            String destination = record.destination();
-            segmentedRecords.computeIfAbsent(destination, k -> new ArrayList<>()).add(record);
-        }
+        Map<String, List<ChangeEvent<Object, Object>>> segmentedRecords = records.stream().collect(Collectors.groupingBy(record -> record.destination()));
 
         List<List<ChangeEvent<Object, Object>>> batchedRecords = new ArrayList<>();
 
