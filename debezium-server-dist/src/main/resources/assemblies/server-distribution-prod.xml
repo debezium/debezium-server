@@ -29,6 +29,10 @@
             <exclude>io.debezium:debezium-connector-cassandra-4</exclude>
             <exclude>io.debezium:debezium-connector-dse</exclude>
             <exclude>io.prometheus.jmx:jmx_prometheus_javaagent:*</exclude>
+
+            <!-- Exclude Oracle JDBC driver libraries -->
+            <exclude>com.oracle.database.jdbc:ojdbc8:*</exclude>
+            <exclude>com.oracle.database.nls:orai18n:*</exclude>
           </excludes>
       </dependencySet>
       <dependencySet>
