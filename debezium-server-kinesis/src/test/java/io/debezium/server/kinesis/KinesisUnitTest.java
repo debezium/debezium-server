@@ -58,7 +58,7 @@ public class KinesisUnitTest {
     public void setup() {
         counter = new AtomicInteger(0);
         threwException = new AtomicBoolean(false);
-        changeEvents = createChangeEvents(500, "destination");
+        changeEvents = createChangeEvents(500, "key", "destination");
         committer = RecordCommitter();
         spyClient = spy(KinesisClient.builder().region(Region.of(KinesisTestConfigSource.KINESIS_REGION))
                 .credentialsProvider(ProfileCredentialsProvider.create("default")).build());
@@ -79,16 +79,16 @@ public class KinesisUnitTest {
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    private static List<ChangeEvent<Object, Object>> createChangeEvents(int size, String destination) {
+    private static List<ChangeEvent<Object, Object>> createChangeEvents(int size, String key, String destination) {
         List<ChangeEvent<Object, Object>> changeEvents = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             ChangeEvent<Object, Object> result = mock(ChangeEvent.class);
-            when(result.key()).thenReturn("key");
+            when(result.key()).thenReturn(key);
             when(result.value()).thenReturn(Integer.toString(i));
             when(result.destination()).thenReturn(destination);
             Header header = mock(Header.class);
-            when(header.getKey()).thenReturn("h1Key");
-            when(header.getValue()).thenReturn("h1Value");
+            when(header.getKey()).thenReturn(key);
+            when(header.getValue()).thenReturn(Integer.toString(i));
             when(result.headers()).thenReturn(List.of(header));
             changeEvents.add(result);
         }
@@ -213,26 +213,38 @@ public class KinesisUnitTest {
         }
     }
 
+    // 4. Create 600 ChangeEvents to destination 1 and 600 to destination 2 and test that they are correctly batched
     @Test
     public void testBatchesAreCorrect() throws Exception {
         // Arrange
+        List<ChangeEvent<Object, Object>> changeEvents = new ArrayList<>();
+        String destinationOne = "dest1";
+        String destinationTwo = "dest2";
+
+        // call createEvents with 600 records for destination 1 and 600 records for destination 2
+        changeEvents = createChangeEvents(600, destinationOne, destinationOne);
+        changeEvents.addAll(createChangeEvents(600, destinationTwo, destinationTwo));
+
         AtomicInteger numRecordsDestinationOne = new AtomicInteger(0);
         AtomicInteger numRrecordsDestinationTwo = new AtomicInteger(0);
+        AtomicInteger numBatches = new AtomicInteger(0);
 
         doAnswer(invocation -> {
             List<PutRecordsResultEntry> response = new ArrayList<>();
             PutRecordsRequest request = invocation.getArgument(0);
             List<PutRecordsRequestEntry> records = request.records();
-            counter.incrementAndGet();
-
-            else {
-                for (PutRecordsRequestEntry record : records) {
-                    recordsFromSecondCall.add(record);
-                    PutRecordsResultEntry recordResult = PutRecordsResultEntry.builder().shardId("shardId").sequenceNumber("sequenceNumber").build();
-                    response.add(recordResult);
+            for (PutRecordsRequestEntry record : records) {
+                if (record.partitionKey().equals(destinationOne)) {
+                    numRecordsDestinationOne.incrementAndGet();
                 }
-                return PutRecordsResponse.builder().failedRecordCount(0).records(response).build();
+                else if (record.partitionKey().equals(destinationTwo)) {
+                    numRrecordsDestinationTwo.incrementAndGet();
+                }
+                PutRecordsResultEntry recordResult = PutRecordsResultEntry.builder().shardId("shardId").sequenceNumber("sequenceNumber").build();
+                response.add(recordResult);
             }
+            numBatches.incrementAndGet();
+            return PutRecordsResponse.builder().failedRecordCount(0).records(response).build();
         }).when(spyClient).putRecords(any(PutRecordsRequest.class));
 
         // Act
@@ -245,7 +257,79 @@ public class KinesisUnitTest {
         }
 
         // Assert
-        assertTrue(threwException.get());
-        // DEFAULT_RETRIES is 5 times
-        assertEquals(5, counter.get());
+        // No exception should be thrown
+        assertFalse(threwException.get());
+        // 2 destinations, 600 records each
+        assertEquals(600, numRecordsDestinationOne.get());
+        assertEquals(600, numRrecordsDestinationTwo.get());
+        // 2 destinations, 2 batches each
+        assertEquals(4, numBatches.get());
+    }
+
+    // 5. Test that empty records are handled correctly
+    @Test
+    public void testEmptyRecords() throws Exception {
+        // Arrange
+        List<ChangeEvent<Object, Object>> changeEvents = new ArrayList<>();
+
+        // Act
+        try {
+            kinesisChangeConsumer.connect();
+            kinesisChangeConsumer.handleBatch(changeEvents, committer);
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+    }
+
+    // 6. Test that a batch of 1000 records is correctly split into 2 batches of 500 records
+    @Test
+    public void testBatchSplitting() throws Exception {
+        // Arrange
+        List<ChangeEvent<Object, Object>> changeEvents = createChangeEvents(1000, "key", "destination");
+
+        AtomicInteger numBatches = new AtomicInteger(0);
+        AtomicInteger numRecordsBatchOne = new AtomicInteger(0);
+        AtomicInteger numRecordsBatchTwo = new AtomicInteger(0);
+        AtomicBoolean firstBatch = new AtomicBoolean(true);
+
+        doAnswer(invocation -> {
+            List<PutRecordsResultEntry> response = new ArrayList<>();
+            PutRecordsRequest request = invocation.getArgument(0);
+            List<PutRecordsRequestEntry> records = request.records();
+
+            for (PutRecordsRequestEntry record : records) {
+                if (firstBatch.get()) {
+                    numRecordsBatchOne.incrementAndGet();
+                }
+                else {
+                    numRecordsBatchTwo.incrementAndGet();
+                }
+                PutRecordsResultEntry recordResult = PutRecordsResultEntry.builder().shardId("shardId").sequenceNumber("sequenceNumber").build();
+                response.add(recordResult);
+            }
+            numBatches.incrementAndGet();
+            firstBatch.getAndSet(false);
+            return PutRecordsResponse.builder().failedRecordCount(0).records(response).build();
+        }).when(spyClient).putRecords(any(PutRecordsRequest.class));
+
+        // Act
+        try {
+            kinesisChangeConsumer.connect();
+            kinesisChangeConsumer.handleBatch(changeEvents, committer);
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(2, numBatches.get());
+        assertEquals(500, numRecordsBatchOne.get());
+        assertEquals(500, numRecordsBatchTwo.get());
+    }
+        
 }
