@@ -59,6 +59,18 @@
                 <scope>import</scope>
             </dependency>
 
+            <!-- Ehcache JAXB implementation dependency -->
+            <dependency>
+                <groupId>org.glassfish.jaxb</groupId>
+                <artifactId>jaxb-runtime</artifactId>
+                <version>${version.jaxb.implementation}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.glassfish.jaxb</groupId>
+                <artifactId>txw2</artifactId>
+                <version>${version.jaxb.implementation}</version>
+            </dependency>
+
             <!-- Quarkus dependencies -->
             <dependency>
                 <groupId>io.quarkus</groupId>
