@@ -69,15 +69,11 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     private Optional<String> endpointOverride;
     private Optional<String> credentialsProfile;
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
+    private Integer batchSize;
+    private Integer RETRIES;
 
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
-
-    @ConfigProperty(name = PROP_BATCH_SIZE, defaultValue = "500")
-    int batchSize;
-
-    @ConfigProperty(name = PROP_RETRIES, defaultValue = "5")
-    int RETRIES;
 
     private KinesisClient client = null;
 
@@ -87,13 +83,16 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
     @PostConstruct
     void connect() {
+        final Config config = ConfigProvider.getConfig();
+        batchSize = config.getOptionalValue(PROP_BATCH_SIZE, Integer.class).orElse(500);
+        RETRIES = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(5);
+
         if (customClient.isResolvable()) {
             client = customClient.get();
             LOGGER.info("Obtained custom configured KinesisClient '{}'", client);
             return;
         }
 
-        final Config config = ConfigProvider.getConfig();
         region = config.getValue(PROP_REGION_NAME, String.class);
         endpointOverride = config.getOptionalValue(PROP_ENDPOINT_NAME, String.class);
         credentialsProfile = config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class);

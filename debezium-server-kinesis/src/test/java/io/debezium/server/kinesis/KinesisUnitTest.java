@@ -69,8 +69,6 @@ public class KinesisUnitTest {
 
         kinesisChangeConsumer = new KinesisChangeConsumer();
         kinesisChangeConsumer.customClient = mockInstance;
-        kinesisChangeConsumer.batchSize = 500;
-        kinesisChangeConsumer.RETRIES = 5;
     }
 
     @AfterEach
