@@ -87,6 +87,12 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         batchSize = config.getOptionalValue(PROP_BATCH_SIZE, Integer.class).orElse(500);
         RETRIES = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(5);
 
+        if (batchSize <= 0) {
+            throw new DebeziumException("Batch size must be greater than 0");
+        } else if (batchSize > 500) {
+            throw new DebeziumException("Retries must be less than or equal to 500");
+        }
+
         if (customClient.isResolvable()) {
             client = customClient.get();
             LOGGER.info("Obtained custom configured KinesisClient '{}'", client);
