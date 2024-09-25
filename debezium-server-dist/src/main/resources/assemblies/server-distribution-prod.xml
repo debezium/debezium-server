@@ -32,6 +32,7 @@
 
             <!-- Exclude Oracle JDBC driver libraries -->
             <exclude>com.oracle.database.jdbc:ojdbc8:*</exclude>
+            <exclude>com.oracle.database.jdbc:ojdbc11:*</exclude>
             <exclude>com.oracle.database.nls:orai18n:*</exclude>
           </excludes>
       </dependencySet>
