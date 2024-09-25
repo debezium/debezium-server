@@ -89,7 +89,8 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
         if (batchSize <= 0) {
             throw new DebeziumException("Batch size must be greater than 0");
-        } else if (batchSize > 500) {
+        }
+        else if (batchSize > 500) {
             throw new DebeziumException("Retries must be less than or equal to 500");
         }
 
