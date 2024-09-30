@@ -5,6 +5,7 @@
  */
 package io.debezium.server.kafka;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -103,7 +104,8 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
                 deliveryFutures.add(producer.send(new ProducerRecord<>(topicName, null, null, record.key(), record.value(), headers),
                         (metadata, exception) -> {
                             if (exception != null) {
-                                LOGGER.error("Failed to send record to {}:", topicName, exception);
+                                LOGGER.error("Failed to send record with key '{}' to {}:", new String((byte[]) record.key(), StandardCharsets.UTF_8), topicName,
+                                        exception);
                                 throw new DebeziumException(exception);
                             }
                             else {
