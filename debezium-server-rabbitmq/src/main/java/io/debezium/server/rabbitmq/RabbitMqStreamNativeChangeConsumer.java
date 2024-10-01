@@ -48,6 +48,14 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmqstream.";
 
+    @Deprecated
+    @ConfigProperty(name = PROP_PREFIX + "connection.host")
+    String legacyHost;
+
+    @Deprecated
+    @ConfigProperty(name = PROP_PREFIX + "connection.port")
+    int legacyPort;
+
     @ConfigProperty(name = PROP_PREFIX + "host", defaultValue = "localhost")
     String host;
 
@@ -137,10 +145,17 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     @PostConstruct
     void connect() {
-        LOGGER.info("Using connection to {}:{}", host, port);
+        if (legacyHost != null || legacyPort > 0) {
+            LOGGER.warn("The parameters connection.host and connection.port are deprecated, please use rabbitmqstream.host and rabbitmqstream.port moving forward.");
+        }
+
+        String connectionHost = legacyHost != null ? legacyHost : host;
+        int connectionPort = legacyPort > 0 ? legacyPort : port;
+
+        LOGGER.info("Using connection to {}:{}", connectionHost, connectionPort);
 
         try {
-            Address entryPoint = new Address(host, port);
+            Address entryPoint = new Address(connectionHost, connectionPort);
             environment = Environment.builder()
                     .host(entryPoint.host())
                     .port(entryPoint.port())
