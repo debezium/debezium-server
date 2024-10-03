@@ -70,7 +70,8 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     private Optional<String> credentialsProfile;
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
     private Integer batchSize;
-    private Integer RETRIES;
+    private Integer maxRetries;
+    private Integer MAX_BATCH_SIZE = 500;
 
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
@@ -84,14 +85,14 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     @PostConstruct
     void connect() {
         final Config config = ConfigProvider.getConfig();
-        batchSize = config.getOptionalValue(PROP_BATCH_SIZE, Integer.class).orElse(500);
-        RETRIES = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(5);
+        batchSize = config.getOptionalValue(PROP_BATCH_SIZE, Integer.class).orElse(MAX_BATCH_SIZE);
+        maxRetries = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(5);
 
         if (batchSize <= 0) {
             throw new DebeziumException("Batch size must be greater than 0");
         }
-        else if (batchSize > 500) {
-            throw new DebeziumException("Retries must be less than or equal to 500");
+        else if (batchSize > MAX_BATCH_SIZE) {
+            throw new DebeziumException("Batch size must be less than or equal to MAX_BATCH_SIZE");
         }
 
         if (customClient.isResolvable()) {
@@ -168,7 +169,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
                 while (notSuccesful) {
 
-                    if (attempts >= RETRIES) {
+                    if (attempts >= maxRetries) {
                         throw new DebeziumException("Exceeded maximum number of attempts to publish event");
                     }
 
