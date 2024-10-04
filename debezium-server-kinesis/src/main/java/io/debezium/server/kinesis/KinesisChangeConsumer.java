@@ -196,6 +196,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
                         }
                         else {
                             notSuccesful = false;
+                            attempts = 0;
                         }
 
                     }
