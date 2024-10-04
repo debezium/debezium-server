@@ -65,13 +65,15 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     private static final String PROP_BATCH_SIZE = PROP_PREFIX + "batch.size";
     private static final String PROP_RETRIES = PROP_PREFIX + "default.retries";
 
+    private static final int DEFAULT_RETRY_COUNT = 5;
+    private static final int MAX_BATCH_SIZE = 500;
+    private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
+
     private String region;
     private Optional<String> endpointOverride;
     private Optional<String> credentialsProfile;
-    private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
     private Integer batchSize;
     private Integer maxRetries;
-    private Integer MAX_BATCH_SIZE = 500;
 
     @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
     String nullKey;
@@ -86,7 +88,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     void connect() {
         final Config config = ConfigProvider.getConfig();
         batchSize = config.getOptionalValue(PROP_BATCH_SIZE, Integer.class).orElse(MAX_BATCH_SIZE);
-        maxRetries = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(5);
+        maxRetries = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(DEFAULT_RETRY_COUNT);
 
         if (batchSize <= 0) {
             throw new DebeziumException("Batch size must be greater than 0");
