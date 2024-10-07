@@ -1,0 +1,37 @@
+version: '3.9'
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.47
+    ports:
+     - 4317:4317
+     - 16686:16686
+    environment:
+     - COLLECTOR_OTLP_ENABLED=true
+  postgres:
+    image: quay.io/debezium/example-postgres:2.4.0.CR1
+    container_name: postgres
+    ports:
+     - 5432:5432
+    environment:
+     - POSTGRES_USER=postgres
+     - POSTGRES_PASSWORD=postgres
+  debezium-server:
+    image: debezium-server:local
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: debezium-server
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /deployments/service-account.json
+      JAVA_APP_JAR: debezium-server-dist-3.0.0-SNAPSHOT-runner.jar
+      JAVA_LIB_DIR: /deployments/lib
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    ports:
+      - "8080:8080"
+      - "1976:1976"
+      - "9090:9090"
+    volumes:
+      - ./service-account.json:/deployments/service-account.json
+      - ./application.properties:/deployments/config/application.properties
