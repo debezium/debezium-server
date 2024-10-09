@@ -50,11 +50,11 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     @Deprecated
     @ConfigProperty(name = PROP_PREFIX + "connection.host")
-    String legacyHost;
+    Optional<String> legacyHost;
 
     @Deprecated
     @ConfigProperty(name = PROP_PREFIX + "connection.port")
-    int legacyPort;
+    Optional<Integer> legacyPort;
 
     @ConfigProperty(name = PROP_PREFIX + "host", defaultValue = "localhost")
     String host;
@@ -145,12 +145,12 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     @PostConstruct
     void connect() {
-        if (legacyHost != null || legacyPort > 0) {
+        if (legacyHost.isPresent() || legacyPort.isPresent()) {
             LOGGER.warn("The parameters connection.host and connection.port are deprecated, please use rabbitmqstream.host and rabbitmqstream.port moving forward.");
         }
 
-        String connectionHost = legacyHost != null ? legacyHost : host;
-        int connectionPort = legacyPort > 0 ? legacyPort : port;
+        final String connectionHost = legacyHost.orElse(host);
+        final int connectionPort = legacyPort.orElse(port);
 
         LOGGER.info("Using connection to {}:{}", connectionHost, connectionPort);
 
