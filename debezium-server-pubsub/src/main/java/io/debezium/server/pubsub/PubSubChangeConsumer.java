@@ -58,7 +58,6 @@ import io.debezium.server.CustomConsumerBuilder;
 import io.debezium.util.Threads;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
 
 /**
@@ -72,7 +71,8 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PubSubChangeConsumer.class);
 
-    private static final OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
+    @Inject
+    OpenTelemetry openTelemetry;
 
     private static final String PROP_PREFIX = "debezium.sink.pubsub.";
     private static final String PROP_PROJECT_ID = PROP_PREFIX + "project.id";
@@ -270,11 +270,15 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
             final String topicName = streamNameMapper.map(record.destination());
+            LOGGER.trace("topicName '{}'", topicName);
+            LOGGER.trace("projectId '{}'", projectId);
             Publisher publisher = publishers.computeIfAbsent(topicName, (x) -> publisherBuilder.get(ProjectTopicName.of(projectId, x)));
+            LOGGER.trace("Received event '{}'", publisher);
 
             PubsubMessage message = buildPubSubMessage(record);
 
             deliveries.add(publisher.publish(message));
+            LOGGER.trace("Sent event '{}'", record);
         }
         List<String> messageIds;
         try {
