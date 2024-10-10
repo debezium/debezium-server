@@ -1,0 +1,31 @@
+debezium:
+  sink:
+    type: kinesis
+    kinesis:
+      region: eu-central-1
+  source:
+    connector:
+      class: io.debezium.connector.postgresql.PostgresConnector
+    offset:
+      storage:
+        file:
+          filename: data/offsets.dat
+      flush:
+        interval:
+          ms: 0
+    database:
+      hostname: localhost
+      port: 5432
+      user: postgres
+      password: postgres
+      dbname: postgres
+    topic:
+      prefix: tutorial
+    schema:
+      include:
+        list: inventory
+
+quarkus:
+  log:
+    console:
+      json: false
