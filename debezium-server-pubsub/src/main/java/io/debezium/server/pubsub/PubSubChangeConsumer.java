@@ -58,6 +58,7 @@ import io.debezium.server.CustomConsumerBuilder;
 import io.debezium.util.Threads;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.opentelemetry.api.OpenTelemetry;
 
 /**
  * Implementation of the consumer that delivers the messages into Google Pub/Sub destination.
@@ -69,6 +70,9 @@ import io.grpc.ManagedChannelBuilder;
 public class PubSubChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PubSubChangeConsumer.class);
+
+    @Inject
+    OpenTelemetry openTelemetry;
 
     private static final String PROP_PREFIX = "debezium.sink.pubsub.";
     private static final String PROP_PROJECT_ID = PROP_PREFIX + "project.id";
@@ -84,6 +88,9 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @ConfigProperty(name = PROP_PREFIX + "ordering.enabled", defaultValue = "true")
     boolean orderingEnabled;
+
+    @ConfigProperty(name = PROP_PREFIX + "opentelemetry.enabled", defaultValue = "false")
+    boolean openTelemetryEnabled;
 
     @ConfigProperty(name = PROP_PREFIX + "ordering.key")
     Optional<String> orderingKey;
@@ -185,6 +192,8 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
             try {
                 Builder builder = Publisher.newBuilder(t)
                         .setEnableMessageOrdering(orderingEnabled)
+                        .setEnableOpenTelemetryTracing(openTelemetryEnabled)
+                        .setOpenTelemetry(openTelemetry)
                         .setBatchingSettings(batchingSettings.build())
                         .setRetrySettings(
                                 RetrySettings.newBuilder()
@@ -208,6 +217,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
             }
         };
 
+        LOGGER.debug("Tracing '{}'", openTelemetryEnabled);
         LOGGER.info("Using default PublisherBuilder '{}'", publisherBuilder);
     }
 
@@ -260,11 +270,15 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
             final String topicName = streamNameMapper.map(record.destination());
+            LOGGER.trace("topicName '{}'", topicName);
+            LOGGER.trace("projectId '{}'", projectId);
             Publisher publisher = publishers.computeIfAbsent(topicName, (x) -> publisherBuilder.get(ProjectTopicName.of(projectId, x)));
+            LOGGER.trace("Received event '{}'", publisher);
 
             PubsubMessage message = buildPubSubMessage(record);
 
             deliveries.add(publisher.publish(message));
+            LOGGER.trace("Sent event '{}'", record);
         }
         List<String> messageIds;
         try {
