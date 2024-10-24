@@ -27,6 +27,7 @@
             <exclude>io.debezium:debezium-scripting-languages</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-3</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-4</exclude>
+            <exclude>io.debezium:debezium-connector-cassandra-5</exclude>
             <exclude>io.debezium:debezium-connector-dse</exclude>
             <exclude>io.prometheus.jmx:jmx_prometheus_javaagent:*</exclude>
 
