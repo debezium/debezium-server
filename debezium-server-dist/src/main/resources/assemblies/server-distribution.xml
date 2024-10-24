@@ -27,6 +27,7 @@
             <exclude>io.debezium:debezium-scripting-languages</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-3</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-4</exclude>
+            <exclude>io.debezium:debezium-connector-cassandra-5</exclude>
             <exclude>io.debezium:debezium-connector-dse</exclude>
             <exclude>io.prometheus.jmx:jmx_prometheus_javaagent:*</exclude>
           </excludes>
@@ -94,6 +95,16 @@
           <useTransitiveFiltering>true</useTransitiveFiltering>
           <includes>
               <include>io.debezium:debezium-connector-cassandra-4:zip:plugin</include>
+          </includes>
+      </dependencySet>
+      <dependencySet>
+          <outputDirectory>${project.parent.artifactId}/connectors/</outputDirectory>
+          <unpack>true</unpack>
+          <scope>runtime</scope>
+          <useProjectArtifact>false</useProjectArtifact>
+          <useTransitiveFiltering>true</useTransitiveFiltering>
+          <includes>
+              <include>io.debezium:debezium-connector-cassandra-5:zip:plugin</include>
           </includes>
       </dependencySet>
   </dependencySets>
