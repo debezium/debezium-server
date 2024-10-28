@@ -278,9 +278,15 @@ public class DebeziumServer {
         }
         catch (NoSuchElementException e) {
             final String configFile = Paths.get(System.getProperty("user.dir"), "config", "application.properties").toString();
-            // CHECKSTYLE IGNORE check FOR NEXT 2 LINES
-            System.err.println(String.format("Failed to load mandatory config value '%s'. Please check you have a correct Debezium server config in %s or required "
-                    + "properties are defined via system or environment variables.", PROP_SINK_TYPE, configFile));
+            final String errorMessage = String
+                    .format("Failed to load mandatory config value '%s'. Please check you have a correct Debezium server config in %s or required "
+                            + "properties are defined via system or environment variables.", PROP_SINK_TYPE, configFile);
+
+            // Print to stderr in case of logging misconfiguration.
+            // CHECKSTYLE IGNORE check FOR NEXT 1 LINES
+            System.err.println(errorMessage);
+            LOGGER.error(errorMessage);
+
             Quarkus.asyncExit();
         }
         return config;
