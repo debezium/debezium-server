@@ -277,7 +277,7 @@ public class DebeziumServer {
             config.getValue(PROP_SINK_TYPE, String.class);
         }
         catch (NoSuchElementException e) {
-            final String configFile = Paths.get(System.getProperty("user.dir"), "conf", "application.properties").toString();
+            final String configFile = Paths.get(System.getProperty("user.dir"), "config", "application.properties").toString();
             // CHECKSTYLE IGNORE check FOR NEXT 2 LINES
             System.err.println(String.format("Failed to load mandatory config value '%s'. Please check you have a correct Debezium server config in %s or required "
                     + "properties are defined via system or environment variables.", PROP_SINK_TYPE, configFile));
