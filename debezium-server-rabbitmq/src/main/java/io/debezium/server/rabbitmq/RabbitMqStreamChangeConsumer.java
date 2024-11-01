@@ -156,8 +156,6 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             catch (IOException e) {
                 throw new DebeziumException(e);
             }
-
-            committer.markProcessed(record);
         }
 
         try {
@@ -167,8 +165,13 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             throw new DebeziumException(e);
         }
 
-        LOGGER.trace("Sent messages");
+        LOGGER.trace("Marking {} records as processed.", records.size());
+        for (ChangeEvent<Object, Object> record : records) {
+            committer.markProcessed(record);
+        }
+
         committer.markBatchFinished();
+        LOGGER.trace("Batch marked finished");
     }
 
     private Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
