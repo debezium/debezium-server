@@ -10,6 +10,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -38,7 +41,6 @@ import io.debezium.server.BaseChangeConsumer;
  * Implementation of the consumer that delivers the messages into RabbitMQ Stream destination.
  *
  * @author Olivier Boudet
- *
  */
 @Named("rabbitmqstream")
 @Dependent
@@ -200,6 +202,9 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
 
+        CountDownLatch latch = new CountDownLatch(records.size());
+        AtomicBoolean hasError = new AtomicBoolean(false);
+
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
@@ -230,17 +235,41 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
                 producer.send(
                         producer.messageBuilder().addData(getBytes(value)).build(),
                         confirmationStatus -> {
+                            try {
+                                if (confirmationStatus.isConfirmed()) {
+                                    committer.markProcessed(record);
+                                }
+                                else {
+                                    LOGGER.error("Failed to confirm message delivery for event '{}'", record);
+                                    hasError.set(true);
+                                }
+                            }
+                            catch (Exception e) {
+                                LOGGER.error("Failed to process record '{}': {}", record, e.getMessage());
+                                hasError.set(true);
+                            }
+                            finally {
+                                latch.countDown();
+                            }
                         });
             }
             catch (StreamException e) {
                 throw new DebeziumException(e);
             }
-
-            committer.markProcessed(record);
         }
 
-        LOGGER.trace("Sent messages");
-        committer.markBatchFinished();
+        if (!latch.await(producerConfirmTimeout, TimeUnit.SECONDS)) {
+            LOGGER.warn("Timeout while waiting for batch confirmation");
+            hasError.set(true);
+        }
+
+        if (!hasError.get()) {
+            LOGGER.trace("All messages sent successfully");
+            committer.markBatchFinished();
+        }
+        else {
+            LOGGER.error("Batch processing was incomplete due to record processing errors.");
+        }
     }
 
     private Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
