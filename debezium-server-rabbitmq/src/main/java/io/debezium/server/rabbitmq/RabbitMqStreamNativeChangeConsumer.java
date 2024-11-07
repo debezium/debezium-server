@@ -127,6 +127,9 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     @ConfigProperty(name = PROP_PREFIX + "producer.enqueueTimeout", defaultValue = "10")
     int producerEnqueueTimeout;
 
+    @ConfigProperty(name = PROP_PREFIX + "batchConfirmTimeout", defaultValue = "30")
+    int batchConfirmTimeout;
+
     @ConfigProperty(name = PROP_PREFIX + "null.value", defaultValue = "default")
     String nullValue;
 
@@ -258,7 +261,7 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
             }
         }
 
-        if (!latch.await(producerConfirmTimeout, TimeUnit.SECONDS)) {
+        if (!latch.await(batchConfirmTimeout, TimeUnit.SECONDS)) {
             LOGGER.warn("Timeout while waiting for batch confirmation");
             hasError.set(true);
         }
@@ -268,7 +271,7 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
             committer.markBatchFinished();
         }
         else {
-            LOGGER.error("Batch processing was incomplete due to record processing errors.");
+            throw new DebeziumException("Batch processing was incomplete due to record processing errors.");
         }
     }
 
