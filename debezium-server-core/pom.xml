@@ -59,6 +59,11 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <!-- Used as default storage for Debezium platform -->
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-storage-jdbc</artifactId>
+        </dependency>
 
         <!-- Testing -->
         <dependency>
