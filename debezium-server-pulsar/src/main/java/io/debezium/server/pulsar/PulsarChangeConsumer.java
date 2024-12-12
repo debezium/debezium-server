@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.util.Strings;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -77,8 +78,12 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     void connect() {
         final Config config = ConfigProvider.getConfig();
         try {
+            Map<String, Object> pulsarClientConfig = getConfigSubset(config, PROP_CLIENT_PREFIX);
+            Map<String, Object> camelCaseConfig = new HashMap<>();
+            pulsarClientConfig.forEach((key, value) -> camelCaseConfig.put(Strings.convertDotAndUnderscoreStringToCamelCase(key), value));
+
             pulsarClient = PulsarClient.builder()
-                    .loadConf(getConfigSubset(config, PROP_CLIENT_PREFIX))
+                    .loadConf(camelCaseConfig)
                     .build();
         }
         catch (PulsarClientException e) {
