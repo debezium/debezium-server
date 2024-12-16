@@ -69,7 +69,7 @@ jobs:
       - name: Maven build core
         run: ./server/mvnw clean install -f core/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build Debezium Server
-        run: ./server/mvnw clean install -fae -f server/pom.xml -Passembly -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore
+        run: ./server/mvnw clean install -fae -f server/pom.xml -DskipTests -DskipITs -Passembly -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore
       - name: Archive Debezium distribution
         uses: actions/upload-artifact@v4
         with:
@@ -119,7 +119,7 @@ jobs:
           # Verify
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8080/q/health)" != "200" ]]; do sleep 5; done' || false
       - name: Print logs
-        if: failure()
+        if: always()
         run: |
           echo "Logs from dependant services:"
           docker compose -f ./server/debezium-server-dist/src/test/resources/${{matrix.sink}}/docker-compose.yml logs
