@@ -70,6 +70,11 @@ jobs:
         run: ./server/mvnw clean install -f core/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build Debezium Server
         run: ./server/mvnw clean install -fae -f server/pom.xml -Passembly -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore
+      - name: Archive Debezium distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: debezium-dist-artifact
+          path: ./server/debezium-server-dist/target/debezium-server-dist*.tar.gz
 
   validate-distribution:
     name: Verify debezium-server distribution
@@ -85,38 +90,43 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 21
-      - name: Cache Maven packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
       - name: Checkout Debezium Server repository
         uses: actions/checkout@v4
+        with:
+          path: server
+      - name: Download Debezium distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: debezium-dist-artifact
+      - name: Unzip Debezium distribution
+        run: tar xf debezium-server-dist-*.tar.gz
       - name: Validate sink '${{matrix.sink}}'
         run: |
           # Creating the distribution archives
-          DISTRIBUTION_FOLDER=./debezium-server-dist
+          DISTRIBUTION_FOLDER=./debezium-server
           SINK=${{matrix.sink}}
-          ./mvnw clean package -DskipITs -DskipTests -Passembly
+          CONFIG_FOLDER=./server/debezium-server-dist/src/test/resources/$SINK
+          
           # Start Up dependant services
-          docker compose -f $DISTRIBUTION_FOLDER/src/test/resources/$SINK/docker-compose.yml up -d
+          docker compose -f $CONFIG_FOLDER/docker-compose.yml up -d
+          
           # Copy configuration file
-          mkdir $DISTRIBUTION_FOLDER/target/config
-          cp $DISTRIBUTION_FOLDER/src/test/resources/$SINK/application.properties $DISTRIBUTION_FOLDER/target/config/application.properties
+          cp $CONFIG_FOLDER/application.properties $DISTRIBUTION_FOLDER/config/application.properties
+          
           # Run debezium server at background
-          chmod +x $DISTRIBUTION_FOLDER/target/classes/distro/run.sh
-          docker run --name server-$SINK -d -v $DISTRIBUTION_FOLDER/target:/opt:z -p 8080:8080 --network debezium-backend -w /opt registry.access.redhat.com/ubi8/openjdk-21 /opt/classes/distro/run.sh
+          docker run --name server-$SINK -d -v $DISTRIBUTION_FOLDER:/opt:z -p 8080:8080 --network debezium-backend -w /opt registry.access.redhat.com/ubi8/openjdk-21 ./run.sh
+          
+          # Verify
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8080/q/health)" != "200" ]]; do sleep 5; done' || false
       - name: Print logs
         if: failure()
         run: |
           echo "Logs from dependant services:"
-          docker compose -f ./debezium-server-dist/src/test/resources/${{matrix.sink}}/docker-compose.yml logs
+          docker compose -f ./server/debezium-server-dist/src/test/resources/${{matrix.sink}}/docker-compose.yml logs
           echo "Logs from Debezium server:"
           docker logs server-${{matrix.sink}}
       - name: Clean Up
         if: always()
         run: |
           docker rm -f server-${{matrix.sink}}
-          docker compose -f ./debezium-server-dist/src/test/resources/${{matrix.sink}}/docker-compose.yml down
+          docker compose -f ./server/debezium-server-dist/src/test/resources/${{matrix.sink}}/docker-compose.yml down
