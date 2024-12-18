@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sink: [ redis ]
+        sink: [ redis, kinesis ]
     needs: build
     steps:
       - name: Set up JDK
@@ -109,12 +109,18 @@ jobs:
           
           # Start Up dependant services
           docker compose -f $CONFIG_FOLDER/docker-compose.yml up -d
+          if [[ -f "$CONFIG_FOLDER/post-script.sh" ]]; then
+            $CONFIG_FOLDER/post-script.sh
+          fi
           
           # Copy configuration file
           cp $CONFIG_FOLDER/application.properties $DISTRIBUTION_FOLDER/config/application.properties
           
           # Run debezium server at background
-          docker run --name server-$SINK -d -v $DISTRIBUTION_FOLDER:/opt:z -p 8080:8080 --network debezium-backend -w /opt registry.access.redhat.com/ubi8/openjdk-21 ./run.sh
+          if [[ -f "$CONFIG_FOLDER/.env" ]]; then
+            ENV_ARGS="--env-file $CONFIG_FOLDER/.env"
+          fi
+          docker run --name server-$SINK -d -v $DISTRIBUTION_FOLDER:/opt:z -p 8080:8080 --network debezium-backend -w /opt $ENV_ARGS registry.access.redhat.com/ubi8/openjdk-21 ./run.sh
           
           # Verify
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8080/q/health)" != "200" ]]; do sleep 5; done' || false
