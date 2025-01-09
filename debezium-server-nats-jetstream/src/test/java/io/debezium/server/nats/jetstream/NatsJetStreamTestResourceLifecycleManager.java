@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy;
 
+import io.debezium.server.Images;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 /**
@@ -22,10 +23,9 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 public class NatsJetStreamTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
     public static final int NATS_PORT = 4222;
-    public static final String NATS_IMAGE = "nats:latest";
 
     private static final AtomicBoolean running = new AtomicBoolean(false);
-    private static final GenericContainer<?> container = new GenericContainer<>(NATS_IMAGE)
+    private static final GenericContainer<?> container = new GenericContainer<>(Images.NATS_IMAGE)
             .withExposedPorts(NATS_PORT)
             .withCommand("-js")
             .waitingFor(new LogMessageWaitStrategy().withRegEx(".*Server is ready.*"));

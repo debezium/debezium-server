@@ -14,16 +14,15 @@ import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 
+import io.debezium.server.Images;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class PulsarTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
-    private static final String PULSAR_VERSION = "2.5.2";
     public static final int PULSAR_PORT = 6650;
     public static final int PULSAR_HTTP_PORT = 8080;
-    public static final String PULSAR_IMAGE = "apachepulsar/pulsar:" + PULSAR_VERSION;
 
-    private static final GenericContainer<?> container = new GenericContainer<>(PULSAR_IMAGE)
+    private static final GenericContainer<?> container = new GenericContainer<>(Images.PULSAR_IMAGE)
             .withStartupTimeout(Duration.ofSeconds(90))
             .waitingFor(Wait.forLogMessage(".*messaging service is ready.*", 1))
             .withCommand("bin/pulsar", "standalone")
