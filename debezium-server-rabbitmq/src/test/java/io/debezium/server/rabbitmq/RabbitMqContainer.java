@@ -11,12 +11,14 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
+import io.debezium.server.Images;
+
 /**
  * RabbitMQ container
  */
 public class RabbitMqContainer extends GenericContainer<RabbitMqContainer> {
 
-    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("rabbitmq:3.12.9-management");
+    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse(Images.RABBITMQ_IMAGE);
     public static final int BROKER_PORT = 5672;
     public static final int STREAM_PORT = 5552;
 

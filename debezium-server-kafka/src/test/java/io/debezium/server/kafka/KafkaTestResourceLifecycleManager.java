@@ -9,7 +9,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.utility.DockerImageName;
 
+import io.debezium.server.Images;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 /**
@@ -19,8 +21,8 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
  */
 public class KafkaTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
-    @SuppressWarnings("deprecation")
-    private static KafkaContainer kafkaContainer = new KafkaContainer();
+    private static KafkaContainer kafkaContainer = new KafkaContainer(
+            DockerImageName.parse(Images.KAFKA_IMAGE).asCompatibleSubstituteFor("confluentinc/cp-kafka"));
 
     @Override
     public Map<String, String> start() {

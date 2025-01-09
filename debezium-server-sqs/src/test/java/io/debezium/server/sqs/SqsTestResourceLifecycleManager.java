@@ -15,6 +15,7 @@ import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.containers.localstack.LocalStackContainer.Service;
 import org.testcontainers.utility.DockerImageName;
 
+import io.debezium.server.Images;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -32,7 +33,8 @@ import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
  */
 public class SqsTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
-    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("localstack/localstack");
+    private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse(Images.LOCALSTACK_IMAGE)
+            .asCompatibleSubstituteFor("localstack/localstack");
 
     private static final LocalStackContainer container = new LocalStackContainer(DEFAULT_IMAGE_NAME)
             .withServices(Service.SQS);

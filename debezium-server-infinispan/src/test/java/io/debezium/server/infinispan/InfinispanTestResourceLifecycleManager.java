@@ -15,15 +15,15 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 
+import io.debezium.server.Images;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class InfinispanTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InfinispanTestResourceLifecycleManager.class);
-    public static final String INFINISPAN_IMAGE = "quay.io/infinispan/server:" + System.getProperty("tag.infinispan", "latest");
     public static final int PORT = ConfigurationProperties.DEFAULT_HOTROD_PORT;
     public static final String CONFIG_PATH = "/etc/infinispan-local.xml";
-    private static final GenericContainer<?> container = new GenericContainer<>(INFINISPAN_IMAGE)
+    private static final GenericContainer<?> container = new GenericContainer<>(Images.INFINISPAN_IMAGE)
             .withExposedPorts(PORT)
             .withClasspathResourceMapping(InfinispanTestConfigSource.CONFIG_FILE, CONFIG_PATH, BindMode.READ_ONLY)
             .withCommand("-c", CONFIG_PATH)
