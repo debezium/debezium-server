@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.FixedHostPortGenericContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 
+import io.debezium.server.Images;
 import io.debezium.server.TestConfigSource;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
@@ -24,10 +25,9 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
     static final String READY_MESSAGE = "Ready to accept connections";
     public static final int REDIS_PORT = 6379;
     public static final int HOST_PORT = 16379;
-    public static final String REDIS_IMAGE = "redis";
 
     private static final AtomicBoolean running = new AtomicBoolean(false);
-    private static final FixedHostPortGenericContainer<?> container = new FixedHostPortGenericContainer<>(REDIS_IMAGE)
+    private static final FixedHostPortGenericContainer<?> container = new FixedHostPortGenericContainer<>(Images.REDIS_IMAGE)
             .withFixedExposedPort(HOST_PORT, REDIS_PORT);
 
     private static synchronized void start(boolean ignored) {

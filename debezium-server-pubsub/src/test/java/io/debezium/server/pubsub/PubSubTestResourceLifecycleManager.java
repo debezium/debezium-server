@@ -11,12 +11,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.testcontainers.containers.PubSubEmulatorContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import io.debezium.server.Images;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class PubSubTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
     public PubSubEmulatorContainer emulator = new PubSubEmulatorContainer(
-            DockerImageName.parse("gcr.io/google.com/cloudsdktool/cloud-sdk:380.0.0-emulators"));
+            DockerImageName.parse(Images.PUB_SUB_EMULATOR_IMAGE));
     private static String endpoint;
 
     @Override

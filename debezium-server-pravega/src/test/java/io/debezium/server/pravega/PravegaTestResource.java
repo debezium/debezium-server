@@ -15,6 +15,7 @@ import org.testcontainers.containers.FixedHostPortGenericContainer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 
+import io.debezium.server.Images;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.StreamConfiguration;
@@ -28,13 +29,11 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
  */
 public class PravegaTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private static final String PRAVEGA_VERSION = "0.13.0";
     public static final int CONTROLLER_PORT = 9090;
     public static final int SEGMENT_STORE_PORT = 12345;
-    public static final String PRAVEGA_IMAGE = "pravega/pravega:" + PRAVEGA_VERSION;
 
     @SuppressWarnings("deprecation")
-    private static final GenericContainer<?> container = new FixedHostPortGenericContainer<>(PRAVEGA_IMAGE)
+    private static final GenericContainer<?> container = new FixedHostPortGenericContainer<>(Images.PRAVEGA_IMAGE)
             .withFixedExposedPort(CONTROLLER_PORT, CONTROLLER_PORT)
             .withFixedExposedPort(SEGMENT_STORE_PORT, SEGMENT_STORE_PORT)
             .withStartupTimeout(Duration.ofSeconds(90))
