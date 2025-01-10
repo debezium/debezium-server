@@ -18,7 +18,6 @@ import org.testcontainers.utility.DockerImageName;
 import com.github.dockerjava.api.command.InspectContainerResponse;
 
 import io.debezium.server.Images;
-import io.debezium.testing.testcontainers.util.ContainerImageVersions;
 
 /**
  * rocketmq container
@@ -26,7 +25,7 @@ import io.debezium.testing.testcontainers.util.ContainerImageVersions;
 public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
     private static final Logger LOGGER = LoggerFactory.getLogger(RocketMqContainer.class);
 
-    private static final String ROCKETMQ_VERSION = ContainerImageVersions.getStableVersion("apache/rocketmq", ContainerImageVersions.NUMBERS_ONLY_VERSION_REGEX_PATTERN);
+    private static final String ROCKETMQ_VERSION = "5.3.1";
     private static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName
             .parse(Images.ROCKETMQ_IMAGE + ":" + ROCKETMQ_VERSION);
     private static final int defaultBrokerPermission = 6;
