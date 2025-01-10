@@ -19,6 +19,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
+import org.apache.pulsar.client.api.BatcherBuilder;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
@@ -73,6 +74,9 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "timeout", defaultValue = "0")
     Integer timeout;
 
+    @ConfigProperty(name = PROP_PRODUCER_PREFIX + "batcherBuilder", defaultValue = "DEFAULT")
+    String batcherBuilderConfig;
+
     @PostConstruct
     void connect() {
         final Config config = ConfigProvider.getConfig();
@@ -112,17 +116,29 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                 return pulsarClient.newProducer(Schema.STRING)
                         .loadConf(producerConfig)
                         .topic(topicFullName)
+                        .batcherBuilder(getBatcherBuilder(batcherBuilderConfig))
                         .create();
             }
             else {
                 return pulsarClient.newProducer()
                         .loadConf(producerConfig)
                         .topic(topicFullName)
+                        .batcherBuilder(getBatcherBuilder(batcherBuilderConfig))
                         .create();
             }
         }
         catch (PulsarClientException e) {
             throw new DebeziumException(e);
+        }
+    }
+
+    private BatcherBuilder getBatcherBuilder(String configValue) {
+        switch (configValue) {
+            case "KEY_BASED":
+                return BatcherBuilder.KEY_BASED;
+            case "DEFAULT":
+            default:
+                return BatcherBuilder.DEFAULT;
         }
     }
 
