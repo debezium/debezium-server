@@ -9,8 +9,10 @@ import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -40,6 +42,7 @@ import io.nats.client.JetStream;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.Nats;
 import io.nats.client.Options;
+import io.nats.client.api.PublishAck;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 
@@ -60,6 +63,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private static final String PROP_CREATE_STREAM = PROP_PREFIX + "create-stream";
     private static final String PROP_SUBJECTS = PROP_PREFIX + "subjects";
     private static final String PROP_STORAGE = PROP_PREFIX + "storage";
+    private static final String PROP_BATCH_SIZE = PROP_PREFIX + "publish.batch.size";
 
     private static final String PROP_AUTH_JWT = PROP_PREFIX + "auth.jwt";
     private static final String PROP_AUTH_SEED = PROP_PREFIX + "auth.seed";
@@ -95,6 +99,9 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     @ConfigProperty(name = PROP_AUTH_TLS_PASSWORD)
     Optional<String> tlsPassword;
+
+    @ConfigProperty(name = PROP_BATCH_SIZE, defaultValue = "10")
+    int batchSize;
 
     @Inject
     @CustomConsumerBuilder
@@ -177,21 +184,41 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                             RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
 
+        // static final int BATCH_SIZE = 100;
+        List<CompletableFuture<PublishAck>> futures = new ArrayList<>();
+        List<ChangeEvent<Object, Object>> batch = new ArrayList<>();
+
         for (ChangeEvent<Object, Object> rec : records) {
             if (rec.value() != null) {
                 String subject = streamNameMapper.map(rec.destination());
                 byte[] recordBytes = getBytes(rec.value());
                 LOGGER.trace("Received event @ {} = '{}'", subject, getString(rec.value()));
 
-                try {
-                    js.publish(subject, recordBytes);
-                }
-                catch (Exception e) {
-                    throw new DebeziumException(e);
+                batch.add(rec);
+                futures.add(js.publishAsync(subject, recordBytes));
+
+                if (batch.size() >= batchSize) {
+                    // Wait for batch to complete
+                    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                    // Mark batch as processed
+                    for (ChangeEvent<Object, Object> event : batch) {
+                        committer.markProcessed(event);
+                    }
+                    // Clear for next batch
+                    futures.clear();
+                    batch.clear();
                 }
             }
-            committer.markProcessed(rec);
         }
+
+        // Process final partial batch
+        if (!futures.isEmpty()) {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            for (ChangeEvent<Object, Object> event : batch) {
+                committer.markProcessed(event);
+            }
+        }
+
         committer.markBatchFinished();
     }
 
