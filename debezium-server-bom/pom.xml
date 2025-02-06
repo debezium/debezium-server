@@ -16,6 +16,7 @@
         <version.sqs>2.13.13</version.sqs>
         <version.pubsub>26.17.0</version.pubsub>
         <version.pulsar>2.10.1</version.pulsar>
+        <version.milvus>2.5.4</version.milvus>
         <version.eventhubs>5.19.1</version.eventhubs>
         <version.pravega>0.13.0</version.pravega>
         <version.nats>2.16.3</version.nats>
@@ -234,6 +235,11 @@
                 <groupId>org.apache.pulsar</groupId>
                 <artifactId>pulsar-client</artifactId>
                 <version>${version.pulsar}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.milvus</groupId>
+                <artifactId>milvus-sdk-java</artifactId>
+                <version>${version.milvus}</version>
             </dependency>
             <dependency>
                 <groupId>com.azure</groupId>
