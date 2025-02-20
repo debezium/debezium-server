@@ -37,6 +37,7 @@ import com.google.api.gax.batching.BatchingSettings;
 import com.google.api.gax.batching.FlowControlSettings;
 import com.google.api.gax.batching.FlowController;
 import com.google.api.gax.core.CredentialsProvider;
+import com.google.api.gax.core.InstantiatingExecutorProvider;
 import com.google.api.gax.core.NoCredentialsProvider;
 import com.google.api.gax.grpc.GrpcTransportChannel;
 import com.google.api.gax.retrying.RetrySettings;
@@ -133,6 +134,12 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
     Integer waitMessageDeliveryTimeout;
 
+    @ConfigProperty(name = PROP_PREFIX + "concurrency.threads", defaultValue = "0")
+    int concurrencyThreads;
+
+    @ConfigProperty(name = PROP_PREFIX + "compression.threshold.bytes", defaultValue = "-1")
+    long compressionBytesThreshold;
+
     @ConfigProperty(name = PROP_PREFIX + "channel.shutdown.timeout.ms", defaultValue = "30000")
     Integer channelShutdownTimeout;
 
@@ -196,6 +203,18 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
                                         .setInitialRpcTimeout(Duration.ofMillis(initialRpcTimeout))
                                         .setRpcTimeoutMultiplier(rpcTimeoutMultiplier)
                                         .build());
+
+                if (concurrencyThreads > 0) {
+                    builder.setExecutorProvider(
+                            InstantiatingExecutorProvider.newBuilder()
+                                    .setExecutorThreadCount(concurrencyThreads)
+                                    .build());
+                }
+
+                if (compressionBytesThreshold >= 0) {
+                    builder.setEnableCompression(true)
+                            .setCompressionBytesThreshold(compressionBytesThreshold);
+                }
 
                 if (address.isPresent()) {
                     builder.setChannelProvider(channelProvider).setCredentialsProvider(credentialsProvider);
