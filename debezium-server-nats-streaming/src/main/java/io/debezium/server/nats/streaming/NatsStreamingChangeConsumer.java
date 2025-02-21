@@ -120,7 +120,7 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
             if (record.value() != null) {
                 String subject = streamNameMapper.map(record.destination());
                 byte[] recordBytes = getBytes(record.value());
-                LOGGER.trace("Received event @ {} = '{}'", subject, getString(record.value()));
+                LOGGER.trace("Received event @ {} = '{}'", subject, record.value());
 
                 try {
                     sc.publish(subject, recordBytes);

@@ -181,7 +181,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             if (rec.value() != null) {
                 String subject = streamNameMapper.map(rec.destination());
                 byte[] recordBytes = getBytes(rec.value());
-                LOGGER.trace("Received event @ {} = '{}'", subject, getString(rec.value()));
+                LOGGER.trace("Received event @ {} = '{}'", subject, rec.value());
 
                 try {
                     js.publish(subject, recordBytes);
