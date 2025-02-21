@@ -12,12 +12,14 @@ public class Images {
 
     private static final String PRAVEGA_VERSION = "0.13.0";
     private static final String PULSAR_VERSION = "2.5.2";
+    private static final String MILVUS_VERSION = "v2.5.4";
 
     public static final String PRAVEGA_IMAGE = "mirror.gcr.io/pravega/pravega:" + PRAVEGA_VERSION;
     public static final String REDIS_IMAGE = "mirror.gcr.io/library/redis";
     public static final String PUB_SUB_EMULATOR_IMAGE = "gcr.io/google.com/cloudsdktool/cloud-sdk:380.0.0-emulators";
     public static final String KAFKA_IMAGE = "mirror.gcr.io/confluentinc/cp-kafka:5.4.3";
     public static final String PULSAR_IMAGE = "mirror.gcr.io/apachepulsar/pulsar:" + PULSAR_VERSION;
+    public static final String MILVUS_IMAGE = "mirror.gcr.io/milvusdb/milvus:" + MILVUS_VERSION;
     public static final String INFINISPAN_IMAGE = "quay.io/infinispan/server:" + System.getProperty("tag.infinispan", "latest");
     public static final String LOCALSTACK_IMAGE = "mirror.gcr.io/localstack/localstack";
     public static final String RABBITMQ_IMAGE = "mirror.gcr.io/library/rabbitmq:3.12.9-management";
