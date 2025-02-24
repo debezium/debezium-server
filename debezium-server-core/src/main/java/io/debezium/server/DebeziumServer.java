@@ -254,12 +254,18 @@ public class DebeziumServer {
         try {
             LOGGER.info("Received request to stop the engine");
             final Config config = ConfigProvider.getConfig();
-            engine.close();
+            try {
+                engine.close();
+            }
+            // TODO: eventually catch more specific exception if DBZ-8732 is implemented
+            catch (IllegalStateException e) {
+                LOGGER.info("Cannot shut down engine now: ", e.getMessage());
+            }
             executor.shutdown();
             executor.awaitTermination(config.getOptionalValue(PROP_TERMINATION_WAIT, Integer.class).orElse(10), TimeUnit.SECONDS);
         }
         catch (Exception e) {
-            LOGGER.error("Exception while shuttting down Debezium", e);
+            LOGGER.error("Exception while shutting down Debezium", e);
         }
         consumerBean.destroy(consumer, consumerBeanCreationalContext);
     }
