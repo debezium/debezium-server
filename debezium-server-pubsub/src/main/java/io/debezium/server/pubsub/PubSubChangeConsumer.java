@@ -74,6 +74,12 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     private static final String PROP_PREFIX = "debezium.sink.pubsub.";
     private static final String PROP_PROJECT_ID = PROP_PREFIX + "project.id";
 
+    private static final String DEFAULT_CONCURRENCY_THREADS_STRING = "0";
+    private static final int DEFAULT_CONCURRENCY_THREADS = Integer.parseInt(DEFAULT_CONCURRENCY_THREADS_STRING);
+
+    private static final String DEFAULT_COMPRESSION_THRESHOLD_BYTES_STRING = "-1";
+    private static final int DEFAULT_COMPRESSION_THRESHOLD_BYTES = Integer.parseInt(DEFAULT_COMPRESSION_THRESHOLD_BYTES_STRING);
+
     public interface PublisherBuilder {
         Publisher get(ProjectTopicName topicName);
     }
@@ -134,10 +140,10 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
     Integer waitMessageDeliveryTimeout;
 
-    @ConfigProperty(name = PROP_PREFIX + "concurrency.threads", defaultValue = "0")
+    @ConfigProperty(name = PROP_PREFIX + "concurrency.threads", defaultValue = DEFAULT_CONCURRENCY_THREADS_STRING)
     int concurrencyThreads;
 
-    @ConfigProperty(name = PROP_PREFIX + "compression.threshold.bytes", defaultValue = "-1")
+    @ConfigProperty(name = PROP_PREFIX + "compression.threshold.bytes", defaultValue = DEFAULT_COMPRESSION_THRESHOLD_BYTES_STRING)
     long compressionBytesThreshold;
 
     @ConfigProperty(name = PROP_PREFIX + "channel.shutdown.timeout.ms", defaultValue = "30000")
@@ -204,14 +210,14 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
                                         .setRpcTimeoutMultiplier(rpcTimeoutMultiplier)
                                         .build());
 
-                if (concurrencyThreads > 0) {
+                if (concurrencyThreads > DEFAULT_CONCURRENCY_THREADS) {
                     builder.setExecutorProvider(
                             InstantiatingExecutorProvider.newBuilder()
                                     .setExecutorThreadCount(concurrencyThreads)
                                     .build());
                 }
 
-                if (compressionBytesThreshold >= 0) {
+                if (compressionBytesThreshold >= DEFAULT_COMPRESSION_THRESHOLD_BYTES) {
                     builder.setEnableCompression(true)
                             .setCompressionBytesThreshold(compressionBytesThreshold);
                 }
