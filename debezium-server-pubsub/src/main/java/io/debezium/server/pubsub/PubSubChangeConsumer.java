@@ -152,6 +152,9 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "address")
     Optional<String> address;
 
+    @ConfigProperty(name = PROP_PREFIX + "region")
+    Optional<String> region;
+
     @Inject
     @CustomConsumerBuilder
     Instance<PublisherBuilder> customPublisherBuilder;
@@ -224,6 +227,9 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
                 if (address.isPresent()) {
                     builder.setChannelProvider(channelProvider).setCredentialsProvider(credentialsProvider);
+                } else if (region.isPresent()) {
+                    String endpoint = String.format("%s-pubsub.googleapis.com:443", region.get());
+                    builder.setEndpoint(endpoint);
                 }
 
                 return builder.build();
