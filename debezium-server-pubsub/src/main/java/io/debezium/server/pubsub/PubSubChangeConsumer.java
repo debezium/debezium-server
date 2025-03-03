@@ -202,7 +202,8 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
                 if (address.isPresent()) {
                     builder.setChannelProvider(channelProvider).setCredentialsProvider(credentialsProvider);
-                } else if (region.isPresent()) {
+                }
+                else if (region.isPresent()) {
                     String endpoint = String.format("%s-pubsub.googleapis.com:443", region.get());
                     builder.setEndpoint(endpoint);
                 }
