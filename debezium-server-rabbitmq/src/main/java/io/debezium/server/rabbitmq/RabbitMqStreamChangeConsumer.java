@@ -31,11 +31,13 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.ConnectionFactoryConfigurator;
 
 import io.debezium.DebeziumException;
+import io.debezium.annotation.VisibleForTesting;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.StreamNameMapper;
 
 /**
  * Implementation of the consumer that delivers the messages into RabbitMQ Stream destination.
@@ -52,6 +54,23 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmq.";
     private static final String PROP_CONNECTION_PREFIX = PROP_PREFIX + "connection.";
 
+    /**
+     * Routing key is calculated from topic name using stream name mapper
+     */
+    private static final String TOPIC_ROUTING_KEY_SOURCE = "topic";
+
+    /**
+     * Routing key statically defined
+     */
+    private static final String STATIC_ROUTING_KEY_SOURCE = "static";
+
+    /**
+     * Routing key is the record key
+     */
+    private static final String KEY_ROUTING_KEY_SOURCE = "key";
+
+    private static final String EMPTY_ROUTING_KEY = "";
+
     @ConfigProperty(name = PROP_PREFIX + "exchange", defaultValue = "")
     Optional<String> exchange;
 
@@ -64,10 +83,16 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     @ConfigProperty(name = PROP_PREFIX + "routingKeyDurable", defaultValue = "true")
     Boolean routingKeyDurable;
 
+    @ConfigProperty(name = PROP_PREFIX + "routingKey.source", defaultValue = STATIC_ROUTING_KEY_SOURCE)
+    String routingKeySource;
+
     /**
      * When true, the routing key is calculated from topic name using stream name mapper.
      * When false the routingKey value or empty string is used.
+     *
+     * @deprecated Use `routingKeySource` with value `topic` instead
      */
+    @Deprecated
     @ConfigProperty(name = PROP_PREFIX + "routingKeyFromTopicName", defaultValue = "false")
     Boolean routingKeyFromTopicName;
 
@@ -96,12 +121,18 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
 
         LOGGER.info("Using connection to {}:{}", factory.getHost(), factory.getPort());
 
+        if (Boolean.TRUE.equals(routingKeyFromTopicName)) {
+            routingKeySource = TOPIC_ROUTING_KEY_SOURCE;
+            LOGGER.warn("Using deprecated `{}` config value. Please, use `{}` with value `topic` instead", PROP_PREFIX + "routingKeyFromTopicName",
+                    PROP_PREFIX + "routingKey.source");
+        }
+
         try {
             connection = factory.newConnection();
             channel = connection.createChannel();
             channel.confirmSelect();
 
-            if (!routingKeyFromTopicName && autoCreateRoutingKey) {
+            if (!isTopicRoutingKeySource() && autoCreateRoutingKey) {
                 final var routingKeyName = routingKey.orElse("");
                 LOGGER.info("Creating queue for routing key named '{}'", routingKeyName);
                 channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
@@ -135,12 +166,11 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
-            final var routingKeyName = routingKey
-                    .orElse(routingKeyFromTopicName ? streamNameMapper.map(record.destination()) : "");
-            final var exchangeName = exchange.orElse(streamNameMapper.map(record.destination()));
+            final String exchangeName = exchange.orElse(streamNameMapper.map(record.destination()));
+            final String routingKeyName = getRoutingKey(record).orElse(EMPTY_ROUTING_KEY);
 
             try {
-                if (routingKeyFromTopicName && autoCreateRoutingKey) {
+                if (isTopicRoutingKeySource() && autoCreateRoutingKey) {
                     LOGGER.trace("Creating queue for routing key named '{}'", routingKeyName);
                     channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
                 }
@@ -174,12 +204,42 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         LOGGER.trace("Batch marked finished");
     }
 
-    private Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
+    private Optional<String> getRoutingKey(ChangeEvent<Object, Object> eventRecord) {
+        if (isStaticRoutingKeySource()) {
+            return routingKey;
+        }
+        else if (isTopicRoutingKeySource()) {
+            return Optional.of(streamNameMapper.map(eventRecord.destination()));
+        }
+        else if (isKeyRoutingKeySource()) {
+            return Optional.ofNullable(eventRecord.key()).map(this::getString);
+        }
+        return Optional.empty();
+    }
+
+    private boolean isStaticRoutingKeySource() {
+        return STATIC_ROUTING_KEY_SOURCE.equals(routingKeySource);
+    }
+
+    private boolean isTopicRoutingKeySource() {
+        return TOPIC_ROUTING_KEY_SOURCE.equals(routingKeySource);
+    }
+
+    private boolean isKeyRoutingKeySource() {
+        return KEY_ROUTING_KEY_SOURCE.equals(routingKeySource);
+    }
+
+    private static Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
         List<Header<Object>> headers = record.headers();
         Map<String, Object> rabbitMqHeaders = new HashMap<>();
         for (Header<Object> header : headers) {
             rabbitMqHeaders.put(header.getKey(), header.getValue());
         }
         return rabbitMqHeaders;
+    }
+
+    @VisibleForTesting
+    void setStreamNameMapper(StreamNameMapper streamNameMapper) {
+        this.streamNameMapper = streamNameMapper;
     }
 }
