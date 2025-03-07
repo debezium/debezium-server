@@ -33,6 +33,7 @@ public class RabbitMqTestConfigSource extends TestConfigSource {
         rabbitmqConfig.put("debezium.source.topic.prefix", "testc");
         rabbitmqConfig.put("debezium.source.schema.include.list", "inventory");
         rabbitmqConfig.put("debezium.source.table.include.list", "inventory.customers");
+        rabbitmqConfig.put("debezium.sink.rabbitmq.routingKey.source", "topic");
         config = rabbitmqConfig;
     }
 

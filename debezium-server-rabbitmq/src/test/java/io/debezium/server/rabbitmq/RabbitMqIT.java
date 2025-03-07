@@ -83,9 +83,12 @@ public class RabbitMqIT {
         connection = factory.newConnection();
         channel = connection.createChannel();
 
+        // With direct exchange and 'debezium.sink.rabbitmq.routingKey.source: topic'
+        // the routing key is expected to be the same as the topic name. Otherwise, the
+        // message won't reach the queue
         channel.exchangeDeclare(RabbitMqTestConfigSource.TOPIC_NAME, BuiltinExchangeType.DIRECT);
         String queue = channel.queueDeclare().getQueue();
-        channel.queueBind(queue, RabbitMqTestConfigSource.TOPIC_NAME, "");
+        channel.queueBind(queue, RabbitMqTestConfigSource.TOPIC_NAME, RabbitMqTestConfigSource.TOPIC_NAME);
 
         channel.basicConsume(queue, new DefaultConsumer(channel) {
             @Override
