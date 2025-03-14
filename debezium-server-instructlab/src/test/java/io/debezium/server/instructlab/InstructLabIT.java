@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import jakarta.enterprise.event.Observes;
@@ -75,19 +76,24 @@ public class InstructLabIT {
                 .withHandler((kind, path) -> {
                     if (kind == ENTRY_MODIFY && path.equals(FRAUD_PATH.resolve("qna.yml"))) {
                         final String contents = Files.readString(path);
-                        assertThat(contents).isEqualTo("version: 3" + System.lineSeparator() +
-                                "task_description: " + path + System.lineSeparator() +
-                                "created_by: Debezium" + System.lineSeparator() +
-                                "seed_examples:" + System.lineSeparator() +
-                                "- question: Is order 10002 potentially fraudulent?" + System.lineSeparator() +
-                                "  answer: Yes, the order's quantity is greater than 1, which is the maximum allowed." + System.lineSeparator() +
-                                "- question: Is order 10003 potentially fraudulent?" + System.lineSeparator() +
-                                "  answer: Yes, the order's quantity is greater than 1, which is the maximum allowed." + System.lineSeparator());
+                        assertThat(contents).isEqualTo(ofLines(
+                                "version: 3",
+                                "task_description: " + path,
+                                "created_by: Debezium",
+                                "seed_examples:",
+                                "- question: Is order 10002 potentially fraudulent?",
+                                "  answer: Yes, the order's quantity is greater than 1, which is the maximum allowed.",
+                                "- question: Is order 10003 potentially fraudulent?",
+                                "  answer: Yes, the order's quantity is greater than 1, which is the maximum allowed."));
                         return true;
                     }
                     return false;
                 })
                 .watch();
+    }
+
+    private static String ofLines(String... lines) {
+        return Stream.of(lines).collect(Collectors.joining(System.lineSeparator())) + System.lineSeparator();
     }
 
     /**

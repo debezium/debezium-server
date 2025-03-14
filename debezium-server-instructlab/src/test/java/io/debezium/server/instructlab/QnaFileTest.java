@@ -9,6 +9,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,9 +45,7 @@ public class QnaFileTest {
         file.flush();
 
         final String content = Files.readString(Path.of(QNA_YAML));
-        assertThat(content).isEqualTo("version: 3" + System.lineSeparator() +
-                "task_description: " + QNA_YAML + System.lineSeparator() +
-                "created_by: Debezium" + System.lineSeparator());
+        assertThat(content).isEqualTo(ofLines("version: 3", "task_description: " + QNA_YAML, "created_by: Debezium"));
     }
 
     @Test
@@ -55,12 +55,13 @@ public class QnaFileTest {
         file.flush();
 
         final String content = Files.readString(Path.of(QNA_YAML));
-        assertThat(content).isEqualTo("version: 3" + System.lineSeparator() +
-                "task_description: " + QNA_YAML + System.lineSeparator() +
-                "created_by: Debezium" + System.lineSeparator() +
-                "seed_examples:" + System.lineSeparator() +
-                "- question: What is the answer to the universe?" + System.lineSeparator() +
-                "  answer: The answer is 42" + System.lineSeparator());
+        assertThat(content).isEqualTo(ofLines(
+                "version: 3",
+                "task_description: " + QNA_YAML,
+                "created_by: Debezium",
+                "seed_examples:",
+                "- question: What is the answer to the universe?",
+                "  answer: The answer is 42"));
     }
 
     @Test
@@ -70,64 +71,70 @@ public class QnaFileTest {
         file.flush();
 
         final String content = Files.readString(Path.of(QNA_YAML));
-        assertThat(content).isEqualTo("version: 3" + System.lineSeparator() +
-                "task_description: " + QNA_YAML + System.lineSeparator() +
-                "created_by: Debezium" + System.lineSeparator() +
-                "seed_examples:" + System.lineSeparator() +
-                "- question: What is the answer to the universe?" + System.lineSeparator() +
-                "  answer: The answer is 42" + System.lineSeparator() +
-                "  context: Source Hitchhiker's Guide to the Galaxy" + System.lineSeparator());
+        assertThat(content).isEqualTo(ofLines(
+                "version: 3",
+                "task_description: " + QNA_YAML,
+                "created_by: Debezium",
+                "seed_examples:",
+                "- question: What is the answer to the universe?",
+                "  answer: The answer is 42",
+                "  context: Source Hitchhiker's Guide to the Galaxy"));
     }
 
     @Test
     public void testAppendQnaFileQuestionAnswer() throws Exception {
-        Files.writeString(Path.of(QNA_YAML),
-                "version: 3" + System.lineSeparator() +
-                        "task_description: Some desc" + System.lineSeparator() +
-                        "created_by: ccranfor" + System.lineSeparator() +
-                        "seed_examples:" + System.lineSeparator() +
-                        "- question: What is 2+2?" + System.lineSeparator() +
-                        "  answer: 4" + System.lineSeparator());
+        Files.writeString(Path.of(QNA_YAML), ofLines(
+                "version: 3",
+                "task_description: Some desc",
+                "created_by: ccranfor",
+                "seed_examples:",
+                "- question: What is 2+2?",
+                "  answer: 4"));
 
         final QnaFile file = new QnaFile(QNA_YAML);
         file.addSeedExample("What is the answer to the universe?", "The answer is 42", null);
         file.flush();
 
         final String content = Files.readString(Path.of(QNA_YAML));
-        assertThat(content).isEqualTo("version: 3" + System.lineSeparator() +
-                "task_description: Some desc" + System.lineSeparator() +
-                "created_by: ccranfor" + System.lineSeparator() +
-                "seed_examples:" + System.lineSeparator() +
-                "- question: What is 2+2?" + System.lineSeparator() +
-                "  answer: 4" + System.lineSeparator() +
-                "- question: What is the answer to the universe?" + System.lineSeparator() +
-                "  answer: The answer is 42" + System.lineSeparator());
+        assertThat(content).isEqualTo(ofLines(
+                "version: 3",
+                "task_description: Some desc",
+                "created_by: ccranfor",
+                "seed_examples:",
+                "- question: What is 2+2?",
+                "  answer: 4",
+                "- question: What is the answer to the universe?",
+                "  answer: The answer is 42"));
     }
 
     @Test
     public void testAppendQnaFileQuestionAnswerContext() throws Exception {
-        Files.writeString(Path.of(QNA_YAML),
-                "version: 3" + System.lineSeparator() +
-                        "task_description: Some desc" + System.lineSeparator() +
-                        "created_by: ccranfor" + System.lineSeparator() +
-                        "seed_examples:" + System.lineSeparator() +
-                        "- question: What is 2+2?" + System.lineSeparator() +
-                        "  answer: 4" + System.lineSeparator());
+        Files.writeString(Path.of(QNA_YAML), ofLines(
+                "version: 3",
+                "task_description: Some desc",
+                "created_by: ccranfor",
+                "seed_examples:",
+                "- question: What is 2+2?",
+                "  answer: 4"));
 
         final QnaFile file = new QnaFile(QNA_YAML);
         file.addSeedExample("What is the answer to the universe?", "The answer is 42", "Source Hitchhiker's Guide to the Galaxy");
         file.flush();
 
         final String content = Files.readString(Path.of(QNA_YAML));
-        assertThat(content).isEqualTo("version: 3" + System.lineSeparator() +
-                "task_description: Some desc" + System.lineSeparator() +
-                "created_by: ccranfor" + System.lineSeparator() +
-                "seed_examples:" + System.lineSeparator() +
-                "- question: What is 2+2?" + System.lineSeparator() +
-                "  answer: 4" + System.lineSeparator() +
-                "- question: What is the answer to the universe?" + System.lineSeparator() +
-                "  answer: The answer is 42" + System.lineSeparator() +
-                "  context: Source Hitchhiker's Guide to the Galaxy" + System.lineSeparator());
+        assertThat(content).isEqualTo(ofLines(
+                "version: 3",
+                "task_description: Some desc",
+                "created_by: ccranfor",
+                "seed_examples:",
+                "- question: What is 2+2?",
+                "  answer: 4",
+                "- question: What is the answer to the universe?",
+                "  answer: The answer is 42",
+                "  context: Source Hitchhiker's Guide to the Galaxy"));
     }
 
+    private static String ofLines(String... lines) {
+        return Stream.of(lines).collect(Collectors.joining(System.lineSeparator())) + System.lineSeparator();
+    }
 }
