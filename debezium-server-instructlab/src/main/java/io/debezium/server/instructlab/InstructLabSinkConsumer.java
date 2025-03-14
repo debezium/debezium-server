@@ -62,7 +62,6 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
         final Map<String, QnaFile> batchFiles = new HashMap<>();
         for (ChangeEvent<Object, Object> record : records) {
             if (record.value() != null) {
-                // LOGGER.info("Received event {} = '{}'", getString(record.key()), getString(record.value()));
                 getQnaMap(record).forEach((key, attributes) -> {
                     final String fileName = attributes.get(AbstractAddQnaHeader.ATTRIBUTE_FILENAME);
                     if (!Strings.isNullOrEmpty(fileName)) {
@@ -104,6 +103,9 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
                     final String prefix = keyParts[1];
                     final String attribute = keyParts[2];
                     headers.computeIfAbsent(prefix, k -> new HashMap<>()).put(attribute, String.valueOf(header.value()));
+                }
+                else {
+                    LOGGER.debug("Header key '{}' did not have the expected format of 'qna.<prefix>.<attribute>', skipping.", key);
                 }
             }
         }
