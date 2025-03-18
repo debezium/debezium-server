@@ -51,6 +51,7 @@ public class DebeziumServerPostgresIT {
     @BeforeEach
     void setUp() {
         Testing.Files.delete(TestConfigSource.OFFSET_STORE_PATH);
+        Testing.Files.createTestingFile(TestConfigSource.OFFSET_STORE_PATH);
     }
 
     @Test
