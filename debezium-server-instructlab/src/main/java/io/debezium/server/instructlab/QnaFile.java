@@ -94,6 +94,11 @@ public class QnaFile {
             });
         }
 
+        // Make sure parent path exists
+        if (!file.getParentFile().exists()) {
+            file.getParentFile().mkdirs();
+        }
+
         try (FileWriter writer = new FileWriter(file)) {
             yaml.dump(data, writer);
         }
