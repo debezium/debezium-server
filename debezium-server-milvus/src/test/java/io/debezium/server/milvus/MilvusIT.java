@@ -25,11 +25,6 @@ import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.util.Testing;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.common.DataType;
-import io.milvus.v2.common.IndexParam;
-import io.milvus.v2.service.collection.request.CreateCollectionReq;
-import io.milvus.v2.service.collection.request.CreateCollectionReq.CollectionSchema;
-import io.milvus.v2.service.collection.request.DropCollectionReq;
 import io.milvus.v2.service.vector.request.QueryReq;
 import io.milvus.v2.service.vector.response.QueryResp.QueryResult;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -46,7 +41,7 @@ import io.quarkus.test.junit.QuarkusTest;
 public class MilvusIT {
 
     private static final int MESSAGE_COUNT = 2;
-    private static final String COLLECTION_NAME = "testc_inventory_t_vector";
+    public static final String COLLECTION_NAME = "testc_inventory_t_vector";
 
     @ConfigProperty(name = "debezium.source.database.hostname")
     String dbHostname;
@@ -63,6 +58,9 @@ public class MilvusIT {
     @ConfigProperty(name = "debezium.source.database.dbname")
     String dbName;
 
+    @ConfigProperty(name = "debezium.sink.milvus.uri")
+    String milvusUri;
+
     private MilvusClientV2 client;
 
     {
@@ -75,51 +73,9 @@ public class MilvusIT {
         Testing.Print.enable();
 
         final var config = ConnectConfig.builder()
-                .uri("http://localhost:19530")
+                .uri(milvusUri)
                 .build();
         client = new MilvusClientV2(config);
-
-        createMilvusCollections();
-    }
-
-    private void createMilvusCollections() {
-
-        try {
-            client.dropCollection(DropCollectionReq.builder().collectionName(COLLECTION_NAME).build());
-        }
-        catch (Exception e) {
-            // Ignore drop errors for non-existing collection
-        }
-        final var collections = client.listCollections().getCollectionNames();
-        if (!collections.contains(COLLECTION_NAME)) {
-            final var pkField = CreateCollectionReq.FieldSchema.builder()
-                    .name("pk")
-                    .isPrimaryKey(true)
-                    .dataType(DataType.Int64)
-                    .build();
-            final var valueField = CreateCollectionReq.FieldSchema.builder()
-                    .name("value")
-                    .dataType(DataType.VarChar)
-                    .build();
-            final var vectorField = CreateCollectionReq.FieldSchema.builder()
-                    .name("f_vector")
-                    .dataType(DataType.FloatVector)
-                    .dimension(3)
-                    .build();
-            final var collectionSchema = CollectionSchema.builder()
-                    .fieldSchemaList(List.of(pkField, valueField, vectorField))
-                    .build();
-            final var index = IndexParam.builder()
-                    .fieldName("f_vector")
-                    .indexType(IndexParam.IndexType.AUTOINDEX)
-                    .build();
-            final var request = CreateCollectionReq.builder()
-                    .collectionName(COLLECTION_NAME)
-                    .collectionSchema(collectionSchema)
-                    .indexParams(List.of(index))
-                    .build();
-            client.createCollection(request);
-        }
     }
 
     void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
