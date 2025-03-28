@@ -12,6 +12,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
@@ -22,14 +23,16 @@ import com.google.gson.JsonObject;
 
 import io.debezium.DebeziumException;
 import io.debezium.data.Envelope;
+import io.debezium.data.Envelope.Operation;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.schema.SchemaFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.service.database.request.CreateDatabaseReq;
+import io.milvus.v2.service.vector.request.DeleteReq;
 import io.milvus.v2.service.vector.request.UpsertReq;
 
 /**
@@ -66,11 +69,7 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
 
         final var databases = milvusClient.listDatabases().getDatabaseNames();
         if (!databases.contains(databaseName)) {
-            LOGGER.info("Database '{}' is not available, trying to create it");
-            final var request = CreateDatabaseReq.builder()
-                    .databaseName(databaseName)
-                    .build();
-            milvusClient.createDatabase(request);
+            throw new DebeziumException(String.format("Database '%s' does not exist", databaseName));
         }
     }
 
@@ -91,35 +90,87 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
         for (final ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
-            // Milvus sink requires access to the message schema so it can do schema evolution
-            // This is not a part of public Debezium Engine API but is an implementation detail on
-            // which Debezium Server can rely
-            @SuppressWarnings("rawtypes")
-            final var sourceRecord = ((EmbeddedEngineChangeEvent) record).sourceRecord();
+            final var sourceRecord = toSourceRecord(record);
 
             // Milvus does not support dots in collection names so we by default replace them
             // with underscores so the user does not need to provide router or mapper
             final var collectionName = streamNameMapper.map(record.destination()).replace('.', '_');
 
+            if (isSchemaChange(sourceRecord)) {
+                LOGGER.debug("Schema change event, ignoring it");
+                committer.markProcessed(record);
+                continue;
+            }
+
             if (record.key() == null) {
                 throw new DebeziumException("Milvus does not support collections without primary key");
             }
-            schema.validateKey(sourceRecord.keySchema());
+            schema.validateKey(collectionName, sourceRecord.keySchema());
 
-            final var data = getData(record, sourceRecord);
-
-            final var request = UpsertReq.builder()
-                    .collectionName(collectionName)
-                    .data(List.of(data))
-                    .build();
-            milvusClient.upsert(request);
-            committer.markProcessed(record);
+            if (sourceRecord.value() == null) {
+                deleteRecord(collectionName, record, committer);
+            }
+            else if (Envelope.isEnvelopeSchema(sourceRecord.valueSchema())) {
+                final var valueStruct = (Struct) sourceRecord.value();
+                switch (Operation.forCode(valueStruct.getString(Envelope.FieldName.OPERATION))) {
+                    case Operation.READ:
+                    case Operation.CREATE:
+                    case Operation.UPDATE:
+                        upsertRecord(collectionName, record, committer);
+                        break;
+                    case Operation.DELETE:
+                        deleteRecord(collectionName, record, committer);
+                        break;
+                    default:
+                        LOGGER.info("Unsupported operation, skipping record '{}'", record);
+                }
+            }
+            else {
+                // Extracted new record state
+                upsertRecord(collectionName, record, committer);
+            }
         }
 
         committer.markBatchFinished();
     }
 
-    private JsonObject getData(ChangeEvent<Object, Object> record, SourceRecord sourceRecord) {
+    protected SourceRecord toSourceRecord(final ChangeEvent<Object, Object> record) {
+        // Milvus sink requires access to the message schema so it can do schema evolution
+        // This is not a part of public Debezium Engine API but is an implementation detail on
+        // which Debezium Server can rely
+        @SuppressWarnings("rawtypes")
+        final var sourceRecord = ((EmbeddedEngineChangeEvent) record).sourceRecord();
+        return sourceRecord;
+    }
+
+    private void upsertRecord(String collectionName, ChangeEvent<Object, Object> record,
+                              RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+        final var data = getValue(record, toSourceRecord(record));
+
+        final var request = UpsertReq.builder()
+                .collectionName(collectionName)
+                .data(List.of(data))
+                .build();
+        milvusClient.upsert(request);
+        committer.markProcessed(record);
+    }
+
+    private void deleteRecord(String collectionName, ChangeEvent<Object, Object> record,
+                              RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+        final var keyStruct = (Struct) toSourceRecord(record).key();
+        final var key = keyStruct.get(keyStruct.schema().fields().get(0));
+
+        final var request = DeleteReq.builder()
+                .collectionName(collectionName)
+                .ids(List.of(key))
+                .build();
+        milvusClient.delete(request);
+        committer.markProcessed(record);
+    }
+
+    private JsonObject getValue(ChangeEvent<Object, Object> record, SourceRecord sourceRecord) {
         final var value = getString(record.value());
         var json = gson.fromJson(value, JsonObject.class);
 
@@ -134,5 +185,10 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
         }
 
         return json;
+    }
+
+    private boolean isSchemaChange(final SourceRecord record) {
+        return record.valueSchema() != null && record.valueSchema().name() != null
+                && SchemaFactory.get().isSchemaChangeSchema(record.valueSchema());
     }
 }

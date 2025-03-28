@@ -18,6 +18,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.debezium.connector.postgresql.connection.PostgresConnection;
+import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.server.TestConfigSource;
 import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.util.Testing;
@@ -140,15 +142,59 @@ public class MilvusIT {
         });
 
         assertThat(queryResults.get()).hasSize(MESSAGE_COUNT);
-        final var data1 = queryResults.get().get(0).getEntity();
-        final var data2 = queryResults.get().get(1).getEntity();
+        final var dataRead1 = queryResults.get().get(0).getEntity();
+        final var dataRead2 = queryResults.get().get(1).getEntity();
 
-        assertThat(data1.get("pk")).isEqualTo(1l);
-        assertThat(data1.get("value")).isEqualTo("one");
-        assertThat(data1.get("f_vector")).isEqualTo(List.of(1.1f, 1.2f, 1.3f));
+        assertThat(dataRead1.get("pk")).isEqualTo(1l);
+        assertThat(dataRead1.get("value")).isEqualTo("one");
+        assertThat(dataRead1.get("f_vector")).isEqualTo(List.of(1.1f, 1.2f, 1.3f));
 
-        assertThat(data2.get("pk")).isEqualTo(2l);
-        assertThat(data2.get("value")).isEqualTo("two");
-        assertThat(data2.get("f_vector")).isEqualTo(List.of(2.1f, 2.2f, 2.3f));
+        assertThat(dataRead2.get("pk")).isEqualTo(2l);
+        assertThat(dataRead2.get("value")).isEqualTo("two");
+        assertThat(dataRead2.get("f_vector")).isEqualTo(List.of(2.1f, 2.2f, 2.3f));
+
+        final JdbcConfiguration config = JdbcConfiguration.create()
+                .with("hostname", dbHostname)
+                .with("port", dbPort)
+                .with("user", dbUser)
+                .with("password", dbPassword)
+                .with("dbname", dbName)
+                .build();
+        try (PostgresConnection connection = new PostgresConnection(config, "Debezium Milvus Test")) {
+            connection.execute("UPDATE inventory.t_vector SET value = 'two-up' WHERE pk = 2");
+        }
+
+        Awaitility.await().atMost(Duration.ofSeconds(MilvusTestConfigSource.waitForSeconds())).until(() -> {
+            final var request = QueryReq.builder()
+                    .collectionName(COLLECTION_NAME)
+                    .filter("value like \"two-up\"")
+                    .build();
+            final var response = client.query(request);
+            queryResults.set(response.getQueryResults());
+            return response.getQueryResults().size() == 1;
+        });
+
+        assertThat(queryResults.get()).hasSize(1);
+        final var dataUpdate2 = queryResults.get().get(0).getEntity();
+
+        assertThat(dataUpdate2.get("pk")).isEqualTo(2l);
+        assertThat(dataUpdate2.get("value")).isEqualTo("two-up");
+        assertThat(dataUpdate2.get("f_vector")).isEqualTo(List.of(2.1f, 2.2f, 2.3f));
+
+        try (PostgresConnection connection = new PostgresConnection(config, "Debezium Milvus Test")) {
+            connection.execute("DELETE FROM inventory.t_vector WHERE pk = 2");
+        }
+
+        Awaitility.await().atMost(Duration.ofSeconds(MilvusTestConfigSource.waitForSeconds())).until(() -> {
+            final var request = QueryReq.builder()
+                    .collectionName(COLLECTION_NAME)
+                    .filter("value like \"two-up\"")
+                    .build();
+            final var response = client.query(request);
+            queryResults.set(response.getQueryResults());
+            return response.getQueryResults().size() == 0;
+        });
+
+        assertThat(queryResults.get()).hasSize(0);
     }
 }
