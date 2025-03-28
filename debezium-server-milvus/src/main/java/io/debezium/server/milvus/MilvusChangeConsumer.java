@@ -10,6 +10,8 @@ import java.util.List;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 import jakarta.inject.Named;
 
 import org.apache.kafka.connect.data.Struct;
@@ -30,6 +32,7 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.schema.SchemaFactory;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.CustomConsumerBuilder;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.DeleteReq;
@@ -59,13 +62,23 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "database", defaultValue = "default")
     String databaseName;
 
+    @Inject
+    @CustomConsumerBuilder
+    Instance<MilvusClientV2> customClient;
+
     @PostConstruct
     void connect() {
-        final var config = ConnectConfig.builder()
-                .uri(uri)
-                .build();
-        milvusClient = new MilvusClientV2(config);
-        schema = new MilvusSchema(milvusClient);
+        if (customClient.isResolvable()) {
+            milvusClient = customClient.get();
+            LOGGER.info("Obtained custom configured MilvusClientV2 '{}'", milvusClient);
+        }
+        else {
+            final var config = ConnectConfig.builder()
+                    .uri(uri)
+                    .build();
+            milvusClient = new MilvusClientV2(config);
+            schema = new MilvusSchema(milvusClient);
+        }
 
         final var databases = milvusClient.listDatabases().getDatabaseNames();
         if (!databases.contains(databaseName)) {
