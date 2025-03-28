@@ -5,12 +5,23 @@
  */
 package io.debezium.server.milvus;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.kafka.connect.data.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.data.Envelope;
+import io.debezium.data.Json;
+import io.debezium.data.vector.DoubleVector;
+import io.debezium.data.vector.FloatVector;
+import io.debezium.util.BoundedConcurrentHashMap;
 import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.common.DataType;
+import io.milvus.v2.service.collection.request.DescribeCollectionReq;
 
 /**
  * Manages collections in Milvus database. Maps Kafka Connect schema into Milvus schema and validates
@@ -22,50 +33,141 @@ public class MilvusSchema {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MilvusChangeConsumer.class);
 
-    private MilvusClientV2 milvusClient;
+    private final MilvusClientV2 milvusClient;
+    private final Map<String, List<MilvusField>> collections = new BoundedConcurrentHashMap<>(1_024);
 
     public MilvusSchema(MilvusClientV2 milvusClient) {
         this.milvusClient = milvusClient;
     }
 
-    private void remapDatatype() {
-        // TODO mapping of types
-        /*
-         * INT64: numpy.int64
-         * VARCHAR: VARCHAR
-         * Scalar field supports:
-         *
-         * BOOL: Boolean (true or false)
-         * INT8: numpy.int8
-         * INT16: numpy.int16
-         * INT32: numpy.int32
-         * INT64: numpy.int64
-         * FLOAT: numpy.float32
-         * DOUBLE: numpy.double
-         * VARCHAR: VARCHAR
-         * JSON: JSON
-         * Array: Array
-         *
-         * BINARY_VECTOR: Stores binary data as a sequence of 0s and 1s, used for compact feature representation in image processing and information retrieval.
-         * FLOAT_VECTOR: Stores 32-bit floating-point numbers, commonly used in scientific computing and machine learning for representing real numbers.
-         * FLOAT16_VECTOR: Stores 16-bit half-precision floating-point numbers, used in deep learning and GPU computations for memory and bandwidth efficiency.
-         * BFLOAT16_VECTOR: Stores 16-bit floating-point numbers with reduced precision but the same exponent range as Float32, popular in deep learning for reducing memory and computational requirements
-         * without significantly impacting accuracy.
-         * SPARSE_FLOAT_VECTOR:
-         */
+    private List<MilvusField> getCollection(String collectionName) {
+        return collections.get(collectionName);
     }
 
-    public void validateKey(Schema schema) {
+    private List<MilvusField> addCollection(String collectionName, Schema schema) {
+        final var fields = new ArrayList<MilvusField>();
+
+        final var request = DescribeCollectionReq.builder()
+                .collectionName(collectionName)
+                .build();
+        final var collectionDescription = milvusClient.describeCollection(request);
+        final var collectionSchema = collectionDescription.getCollectionSchema();
+        for (var field : collectionSchema.getFieldSchemaList()) {
+            fields.add(new MilvusField(field.getName(), field.getIsPrimaryKey(), field.getDataType(), schema));
+        }
+        LOGGER.info("Adding collection '{}' with fields {} to known schemas", collectionName, fields);
+        collections.put(collectionName, fields);
+        return fields;
+    }
+
+    public void validateValue(String collectionName, Schema schema) {
+        if (schema == null) {
+            // Tombstone message
+            return;
+        }
+
         if (schema.type() != Schema.Type.STRUCT) {
-            throw new DebeziumException("Only structs are supported as the key");
+            throw new DebeziumException(String.format("Only structs are supported as the value for collection '%s' but got '%s'", collectionName, schema.type()));
         }
+
+        if (Envelope.isEnvelopeSchema(schema)) {
+            // Message is envelope, so only after part is used
+            schema = schema.field(Envelope.FieldName.AFTER).schema();
+        }
+
+        if (schema == null) {
+            // Delete message
+            return;
+        }
+
+        var fields = getCollection(collectionName);
+        if (fields == null) {
+            fields = addCollection(collectionName, schema);
+        }
+
+        if (fields.size() != schema.fields().size()) {
+            throw new DebeziumException(String.format("Schema field count %d does not match the collection field count %d in collection '%s'",
+                    schema.fields().size(), fields.size(), collectionName));
+        }
+
+        for (int i = 0; i < schema.fields().size(); i++) {
+            final var schemaField = schema.fields().get(i);
+            final var milvusField = fields.get(i);
+            if (!milvusField.name.equals(schemaField.name())) {
+                throw new DebeziumException(
+                        String.format("Schema field '%s' does not match the collection field '%s' in collection '%s'",
+                                schemaField.name(), milvusField.name, collectionName));
+            }
+            if (milvusField.dataType != connectTypeToMilvusType(schemaField.schema())) {
+                throw new DebeziumException(String.format(
+                        "Type for field '%s' in collection '%s' does not match the mapped type %s != %s (%s)",
+                        milvusField.name, collectionName, milvusField.dataType,
+                        connectTypeToMilvusType(schemaField.schema()), schemaField.schema()));
+            }
+        }
+    }
+
+    private DataType connectTypeToMilvusType(Schema schema) {
+        if (schema.name() != null) {
+            switch (schema.name()) {
+                case Json.LOGICAL_NAME:
+                    return DataType.JSON;
+                case DoubleVector.LOGICAL_NAME:
+                    return DataType.FloatVector;
+                case FloatVector.LOGICAL_NAME:
+                    return DataType.Float16Vector;
+            }
+        }
+
+        switch (schema.type()) {
+            case BOOLEAN:
+                return DataType.Bool;
+            case INT8:
+                return DataType.Int8;
+            case INT16:
+                return DataType.Int16;
+            case INT32:
+                return DataType.Int32;
+            case INT64:
+                return DataType.Int64;
+            case FLOAT32:
+                return DataType.Float;
+            case FLOAT64:
+                return DataType.Double;
+            case STRING:
+                return DataType.VarChar;
+            case ARRAY:
+                // TODO
+            default:
+                throw new DebeziumException("Unsupported type " + schema.name() + "(" + schema.type() + ")");
+        }
+        // Datatypes not yet covered
+        // BINARY_VECTOR - no source type available yet
+        // BFLOAT16_VECTOR - could be mapped from FloatVector
+        // SPARSE_FLOAT_VECTOR - currently only SparseDoubleVector is available, precision can be reduced
+    }
+
+    public void validateKey(String collectionName, Schema schema) {
+        if (schema.type() != Schema.Type.STRUCT) {
+            throw new DebeziumException(
+                    String.format("Only structs are supported as the key for collection '%s' but got '%s'",
+                            collectionName, schema.type()));
+        }
+
         if (schema.fields().size() != 1) {
-            throw new DebeziumException("Key must have exactly one field");
+            throw new DebeziumException(
+                    String.format("Key for collection '%s' must have exactly one field", collectionName));
         }
+
         final var keyField = schema.fields().get(0);
         if (keyField.schema().type() != Schema.STRING_SCHEMA.type()
                 && keyField.schema().type() != Schema.INT64_SCHEMA.type()) {
-            throw new DebeziumException("Only string and int64 type can be used as key");
+            throw new DebeziumException(
+                    String.format("Only STRING and INT64 type can be used as key but got '%s' for collection '%s'",
+                            keyField.schema().type(), collectionName));
         }
+    }
+
+    private record MilvusField(String name, boolean isPrimaryKey, DataType dataType, Schema schema) {
     }
 }
