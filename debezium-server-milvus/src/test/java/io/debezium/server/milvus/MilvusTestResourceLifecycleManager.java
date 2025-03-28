@@ -18,12 +18,13 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 public class MilvusTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
+    @SuppressWarnings("resource")
     private static final MilvusContainer container = new MilvusContainer(DockerImageName.parse(Images.MILVUS_IMAGE).asCompatibleSubstituteFor("milvusdb/milvus"))
             .withStartupTimeout(Duration.ofSeconds(90));
 
     @Override
     public Map<String, String> start() {
-        // container.start();
+        container.start();
 
         Map<String, String> params = new ConcurrentHashMap<>();
         params.put("debezium.sink.milvus.uri", "http://localhost:19530");

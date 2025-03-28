@@ -8,17 +8,21 @@ package io.debezium.server.milvus;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.List;
 
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.testcontainers.milvus.MilvusContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import io.debezium.DebeziumException;
 import io.debezium.data.Envelope;
 import io.debezium.data.vector.DoubleVector;
 import io.debezium.data.vector.FloatVector;
+import io.debezium.server.Images;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.DataType;
 import io.milvus.v2.service.collection.request.CreateCollectionReq.CollectionSchema;
@@ -64,7 +68,6 @@ public class MilvusSchemaTest {
         final var error = assertThrows(DebeziumException.class, () -> {
             schema.validateKey("test", keySchema);
         });
-        System.out.println(error);
         assertTrue(error.getMessage().contains("Only STRING and INT64 type can be used as key"));
     }
 
@@ -145,4 +148,14 @@ public class MilvusSchemaTest {
                 .withSource(sourceSchema)
                 .build().schema();
     }
+
+    @Test
+    public void testMilvusContainerIsRunning() throws InterruptedException {
+        var container = new MilvusContainer(DockerImageName.parse(Images.MILVUS_IMAGE).asCompatibleSubstituteFor("milvusdb/milvus"))
+                .withStartupTimeout(Duration.ofSeconds(90));
+        container.start();
+        Thread.sleep(30000);
+        container.stop();
+    }
+
 }
