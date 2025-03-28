@@ -36,7 +36,7 @@ import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 
 /**
- * Integration test that verifies basic reading from PostgreSQL database and writing to an Apache Pulsar topic.
+ * Integration test that verifies basic reading from PostgreSQL database and writing to a Milvus vector database.
  *
  * @author Jiri Pechanec
  */
