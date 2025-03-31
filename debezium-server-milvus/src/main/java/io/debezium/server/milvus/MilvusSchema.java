@@ -31,7 +31,6 @@ import io.milvus.v2.service.collection.request.DescribeCollectionReq;
  */
 public class MilvusSchema {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MilvusChangeConsumer.class);
     private static final Logger LOGGER = LoggerFactory.getLogger(MilvusSchema.class);
 
     private final MilvusClientV2 milvusClient;
