@@ -44,6 +44,12 @@
               <include>jakarta.xml.bind:*:*</include>
               <include>jakarta.activation:*:*</include>
               <include>jakarta.validation:*:*</include>
+              <!--
+              DBZ-8863 Explicitly include SnakeYAML, required by quarkus-config-yaml. It is being
+              incorrectly removed by transitive dependency filtering added for
+              debezium-connector-dse exclusion.
+              -->
+              <include>org.yaml:snakeyaml:*:*</include>
           </includes>
       </dependencySet>
       <dependencySet>
