@@ -49,10 +49,13 @@ public class InstructLabIT {
 
         Awaitility.await()
                 .atMost(Duration.ofMinutes(2))
-                .until(() -> {
+                .untilAsserted(() -> {
                     try {
+                        final String t1Contents = Files.readString(t1Path);
+                        final String t2Contents = Files.readString(t2Path);
+
                         // Check that taxonomy t1 was created
-                        assertThat(Files.readString(t1Path)).isEqualTo(ofLines(
+                        assertThat(t1Contents).isEqualTo(ofLines(
                                 "version: 3",
                                 "task_description: " + t1Path.toAbsolutePath().toString(),
                                 "created_by: Debezium",
@@ -70,7 +73,7 @@ public class InstructLabIT {
                                 "  answer: '107'",
                                 "  context: '1'"));
 
-                        assertThat(Files.readString(t2Path)).isEqualTo(ofLines(
+                        assertThat(t2Contents).isEqualTo(ofLines(
                                 "version: 3",
                                 "task_description: " + t2Path.toAbsolutePath().toString(),
                                 "created_by: Debezium",
@@ -83,13 +86,10 @@ public class InstructLabIT {
                                 "  answer: '106'",
                                 "- question: '1003'",
                                 "  answer: '107'"));
-
-                        return true;
                     }
                     catch (IOException e) {
-                        // no-op
+                        throw new AssertionError(e);
                     }
-                    return false;
                 });
     }
 
