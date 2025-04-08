@@ -5,6 +5,7 @@
  */
 package io.debezium.server.pulsar;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,15 +97,20 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @PreDestroy
     void close() {
+        final List<CompletableFuture<Void>> closeFutures = new ArrayList<>(producers.size());
         producers.values().forEach(producer -> {
+            // Avoid potentially infinitely long blocking call if things go wrong.
+            closeFutures.add(producer.closeAsync().orTimeout(timeout, TimeUnit.MILLISECONDS));
+        });
+        for (CompletableFuture<Void> cf : closeFutures) {
             try {
-                producer.close();
+                cf.get();
             }
             catch (Exception e) {
                 hasFailed.set(true);
                 LOGGER.warn("Exception while closing producer", e);
             }
-        });
+        }
         try {
             // DBZ-8843 If the client failed, terminate it abruptly to prevent client restart during or after server shutdown.
             if (hasFailed.get()) {
