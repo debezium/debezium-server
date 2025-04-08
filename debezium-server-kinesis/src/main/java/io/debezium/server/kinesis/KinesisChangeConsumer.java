@@ -188,7 +188,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
                             for (int index = 0; index < putRecordsResults.size(); index++) {
                                 PutRecordsResultEntry entryResult = putRecordsResults.get(index);
                                 if (entryResult.errorCode() != null) {
-                                    failedRecordsList.add(putRecordsRequestEntryList.get(index));
+                                    failedRecordsList.add(batchRequest.get(index));
                                 }
                             }
                             batchRequest = failedRecordsList;
