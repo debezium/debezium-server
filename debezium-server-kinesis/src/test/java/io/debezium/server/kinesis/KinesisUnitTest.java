@@ -53,12 +53,13 @@ public class KinesisUnitTest {
     private AtomicBoolean threwException;
     List<ChangeEvent<Object, Object>> changeEvents;
     RecordCommitter<ChangeEvent<Object, Object>> committer;
+    private static final Integer NUMBER_OF_CHANGE_EVENTS = 500;
 
     @BeforeEach
     public void setup() {
         counter = new AtomicInteger(0);
         threwException = new AtomicBoolean(false);
-        changeEvents = createChangeEvents(500, "key", "destination");
+        changeEvents = createChangeEvents(NUMBER_OF_CHANGE_EVENTS, "key", "destination");
         committer = RecordCommitter();
         spyClient = spy(KinesisClient.builder().region(Region.of(KinesisTestConfigSource.KINESIS_REGION))
                 .credentialsProvider(ProfileCredentialsProvider.create("default")).build());
@@ -283,7 +284,7 @@ public class KinesisUnitTest {
         assertFalse(threwException.get());
     }
 
-    // 6. Test that a batch of 1000 records is correctly split into 2 batches of 500 records
+    // 6. Test that a batch of 1000 records is correctly split into 2 batches of NUMBER_OF_CHANGE_EVENTS records
     @Test
     public void testBatchSplitting() throws Exception {
         // Arrange
@@ -326,8 +327,94 @@ public class KinesisUnitTest {
         // Assert
         assertFalse(threwException.get());
         assertEquals(2, numBatches.get());
-        assertEquals(500, numRecordsBatchOne.get());
-        assertEquals(500, numRecordsBatchTwo.get());
+        assertEquals(NUMBER_OF_CHANGE_EVENTS, numRecordsBatchOne.get());
+        assertEquals(NUMBER_OF_CHANGE_EVENTS, numRecordsBatchTwo.get());
     }
 
+    // 7. Test that only failed records are re-sent after successive retry
+    @Test
+    public void testResendFailedRecordsSuccessive() throws Exception {
+        // Arrange
+        AtomicBoolean firstCall = new AtomicBoolean(true);
+        AtomicBoolean secondCall = new AtomicBoolean(false);
+        List<PutRecordsRequestEntry> failedRecordsFromFirstCall = new ArrayList<>();
+        List<PutRecordsRequestEntry> failedRecordsFromSecondCall = new ArrayList<>();
+        List<PutRecordsRequestEntry> recordsFromSecondCall = new ArrayList<>();
+        List<PutRecordsRequestEntry> recordsFromThirdCall = new ArrayList<>();
+        doAnswer(invocation -> {
+            List<PutRecordsResultEntry> response = new ArrayList<>();
+            PutRecordsRequest request = invocation.getArgument(0);
+            List<PutRecordsRequestEntry> records = request.records();
+            counter.incrementAndGet();
+
+            if (firstCall.get()) {
+                int failedEntries = 100;
+                for (int i = 0; i < records.size(); i++) {
+                    PutRecordsResultEntry recordResult;
+                    //
+                    if (i >= NUMBER_OF_CHANGE_EVENTS - failedEntries) {
+                        recordResult = PutRecordsResultEntry.builder().errorCode("ProvisionedThroughputExceededException")
+                                .errorMessage("The request rate for the stream is too high").build();
+
+                        failedRecordsFromFirstCall.add(records.get(i));
+                    }
+                    else {
+                        recordResult = PutRecordsResultEntry.builder().shardId("shardId").sequenceNumber("sequenceNumber").build();
+                    }
+                    response.add(recordResult);
+                }
+                firstCall.getAndSet(false);
+                secondCall.getAndSet(true);
+                return PutRecordsResponse.builder().failedRecordCount(failedEntries).records(response).build();
+            }
+            if (secondCall.get()) {
+                int failedEntries = 20;
+                for (int i = 0; i < failedRecordsFromFirstCall.size(); i++) {
+                    PutRecordsResultEntry recordResult;
+                    if (i >= failedRecordsFromFirstCall.size() - failedEntries) {
+                        recordResult = PutRecordsResultEntry.builder().errorCode("ProvisionedThroughputExceededException")
+                                .errorMessage("The request rate for the stream is too high").build();
+                        failedRecordsFromSecondCall.add(records.get(i));
+                    }
+                    else {
+                        recordResult = PutRecordsResultEntry.builder().shardId("shardId").sequenceNumber("sequenceNumber").build();
+                    }
+                    recordsFromSecondCall.add(records.get(i));
+                    response.add(recordResult);
+                }
+                secondCall.getAndSet(false);
+                return PutRecordsResponse.builder().failedRecordCount(failedEntries).records(response).build();
+            }
+            else {
+                for (PutRecordsRequestEntry record : records) {
+                    recordsFromThirdCall.add(record);
+                    PutRecordsResultEntry recordResult = PutRecordsResultEntry.builder().shardId("shardId").sequenceNumber("sequenceNumber").build();
+                    response.add(recordResult);
+                }
+                return PutRecordsResponse.builder().failedRecordCount(0).records(response).build();
+            }
+        }).when(spyClient).putRecords(any(PutRecordsRequest.class));
+
+        // Act
+        try {
+            kinesisChangeConsumer.connect();
+            kinesisChangeConsumer.handleBatch(changeEvents, committer);
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(3, counter.get());
+
+        assertEquals(recordsFromSecondCall.size(), failedRecordsFromFirstCall.size());
+        assertEquals(recordsFromThirdCall.size(), failedRecordsFromSecondCall.size());
+        for (int i = 0; i < recordsFromSecondCall.size(); i++) {
+            assertEquals(failedRecordsFromFirstCall.get(i).data(), recordsFromSecondCall.get(i).data());
+        }
+        for (int i = 0; i < recordsFromThirdCall.size(); i++) {
+            assertEquals(failedRecordsFromSecondCall.get(i).data(), recordsFromThirdCall.get(i).data());
+        }
+    }
 }
