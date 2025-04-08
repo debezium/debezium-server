@@ -55,7 +55,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     private static final String PROP_CLIENT_PREFIX = PROP_PREFIX + "client.";
     private static final String PROP_PRODUCER_PREFIX = PROP_PREFIX + "producer.";
 
-    private static final AtomicBoolean HAS_FAILED = new AtomicBoolean(false);
+    private static final AtomicBoolean hasFailed = new AtomicBoolean(false);
 
     public interface ProducerBuilder {
         Producer<Object> get(String topicName, Object value);
@@ -101,12 +101,14 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                 producer.close();
             }
             catch (Exception e) {
+                hasFailed.set(true);
                 LOGGER.warn("Exception while closing producer", e);
             }
         });
         try {
             // DBZ-8843 If the client failed, terminate it abruptly to prevent client restart during or after server shutdown.
-            if (HAS_FAILED.get()) {
+            if (hasFailed.get()) {
+                LOGGER.warn("Shutting down pulsar client forcefully due to previous failure");
                 pulsarClient.shutdown();
             }
             else {
@@ -137,7 +139,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
             }
         }
         catch (PulsarClientException e) {
-            HAS_FAILED.set(true);
+            hasFailed.set(true);
             throw new DebeziumException(e);
         }
     }
@@ -215,7 +217,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
             }
         }
         catch (CompletionException | ExecutionException | TimeoutException exception) {
-            HAS_FAILED.set(true);
+            hasFailed.set(true);
             LOGGER.error("Failed to send batch", exception);
             throw new DebeziumException(exception);
         }
