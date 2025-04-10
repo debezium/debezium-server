@@ -45,6 +45,10 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
             .withDefault(DEFAULT_BUFFER_FILL_RATE)
             .withValidation(RangeValidator.atLeast(0));
 
+    private static final boolean DEFAULT_SKIP_HEARTBEAT_MESSAGES = true;
+    private static final Field PROP_SKIP_HEARTBEAT_MESSAGES = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "skip.heartbeat.messages")
+            .withDefault(DEFAULT_SKIP_HEARTBEAT_MESSAGES);
+
     private int batchSize;
     private String nullKey;
     private String nullValue;
@@ -53,6 +57,7 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private int memoryLimitMb;
     private int batchDelay;
     private int bufferFillRate;
+    private boolean skipHeartbeatMessages;
 
     public RedisStreamChangeConsumerConfig(Configuration config) {
         super(config, PROP_PREFIX);
@@ -67,11 +72,13 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
         messageFormat = config.getString(PROP_MESSAGE_FORMAT);
         memoryLimitMb = config.getInteger(PROP_MEMORY_LIMIT_MB);
         bufferFillRate = config.getInteger(PROP_BUFFER_FILL_RATE);
+        skipHeartbeatMessages = config.getBoolean(PROP_SKIP_HEARTBEAT_MESSAGES);
     }
 
     @Override
     protected List<Field> getAllConfigurationFields() {
-        List<Field> fields = Collect.arrayListOf(PROP_BATCH_SIZE, PROP_NULL_KEY, PROP_NULL_VALUE, PROP_MESSAGE_FORMAT);
+        List<Field> fields = Collect.arrayListOf(PROP_BATCH_SIZE, PROP_NULL_KEY, PROP_NULL_VALUE, PROP_MESSAGE_FORMAT,
+                PROP_SKIP_HEARTBEAT_MESSAGES);
         fields.addAll(super.getAllConfigurationFields());
         return fields;
     }
@@ -108,4 +115,7 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
         return memoryLimitMb;
     }
 
+    public boolean isSkipHeartbeatMessages() {
+        return skipHeartbeatMessages;
+    }
 }
