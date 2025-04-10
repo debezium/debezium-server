@@ -84,8 +84,12 @@ public class MilvusTestResourceLifecycleManager implements QuarkusTestResourceLi
                     .dataType(DataType.FloatVector)
                     .dimension(3)
                     .build();
+            final var jsonField = CreateCollectionReq.FieldSchema.builder()
+                    .name("f_json")
+                    .dataType(DataType.JSON)
+                    .build();
             final var collectionSchema = CollectionSchema.builder()
-                    .fieldSchemaList(List.of(pkField, valueField, vectorField))
+                    .fieldSchemaList(List.of(pkField, valueField, vectorField, jsonField))
                     .build();
             final var index = IndexParam.builder()
                     .fieldName("f_vector")

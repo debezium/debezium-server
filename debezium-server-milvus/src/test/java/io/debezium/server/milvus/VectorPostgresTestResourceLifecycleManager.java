@@ -33,9 +33,9 @@ public class VectorPostgresTestResourceLifecycleManager extends PostgresTestReso
             connection.execute(
                     "CREATE SCHEMA IF NOT EXISTS pgvector",
                     "CREATE EXTENSION IF NOT EXISTS vector SCHEMA pgvector",
-                    "CREATE TABLE inventory.t_vector (pk INT8 PRIMARY KEY, value VARCHAR(32), f_vector pgvector.vector(3));",
-                    "INSERT INTO inventory.t_vector VALUES (1, 'one', '[1.1, 1.2, 1.3]')",
-                    "INSERT INTO inventory.t_vector VALUES (2, 'two', '[2.1, 2.2, 2.3]')");
+                    "CREATE TABLE inventory.t_vector (pk INT8 PRIMARY KEY, value VARCHAR(32), f_vector pgvector.vector(3), f_json JSON);",
+                    "INSERT INTO inventory.t_vector VALUES (1, 'one', '[1.1, 1.2, 1.3]', '{}'::JSON)",
+                    "INSERT INTO inventory.t_vector VALUES (2, 'two', '[2.1, 2.2, 2.3]', '{}'::JSON)");
         }
         catch (Exception e) {
             throw new DebeziumException(e);

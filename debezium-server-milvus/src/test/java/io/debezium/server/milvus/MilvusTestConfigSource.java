@@ -25,6 +25,7 @@ public class MilvusTestConfigSource extends TestConfigSource {
         milvusTest.put("debezium.source.topic.prefix", "testc");
         milvusTest.put("debezium.source.schema.include.list", "inventory");
         milvusTest.put("debezium.source.table.include.list", "inventory.t_vector");
+        milvusTest.put("debezium.sink.milvus.unwind.json", "true");
 
         config = milvusTest;
     }
