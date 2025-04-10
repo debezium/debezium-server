@@ -18,6 +18,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.gson.JsonObject;
+
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.server.TestConfigSource;
@@ -104,10 +106,12 @@ public class MilvusIT {
         assertThat(dataRead1.get("pk")).isEqualTo(1l);
         assertThat(dataRead1.get("value")).isEqualTo("one");
         assertThat(dataRead1.get("f_vector")).isEqualTo(List.of(1.1f, 1.2f, 1.3f));
+        assertThat(dataRead1.get("f_json")).isInstanceOf(JsonObject.class);
 
         assertThat(dataRead2.get("pk")).isEqualTo(2l);
         assertThat(dataRead2.get("value")).isEqualTo("two");
         assertThat(dataRead2.get("f_vector")).isEqualTo(List.of(2.1f, 2.2f, 2.3f));
+        assertThat(dataRead2.get("f_json")).isInstanceOf(JsonObject.class);
 
         final JdbcConfiguration config = JdbcConfiguration.create()
                 .with("hostname", dbHostname)

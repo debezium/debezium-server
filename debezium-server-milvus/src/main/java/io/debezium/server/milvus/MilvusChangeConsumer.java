@@ -14,6 +14,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -26,6 +27,7 @@ import com.google.gson.JsonObject;
 import io.debezium.DebeziumException;
 import io.debezium.data.Envelope;
 import io.debezium.data.Envelope.Operation;
+import io.debezium.data.Json;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
@@ -61,6 +63,9 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @ConfigProperty(name = PROP_PREFIX + "database", defaultValue = "default")
     String databaseName;
+
+    @ConfigProperty(name = PROP_PREFIX + "unwind.json", defaultValue = "false")
+    boolean unwindJson;
 
     @Inject
     @CustomConsumerBuilder
@@ -185,6 +190,8 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
 
     private JsonObject getValue(ChangeEvent<Object, Object> record, SourceRecord sourceRecord) {
         final var value = getString(record.value());
+        var valueSchema = sourceRecord.valueSchema();
+
         var json = gson.fromJson(value, JsonObject.class);
 
         if ((json.has("schema") || json.has("schemaId")) && json.has("payload")) {
@@ -195,8 +202,18 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
         if (Envelope.isEnvelopeSchema(sourceRecord.valueSchema())) {
             // Message is envelope, so only after part is used
             json = json.getAsJsonObject(Envelope.FieldName.AFTER);
+            valueSchema = valueSchema.field(Envelope.FieldName.AFTER).schema();
         }
 
+        if (unwindJson) {
+            for (Field field : valueSchema.fields()) {
+                if (Json.LOGICAL_NAME.equals(field.schema().name()) && json.has(field.name())) {
+                    final var stringValue = json.get(field.name()).getAsString();
+                    final var jsonValue = gson.fromJson(stringValue, JsonObject.class);
+                    json.add(field.name(), jsonValue);
+                }
+            }
+        }
         return json;
     }
 
