@@ -25,6 +25,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
+import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +57,9 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
 
     private static final String DEBEZIUM_REDIS_SINK_CLIENT_NAME = "debezium:redis:sink";
 
+    private static final String HEARTBEAT_PREFIX_CONFIG = "topic.heartbeat.prefix";
+    private static final String DEFAULT_HEARTBEAT_PREFIX = "__debezium-heartbeat";
+
     private static final String EXTENDED_MESSAGE_KEY_KEY = "key";
     private static final String EXTENDED_MESSAGE_VALUE_KEY = "value";
     private RedisClient client;
@@ -66,10 +70,21 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
 
     private RedisStreamChangeConsumerConfig config;
 
+    private String heartbeatPrefix;
+
     @PostConstruct
     void connect() {
-        Configuration configuration = Configuration.from(getConfigSubset(ConfigProvider.getConfig(), ""));
+        // Get configuration from ConfigProvider
+        Config mpConfig = ConfigProvider.getConfig();
+        Map<String, Object> sourceConfig = getConfigSubset(mpConfig, "debezium.source.");
+
+        // Get Redis sink configuration
+        Configuration configuration = Configuration.from(getConfigSubset(mpConfig, ""));
         config = new RedisStreamChangeConsumerConfig(configuration);
+
+        // Get the heartbeat prefix from the configuration
+        heartbeatPrefix = (String) sourceConfig.getOrDefault(HEARTBEAT_PREFIX_CONFIG, DEFAULT_HEARTBEAT_PREFIX);
+        LOGGER.info("Using heartbeat prefix: {}", heartbeatPrefix);
 
         String messageFormat = config.getMessageFormat();
         if (MESSAGE_FORMAT_EXTENDED.equals(messageFormat)) {
@@ -173,6 +188,14 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         List<SimpleEntry<String, Map<String, String>>> recordsMap = new ArrayList<>(clonedBatch.size());
                         for (ChangeEvent<Object, Object> record : clonedBatch) {
                             String destination = streamNameMapper.map(record.destination());
+
+                            // Check if this is a heartbeat message that should be skipped
+                            if (config.isSkipHeartbeatMessages() && destination.startsWith(heartbeatPrefix)) {
+                                // Mark as processed but don't add to Redis
+                                committer.markProcessed(record);
+                                continue;
+                            }
+
                             Map<String, String> recordMap = recordMapFunction.apply(record);
                             recordsMap.add(new SimpleEntry<>(destination, recordMap));
                         }
