@@ -64,6 +64,9 @@ public class DebeziumServerPostgresIT {
 
         waitSnapshotCompletion();
 
+        Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
+                .until(() -> (testConsumer.getValues().size() >= MESSAGE_COUNT));
+
         assertThat(testConsumer.getValues().size()).isEqualTo(MESSAGE_COUNT);
 
         List<String> values = testConsumer.getValues().stream().map(Object::toString).collect(Collectors.toList());
