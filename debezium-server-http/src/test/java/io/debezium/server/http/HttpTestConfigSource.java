@@ -10,7 +10,7 @@ import java.util.Map;
 
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 
-import io.debezium.embedded.ConvertingEngineBuilderFactory;
+import io.debezium.embedded.async.ConvertingAsyncEngineBuilderFactory;
 import io.debezium.server.TestConfigSource;
 
 public class HttpTestConfigSource extends TestConfigSource {
@@ -31,7 +31,7 @@ public class HttpTestConfigSource extends TestConfigSource {
         httpTest.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
         httpTest.put("debezium.transforms.addheader.header", "headerKey");
         httpTest.put("debezium.transforms.addheader.value.literal", "headerValue");
-        httpTest.put("debezium.engine.factory", ConvertingEngineBuilderFactory.class.getName());
+        httpTest.put("debezium.engine.factory", ConvertingAsyncEngineBuilderFactory.class.getName());
 
         config = httpTest;
     }
