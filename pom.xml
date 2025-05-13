@@ -41,9 +41,9 @@
 
     <repositories>
         <repository>
-            <id>oss</id>
-            <name>OSS Sonatype Nexus</name>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+            <id>central-snapshots</id>
+            <name>Maven Central Snapshots</name>
+            <url>${publish.snapshot.url}</url>
             <releases>
                 <enabled>true</enabled>
                 <updatePolicy>never</updatePolicy>
