@@ -1,0 +1,31 @@
+name: Auto Update Debezium Fork
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  update-fork:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout main
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: sync
+      uses: TobKed/github-forks-sync-action@master
+      with:
+        github_token: ${{ secrets.DEBEZIUM_WORKFLOW_TOKEN }}
+        upstream_repository: debezium/debezium-server
+        target_repository: get-bridge/debezium-server
+        upstream_branch: main
+        target_branch: main
+        force: true
+        tags: true
+
+    - name: Timestamp
+      run: date
