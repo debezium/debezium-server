@@ -29,11 +29,6 @@ import io.milvus.v2.service.collection.request.CreateCollectionReq.CollectionSch
 import io.milvus.v2.service.collection.request.CreateCollectionReq.FieldSchema;
 import io.milvus.v2.service.collection.response.DescribeCollectionResp;
 
-/*
- * Copyright Debezium Authors.
- *
- * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
- */
 public class MilvusSchemaTest {
 
     @Test

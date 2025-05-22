@@ -17,6 +17,7 @@
         <version.pubsub>26.17.0</version.pubsub>
         <version.pulsar>2.10.1</version.pulsar>
         <version.milvus>2.5.4</version.milvus>
+        <version.qdrant>1.14.0</version.qdrant>
         <version.eventhubs>5.19.1</version.eventhubs>
         <version.pravega>0.13.0</version.pravega>
         <version.nats>2.16.3</version.nats>
@@ -195,6 +196,11 @@
             </dependency>
             <dependency>
                 <groupId>io.debezium</groupId>
+                <artifactId>debezium-server-qdrant</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.debezium</groupId>
                 <artifactId>debezium-server-instructlab</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -250,6 +256,11 @@
                 <groupId>io.milvus</groupId>
                 <artifactId>milvus-sdk-java</artifactId>
                 <version>${version.milvus}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.qdrant</groupId>
+                <artifactId>client</artifactId>
+                <version>${version.qdrant}</version>
             </dependency>
             <dependency>
                 <groupId>com.azure</groupId>

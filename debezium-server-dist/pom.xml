@@ -157,6 +157,10 @@
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>
+                    <artifactId>debezium-server-qdrant</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
                     <artifactId>debezium-server-instructlab</artifactId>
                 </dependency>
                 <dependency>
