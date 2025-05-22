@@ -62,6 +62,7 @@
         <module>debezium-server-pubsub</module>
         <module>debezium-server-pulsar</module>
         <module>debezium-server-milvus</module>
+        <module>debezium-server-qdrant</module>
         <module>debezium-server-eventhubs</module>
         <module>debezium-server-http</module>
         <module>debezium-server-redis</module>
