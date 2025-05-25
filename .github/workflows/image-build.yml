@@ -19,7 +19,7 @@ jobs:
       - name: Checkout core repository
         uses: actions/checkout@v4
         with:
-          repository: get-bridge/debezium-server
+          repository: get-bridge/debezium
           ref: main
           path: core
       - name: Checkout Debezium Server
@@ -27,6 +27,7 @@ jobs:
         with:
           repository: get-bridge/debezium-server
           ref: ${{ github.ref }}
+          path: server
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
