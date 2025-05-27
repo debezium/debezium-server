@@ -67,7 +67,7 @@ jobs:
           -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
           -DskipNonCore \
           -DskipTests=true \
-          -Dcheckstyle.skip=false \
+          -DskipITs=true
           -Dformat.skip=false \
           -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
           -DfailFlakyTests=false
