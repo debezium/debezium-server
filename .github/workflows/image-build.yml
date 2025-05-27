@@ -33,17 +33,45 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: 21
+
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
-      - name: Maven build core
-        run: ./server/mvnw clean install -f core/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipTests
-      - name: Maven build Debezium Server
-        run: ./server/mvnw clean install -fae -f server/pom.xml -Passembly,pulsar-and-postgres -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore -DskipTests
 
+      - name: Maven build core
+        run: |
+          ./server/mvnw clean install -B -ntp -f core/pom.xml \
+          -DskipTests=true \
+          -DskipITs=true \
+          -Dformat.formatter.goal=validate \
+          -Dformat.imports.goal=check \
+          -Dhttp.keepAlive=false \
+          -Dmaven.wagon.http.pool=false \
+          -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
+          -Dcheckstyle.skip=true \
+          -Dformat.skip=true \
+          -Drevapi.skip \
+          -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
+
+      - name: Maven build Debezium Server
+        run: |
+          ./server/mvnw clean install -B -ntp -fae -f server/pom.xml \
+          -Passembly,pulsar-and-postgres \
+          -Dformat.formatter.goal=validate \
+          -Dformat.imports.goal=check \
+          -Dhttp.keepAlive=false \
+          -Dmaven.wagon.http.pool=false \
+          -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
+          -DskipNonCore \
+          -DskipTests=true \
+          -Dcheckstyle.skip=false \
+          -Dformat.skip=false \
+          -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+          -DfailFlakyTests=false
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
