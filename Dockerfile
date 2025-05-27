@@ -24,10 +24,11 @@ USER jboss
 RUN mkdir $SERVER_HOME/conf && \
     mkdir $SERVER_HOME/data
 
+ARG DEBEZIUM_SERVER_DIST_FILENAME
 #
 # Copy built artifact
 #
-COPY --chown=jboss:jboss debezium-server-dist/target/debezium-server-dist-2.7.1.Final.tar.gz $DEBEZIUM_ARCHIVE
+COPY --chown=jboss:jboss debezium-server-dist/target/${DEBEZIUM_SERVER_DIST_FILENAME} $DEBEZIUM_ARCHIVE
 
 #
 # Verify the contents and then install ...
