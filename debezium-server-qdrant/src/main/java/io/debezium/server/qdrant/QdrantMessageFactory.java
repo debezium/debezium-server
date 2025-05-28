@@ -9,7 +9,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -39,8 +42,76 @@ public class QdrantMessageFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(QdrantMessageFactory.class);
 
     private final Map<String, String> requestedVectorFieldNames = new HashMap<>();
-    private final Map<String, List<String>> fieldNamesPerCollection = new HashMap<>();
+    private final Map<String, Set<String>> fieldNamesPerCollection = new HashMap<>();
 
+    public QdrantMessageFactory(Optional<String> vectorFieldNamesStr, Map<String, Object> fieldNamesPerCollectionStr) {
+        if (vectorFieldNamesStr.isPresent()) {
+            initializeRequestedVectorFieldNames(vectorFieldNamesStr.get().trim());
+        }
+        else {
+            LOGGER.info("No vector field names configured, only implicit mapping will be used");
+        }
+        if (fieldNamesPerCollectionStr != null && !fieldNamesPerCollectionStr.isEmpty()) {
+            initializeFieldNamesPerCollection(fieldNamesPerCollectionStr);
+        }
+        else {
+            LOGGER.info("No field names per collection configured, all fields will be included");
+        }
+    }
+
+    private void initializeFieldNamesPerCollection(Map<String, Object> fieldNamesPerCollectionStr) {
+        fieldNamesPerCollectionStr.forEach((collectionName, fieldNamesValue) -> {
+            final var fieldNamesStr = ((String) fieldNamesValue).trim();
+            if (fieldNamesStr.isEmpty()) {
+                throw new DebeziumException("Field names for collection '%s' cannot be empty".formatted(collectionName));
+            }
+            final Set<String> fieldNames = Set.of(fieldNamesStr.split(",")).stream()
+                    .map(String::trim)
+                    .filter(name -> !name.isEmpty())
+                    .collect(Collectors.toSet());
+            if (fieldNames.isEmpty()) {
+                throw new DebeziumException("Field names for collection '%s' cannot be empty".formatted(collectionName));
+            }
+            fieldNamesPerCollection.put(collectionName, fieldNames);
+            LOGGER.debug("Field names for collection '{}': {}", collectionName, fieldNames);
+        });
+    }
+
+    private void initializeRequestedVectorFieldNames(String vectorFieldNamesStr) {
+        LOGGER.debug("Requested vector field names: '{}'", vectorFieldNamesStr);
+        if (vectorFieldNamesStr.isEmpty()) {
+            throw new DebeziumException("Vector field names cannot be empty");
+        }
+        final var vectorFields = vectorFieldNamesStr.split(",");
+        for (var field : vectorFields) {
+            final var parts = field.trim().split(":");
+            if (parts.length != 2) {
+                throw new DebeziumException("Invalid vector field format: '%s'".formatted(field));
+            }
+            final var collection = parts[0].trim();
+            final var fieldName = parts[1].trim();
+            if (collection.isEmpty() || fieldName.isEmpty()) {
+                throw new DebeziumException("Invalid vector field format: '%s'".formatted(field));
+            }
+            LOGGER.debug("Requested vector field for collection '{}': '{}'", collection, fieldName);
+
+            if (requestedVectorFieldNames.containsKey(collection)) {
+                throw new DebeziumException(
+                        "Multiple vector fields requested for collection '%s': '%s' and '%s'".formatted(
+                                collection, requestedVectorFieldNames.get(collection), fieldName));
+            }
+            requestedVectorFieldNames.put(collection, fieldName);
+        }
+    }
+
+    /**
+     * Validates the key schema for a collection.
+     * The key must be a Struct with exactly one field, which can be either INT64 or UUID.
+     * This is a limitation of Qdrant.
+     *
+     * @param collectionName the name of the collection
+     * @param schema the schema of the key
+     */
     public void validateKey(String collectionName, Schema schema) {
         if (schema.type() != Schema.Type.STRUCT) {
             throw new DebeziumException(
@@ -65,40 +136,54 @@ public class QdrantMessageFactory {
                         keyField.schema().type(), keyField.schema().name(), collectionName));
     }
 
+    /**
+     * Converts a key and value from a Struct to a Map of Qdrant Values for the payload.
+     * Key and vector fields are not included in the payload.
+     * If field names are configured for the collection, only those fields are included.
+     *
+     * @param collectionName the name of the collection
+     * @param key the key Struct
+     * @param value the value Struct
+     * @return a Map of field names to Qdrant Values
+     */
     public Map<String, Value> toPayloadMap(String collectionName, Struct key, Struct value) {
         final Map<String, Value> values = new HashMap<>();
 
         final var keyFieldName = key.schema().fields().get(0).name();
 
-        List<String> fieldList = fieldNamesPerCollection.get(collectionName);
+        final Set<String> includeList = fieldNamesPerCollection.get(collectionName);
 
-        if (fieldList == null) {
-            fieldList = new ArrayList<>();
-
-            for (Field field : value.schema().fields()) {
-                String fieldName = field.name();
-                if (fieldName.equals(keyFieldName)) {
-                    continue;
-                }
-                if (isVector(field.schema())) {
-                    continue;
-                }
+        final List<String> fieldList = new ArrayList<>();
+        for (var field : value.schema().fields()) {
+            String fieldName = field.name();
+            // Key fields are not added to payload
+            if (fieldName.equals(keyFieldName)) {
+                continue;
+            }
+            // Vector fields are not added to payload
+            if (isVector(field.schema())) {
+                continue;
+            }
+            if (includeList == null || includeList.contains(fieldName)) {
                 fieldList.add(fieldName);
             }
         }
 
-        for (String fieldName : fieldList) {
-            final var field = value.schema().field(fieldName);
-            if (field == null) {
-                throw new DebeziumException(
-                        "Field '%s' not found in collection '%s'".formatted(fieldName, collectionName));
-            }
+        for (var fieldName : fieldList) {
             values.put(fieldName, fieldToValue(fieldName, collectionName, value));
         }
         return values;
     }
 
-    public Value fieldToValue(String fieldName, String collectionName, Struct struct) {
+    /**
+     * Converts a field in a Struct to a Value for Qdrant based on the schema type.
+     *
+     * @param fieldName the name of the field
+     * @param collectionName the name of the collection
+     * @param struct the Struct containing the field
+     * @return the Qdrant value
+     */
+    private Value fieldToValue(String fieldName, String collectionName, Struct struct) {
         final var schema = struct.schema().field(fieldName).schema();
 
         if (struct.get(fieldName) == null) {
@@ -128,7 +213,17 @@ public class QdrantMessageFactory {
         }
     }
 
-    public Field getVectorField(String collectionName, Struct struct) {
+    /**
+     * Retrieves the vector field from a Struct based on the collection name.
+     * If a specific vector field was configured for the collection, it is returned.
+     * Otherwise, if there is only one field with logical type FloatVector or DoubleVector then is returned.
+     * If not an error is raised.
+     *
+     * @param collectionName the name of the collection
+     * @param struct the Struct containing the fields
+     * @return the vector Field
+     */
+    private Field getVectorField(String collectionName, Struct struct) {
         Field vectorField = null;
 
         // Check if a specific vector field was configured for this collection
@@ -172,6 +267,14 @@ public class QdrantMessageFactory {
         return vectorField;
     }
 
+    /**
+     * Converts a key Struct to a PointId for Qdrant.
+     * The key must have exactly one field, which can be either INT64 or UUID.
+     * This is limitation of Qdrant.
+     *
+     * @param key the key Struct
+     * @return the PointId
+     */
     public PointId toPointId(Struct key) {
         final var keyField = key.schema().fields().get(0);
 
@@ -180,6 +283,16 @@ public class QdrantMessageFactory {
                 : PointIdFactory.id(UUID.fromString(key.getString(keyField.name())));
     }
 
+    /**
+     * Converts a Struct to Vectors for Qdrant.
+     * The vector field must be either FloatVector or DoubleVector.
+     * If the vector field is FloatVector, it is returned as is.
+     * If it is DoubleVector, it is converted to FloatVector with loss of precision.
+     *
+     * @param collectionName the name of the collection
+     * @param struct the Struct containing the vector field
+     * @return the Vectors
+     */
     public Vectors toVectors(String collectionName, Struct struct) {
         final var vectorField = getVectorField(collectionName, struct);
         if (isFloatVector(vectorField.schema())) {
