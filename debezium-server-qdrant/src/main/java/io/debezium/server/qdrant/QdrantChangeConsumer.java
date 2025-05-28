@@ -18,6 +18,7 @@ import jakarta.inject.Named;
 
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +54,7 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
     private static final Logger LOGGER = LoggerFactory.getLogger(QdrantChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.qdrant.";
+    private static final String FIELD_INCLUDE_LIST_PROP_PREFIX = PROP_PREFIX + "field.include.list.";
 
     private QdrantClient qdrantClient;
     private QdrantMessageFactory messageFactory;
@@ -65,6 +67,9 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
 
     @ConfigProperty(name = PROP_PREFIX + "api.key")
     Optional<String> apiKey;
+
+    @ConfigProperty(name = PROP_PREFIX + "vector.field.names")
+    Optional<String> vectorFieldNames;
 
     @Inject
     @CustomConsumerBuilder
@@ -84,9 +89,10 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
                 qdrantClientBuilder = qdrantClientBuilder.withApiKey(apiKey.get());
             }
             qdrantClient = new QdrantClient(qdrantClientBuilder.build());
+            LOGGER.info("Created standard QdrantClient '{}'", qdrantClient);
         }
 
-        messageFactory = new QdrantMessageFactory();
+        messageFactory = new QdrantMessageFactory(vectorFieldNames, getConfigSubset(ConfigProvider.getConfig(), FIELD_INCLUDE_LIST_PROP_PREFIX));
     }
 
     @PreDestroy
