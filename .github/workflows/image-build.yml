@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - main
+      - PLT-897
     paths-ignore:
         - '*.md'
 
