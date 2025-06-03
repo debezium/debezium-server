@@ -98,7 +98,6 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: debezium-server
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           ARTIFACT_FILE="${{ steps.build_server.outputs.artifact_filename }}"
           if [ -z "$ARTIFACT_FILE" ]; then
@@ -111,5 +110,5 @@ jobs:
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             --tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA \
             server/ # Context for Dockerfile is 'server/'
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
