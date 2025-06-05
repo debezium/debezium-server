@@ -52,7 +52,7 @@ public class RedisStreamMessageIT {
         final List<StreamEntry> entries = jedis.xrange(STREAM_NAME, (StreamEntryID) null, (StreamEntryID) null);
         for (StreamEntry entry : entries) {
             Map<String, String> map = entry.getFields();
-            assertEquals(3, map.size(), "Expected map of size 3");
+            assertEquals(6, map.size(), "Expected map of size 6");
             assertTrue(map.get("key") != null && map.get("key").startsWith("{\"schema\":"), "Expected key's value starting with {\"schema\":...");
             assertTrue(map.get("value") != null && map.get("value").startsWith("{\"schema\":"), "Expected value's value starting with {\"schema\":...");
             assertTrue(map.containsKey("HEADERKEY"));

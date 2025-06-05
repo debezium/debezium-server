@@ -81,6 +81,6 @@ public class DebeziumServerConnectFormatIT {
         assertThat(after.getString("email")).isEqualTo("annek@noanswer.org");
 
         ConnectHeaders headers = (ConnectHeaders) record.headers();
-        assertThat(headers.size()).isEqualTo(0);
+        assertThat(headers.size()).isEqualTo(3);
     }
 }
