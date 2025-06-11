@@ -18,7 +18,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import io.debezium.DebeziumException;
-import io.debezium.annotation.VisibleForTesting;
+import io.debezium.common.annotation.VisibleForTesting;
 import io.debezium.server.http.Authenticator;
 
 public class StandardWebhooksAuthenticator implements Authenticator {
