@@ -65,6 +65,11 @@
             <artifactId>debezium-storage-jdbc</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-common</artifactId>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>io.debezium</groupId>
