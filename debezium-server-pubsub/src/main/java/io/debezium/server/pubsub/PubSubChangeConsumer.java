@@ -104,7 +104,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @ConfigProperty(name = PROP_PREFIX + "batch.element.count.threshold", defaultValue = "100")
     Long maxBufferSize;
 
-    @ConfigProperty(name = PROP_PREFIX + "batch.request.byte.threshold", defaultValue = "10000000")
+    @ConfigProperty(name = PROP_PREFIX + "batch.request.byte.threshold", defaultValue = "9500000")
     Long maxBufferBytes;
 
     @ConfigProperty(name = PROP_PREFIX + "flowcontrol.enabled", defaultValue = "false")
