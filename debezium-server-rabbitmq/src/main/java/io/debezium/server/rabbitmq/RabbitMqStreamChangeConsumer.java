@@ -31,7 +31,7 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.ConnectionFactoryConfigurator;
 
 import io.debezium.DebeziumException;
-import io.debezium.annotation.VisibleForTesting;
+import io.debezium.common.annotation.VisibleForTesting;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
