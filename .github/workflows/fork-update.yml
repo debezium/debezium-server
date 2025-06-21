@@ -1,8 +1,10 @@
 name: Auto Update Debezium Fork
 
 on:
-  schedule:
-    - cron: '0 0 * * 0'
+  # schedule:
+  #   - cron: '0 0 1 * *'
+  push:
+    - main
 
 jobs:
   update-fork:
@@ -16,6 +18,18 @@ jobs:
         ref: main
         token: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Generate random hash and define branch name
+      id: branch_name
+      run: |
+        HASH=$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')
+        BRANCH_NAME="debezium-fork-update+$HASH"
+        echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+    
+    - name: Create new branch
+      run: |
+        git checkout -b "${{ steps.branch_name.outputs.branch_name }}"
+        git push origin "${{ steps.branch_name.outputs.branch_name }}"
+
     - name: sync
       uses: TobKed/github-forks-sync-action@master
       with:
@@ -23,7 +37,7 @@ jobs:
         upstream_repository: debezium/debezium-server
         target_repository: get-bridge/debezium-server
         upstream_branch: main
-        target_branch: main
+        target_branch: ${{ steps.branch_name.outputs.branch_name }}
         force: true
         tags: true
 

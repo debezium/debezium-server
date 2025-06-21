@@ -1,3 +1,7 @@
+FROM curlimages/curl:latest AS downloader
+RUN curl --progress-bar --location --output /tmp/otel-javaagent.jar \
+  https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.9.0/opentelemetry-javaagent.jar
+
 FROM registry.access.redhat.com/ubi8/openjdk-21 AS builder
 
 LABEL maintainer="Debezium Community"
@@ -29,6 +33,7 @@ ARG DEBEZIUM_SERVER_DIST_FILENAME
 # Copy built artifact
 #
 COPY --chown=jboss:jboss debezium-server-dist/target/${DEBEZIUM_SERVER_DIST_FILENAME} $DEBEZIUM_ARCHIVE
+COPY --from=downloader /tmp/otel-javaagent.jar
 
 #
 # Verify the contents and then install ...

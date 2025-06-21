@@ -8,4 +8,6 @@ else
   echo "Pulsar service account environment variable (PULSAR_SERVICE_ACCOUNT_JSON) was not found."
 fi
 
+exec java -javaagent:/otel-javaagent.jar -jar /app.jar $@
+
 /debezium/run.sh
