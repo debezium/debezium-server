@@ -20,7 +20,7 @@
         <version.qdrant>1.14.0</version.qdrant>
         <version.eventhubs>5.19.1</version.eventhubs>
         <version.pravega>0.13.0</version.pravega>
-        <version.nats>2.16.3</version.nats>
+        <version.nats>2.21.2</version.nats>
         <version.stan>2.2.3</version.stan>
         <version.commons.logging>1.2</version.commons.logging>
         <version.jmx.exporter>1.0.1</version.jmx.exporter>

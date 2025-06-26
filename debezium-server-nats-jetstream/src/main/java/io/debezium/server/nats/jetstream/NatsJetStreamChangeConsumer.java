@@ -42,6 +42,7 @@ import io.nats.client.Nats;
 import io.nats.client.Options;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
+import io.nats.client.impl.Headers;
 
 /**
  * Implementation of the consumer that delivers the messages into a NATS Jetstream stream.
@@ -180,10 +181,26 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         for (ChangeEvent<Object, Object> rec : records) {
             if (rec.value() != null) {
                 String subject = streamNameMapper.map(rec.destination());
-                byte[] recordBytes = getBytes(rec.value());
                 LOGGER.trace("Received event @ {} = '{}'", subject, rec.value());
+                byte[] recordBytes = getBytes(rec.value());
+
+                final var headers = convertHeaders(rec);
+                final var natsHeaders = new Headers();
+                if (!headers.isEmpty()) {
+                    headers.forEach((key, value) -> {
+                        if (value != null) {
+                            natsHeaders.add(key, value);
+                        }
+                    });
+                }
 
                 try {
+                    if (!natsHeaders.isEmpty()) {
+                        js.publish(subject, natsHeaders, recordBytes);
+                    }
+                    else {
+                        js.publish(subject, recordBytes);
+                    }
                     js.publish(subject, recordBytes);
                 }
                 catch (Exception e) {
