@@ -29,6 +29,8 @@ public class BatchManager {
     // Prepare CreateBatchOptions for N partitions
     private final HashMap<Integer, CreateBatchOptions> batchOptions = new HashMap<>();
     private final HashMap<Integer, EventDataBatchProxy> batches = new HashMap<>();
+    
+    private final HashMap<String, EventDataBatchProxy> dynamicPartitionKeyBatches = new HashMap<>();
 
     public BatchManager(EventHubProducerClient producer, String configurePartitionId,
                         String configuredPartitionKey, Integer maxBatchSize) {
@@ -93,6 +95,13 @@ public class BatchManager {
                 emitBatchToEventHub(batch);
             }
         });
+        
+        dynamicPartitionKeyBatches.forEach((partitionKey, batch) -> {
+            if (batch.getCount() > 0) {
+                LOGGER.trace("Dispatching {} events for partition key '{}'.", batch.getCount(), partitionKey);
+                emitBatchToEventHub(batch);
+            }
+        });
     }
 
     public void sendEventToPartitionId(EventData eventData, Integer recordIndex, Integer partitionId) {
@@ -116,6 +125,49 @@ public class BatchManager {
             // Add event which we failed to add to the previous batch which was already full.
             if (!batch.tryAdd(eventData)) {
                 // This is the first event in the batch, if we failed to add it, it has to be too large.
+                throw new DebeziumException("Event data is too large to fit into batch");
+            }
+        }
+    }
+    
+    /**
+     * Sends an event using a dynamic partition key derived from the record key.
+     * This allows proper partitioning when no explicit partition ID or key is configured.
+     */
+    public void sendEventWithDynamicPartitionKey(EventData eventData, String partitionKey) {
+        String effectivePartitionKey = (partitionKey != null && !partitionKey.isEmpty()) ? partitionKey : "default";
+        
+        EventDataBatchProxy batch = dynamicPartitionKeyBatches.get(effectivePartitionKey);
+        
+        if (batch == null) {
+            CreateBatchOptions op = new CreateBatchOptions().setPartitionKey(effectivePartitionKey);
+            if (maxBatchSize != 0) {
+                op.setMaximumSizeInBytes(maxBatchSize);
+            }
+            batch = new EventDataBatchProxy(producer, op);
+            dynamicPartitionKeyBatches.put(effectivePartitionKey, batch);
+        }
+
+        if (!batch.tryAdd(eventData)) {
+            if (batch.getCount() == 0) {
+                throw new DebeziumException("Event data is too large to fit into batch");
+            }
+
+            LOGGER.debug("Maximum batch size reached for partition key '{}', dispatching {} events.", effectivePartitionKey, batch.getCount());
+
+            // Max size reached, dispatch the batch to EventHub
+            emitBatchToEventHub(batch);
+            
+            // Create a new batch proxy so we can continue.
+            CreateBatchOptions op = new CreateBatchOptions().setPartitionKey(effectivePartitionKey);
+            if (maxBatchSize != 0) {
+                op.setMaximumSizeInBytes(maxBatchSize);
+            }
+            batch = new EventDataBatchProxy(producer, op);
+            dynamicPartitionKeyBatches.put(effectivePartitionKey, batch);
+            
+            // Add event which we failed to add to the previous batch which was already full.
+            if (!batch.tryAdd(eventData)) {
                 throw new DebeziumException("Event data is too large to fit into batch");
             }
         }
