@@ -155,6 +155,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
                 // Find the partition to send eventData to.
                 Integer targetPartitionId;
+                String dynamicPartitionKey = null;
 
                 if (!configuredPartitionId.isEmpty()) {
                     targetPartitionId = Integer.parseInt(configuredPartitionId);
@@ -164,21 +165,31 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     targetPartitionId = BatchManager.BATCH_INDEX_FOR_PARTITION_KEY;
                 }
                 else {
-                    targetPartitionId = record.partition();
-
-                    if (targetPartitionId == null) {
-                        targetPartitionId = BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
+                    if (record.key() != null) {
+                        dynamicPartitionKey = getString(record.key());
+                        targetPartitionId = null;
+                    }
+                    else {
+                        targetPartitionId = record.partition();
+                        if (targetPartitionId == null) {
+                            targetPartitionId = BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
+                        }
                     }
                 }
 
-                // Check that the target partition exists.
-                if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID || targetPartitionId > partitionCount - 1) {
-                    throw new IndexOutOfBoundsException(
-                            String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, eventHubName));
-                }
-
                 try {
-                    batchManager.sendEventToPartitionId(eventData, recordIndex, targetPartitionId);
+                    if (dynamicPartitionKey != null) {
+                        batchManager.sendEventWithDynamicPartitionKey(eventData, dynamicPartitionKey);
+                    }
+                    else {
+                        // Check that the target partition exists.
+                        if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID || targetPartitionId > partitionCount - 1) {
+                            throw new IndexOutOfBoundsException(
+                                    String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, eventHubName));
+                        }
+                        
+                        batchManager.sendEventToPartitionId(eventData, recordIndex, targetPartitionId);
+                    }
                 }
                 catch (IllegalArgumentException e) {
                     // thrown by tryAdd if event data is null
