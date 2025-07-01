@@ -5,7 +5,7 @@ FROM curlimages/curl:latest AS downloader
 RUN curl --progress-bar --location --output /tmp/otel-javaagent.jar \
   https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.9.0/opentelemetry-javaagent.jar
 
-FROM registry.access.redhat.com/ubi8/openjdk-21 AS builder
+FROM registry.redhat.io/ubi8/openjdk-21 AS builder
 LABEL maintainer="Debezium Community"
 ENV SERVER_HOME=/debezium \
     DEBEZIUM_ARCHIVE=/tmp/debezium.tar.gz
@@ -42,7 +42,7 @@ RUN tar xzf $DEBEZIUM_ARCHIVE -C $SERVER_HOME --strip-components 1 && \
     rm -f $DEBEZIUM_ARCHIVE
 
 # Final stage
-FROM registry.access.redhat.com/ubi8/openjdk-21 AS final
+FROM registry.redhat.io/ubi8/openjdk-21 AS final
 ENV SERVER_HOME=/debezium
 
 USER root
