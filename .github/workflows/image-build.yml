@@ -1,0 +1,110 @@
+name: Image build
+on:
+  push:
+    branches:
+      - main
+      - PLT-897
+      - debezium-server-3.2
+    paths-ignore:
+        - '*.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout core repository
+        uses: actions/checkout@v4
+        with:
+          repository: get-bridge/debezium
+          ref: main
+          path: core
+      - name: Checkout Debezium Server
+        uses: actions/checkout@v4
+        with:
+          repository: get-bridge/debezium-server
+          ref: ${{ github.ref }}
+          path: server
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Maven build core
+        run: |
+          ./server/mvnw clean install -B -ntp -f core/pom.xml \
+          -DskipTests=true \
+          -DskipITs=true \
+          -Dformat.formatter.goal=validate \
+          -Dformat.imports.goal=check \
+          -Dhttp.keepAlive=false \
+          -Dmaven.wagon.http.pool=false \
+          -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
+          -Dcheckstyle.skip=true \
+          -Dformat.skip=true \
+          -Drevapi.skip \
+          -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
+      - name: Maven build Debezium Server
+        id: build_server
+        run: |
+          ./server/mvnw clean install -B -ntp -fae -f server/pom.xml \
+          -Passembly,pulsar-and-postgres \
+          -Dformat.formatter.goal=validate \
+          -Dformat.imports.goal=check \
+          -Dhttp.keepAlive=false \
+          -Dmaven.wagon.http.pool=false \
+          -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
+          -DskipNonCore \
+          -DskipTests=true \
+          -DskipITs=true \
+          -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+          -DfailFlakyTests=false
+          ARTIFACT_PATH=$(find server/debezium-server-dist/target/ -maxdepth 1 -name "debezium-server-dist-*.tar.gz" | head -n 1)
+          if [ -f "$ARTIFACT_PATH" ]; then
+            ARTIFACT_FILENAME=$(basename "$ARTIFACT_PATH")
+            echo "Discovered artifact: $ARTIFACT_FILENAME"
+            echo "artifact_filename=$ARTIFACT_FILENAME" >> $GITHUB_OUTPUT
+          else
+            echo "Error: Could not find artifact 'debezium-server-dist-*.tar.gz' in server/debezium-server-dist/target/"
+            echo "Available files in target directory:"
+            ls -la server/debezium-server-dist/target/
+            exit 1
+          fi 
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.TRUSS_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.TRUSS_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Login to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build Server Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: debezium-server
+        run: |
+          ARTIFACT_FILE="${{ steps.build_server.outputs.artifact_filename }}"
+          if [ -z "$ARTIFACT_FILE" ]; then
+              echo "Error: Artifact filename not found from previous step. Docker build cannot proceed."
+              exit 1
+          fi
+          echo "Building Docker image with artifact: $ARTIFACT_FILE"
+          docker build \
+            --build-arg DEBEZIUM_SERVER_DIST_FILENAME="$ARTIFACT_FILE" \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA \
+            server/ # Context for Dockerfile is 'server/'
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest

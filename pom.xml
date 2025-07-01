@@ -39,6 +39,18 @@
         <maven.compiler.testRelease>${debezium.java.specific.target}</maven.compiler.testRelease>
     </properties>
 
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <configuration>
+                    <packageType>fast-jar</packageType> 
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
     <repositories>
         <repository>
             <id>central-snapshots</id>
