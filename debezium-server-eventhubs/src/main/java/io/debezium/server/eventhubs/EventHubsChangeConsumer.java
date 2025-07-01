@@ -187,7 +187,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                             throw new IndexOutOfBoundsException(
                                     String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, eventHubName));
                         }
-                        
+
                         batchManager.sendEventToPartitionId(eventData, recordIndex, targetPartitionId);
                     }
                 }
