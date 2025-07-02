@@ -15,6 +15,7 @@ import com.azure.messaging.eventhubs.EventHubProducerClient;
 import com.azure.messaging.eventhubs.models.CreateBatchOptions;
 
 import io.debezium.DebeziumException;
+import io.debezium.util.Strings;
 
 public class BatchManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(BatchManager.class);
@@ -135,7 +136,7 @@ public class BatchManager {
      * This allows proper partitioning when no explicit partition ID or key is configured.
      */
     public void sendEventWithDynamicPartitionKey(EventData eventData, String partitionKey) {
-        String effectivePartitionKey = Strings.isNullOrBlank((partitionKey) ? partitionKey : "default";
+        String effectivePartitionKey = Strings.isNullOrBlank(partitionKey) ? partitionKey : "default";
 
         EventDataBatchProxy batch = dynamicPartitionKeyBatches.get(effectivePartitionKey);
 
