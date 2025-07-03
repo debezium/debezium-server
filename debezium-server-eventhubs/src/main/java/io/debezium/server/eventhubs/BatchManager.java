@@ -136,7 +136,7 @@ public class BatchManager {
      * This allows proper partitioning when no explicit partition ID or key is configured.
      */
     public void sendEventWithDynamicPartitionKey(EventData eventData, String partitionKey) {
-        String effectivePartitionKey = Strings.isNullOrBlank(partitionKey) ? partitionKey : "default";
+        String effectivePartitionKey = Strings.isNullOrBlank(partitionKey) ? "default" : partitionKey;
 
         EventDataBatchProxy batch = dynamicPartitionKeyBatches.get(effectivePartitionKey);
 
