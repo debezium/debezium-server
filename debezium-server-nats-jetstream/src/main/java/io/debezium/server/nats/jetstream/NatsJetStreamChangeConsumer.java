@@ -201,7 +201,6 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                     else {
                         js.publish(subject, recordBytes);
                     }
-                    js.publish(subject, recordBytes);
                 }
                 catch (Exception e) {
                     throw new DebeziumException(e);
