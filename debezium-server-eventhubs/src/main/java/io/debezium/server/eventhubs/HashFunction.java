@@ -26,7 +26,7 @@ public enum HashFunction {
 
     /**
      * Parse a string value to a HashFunction enum.
-     * 
+     *
      * @param value the string value (case-insensitive)
      * @return the corresponding HashFunction
      * @throws IllegalArgumentException if the value is not supported
@@ -43,7 +43,7 @@ public enum HashFunction {
             }
         }
 
-        throw new IllegalArgumentException("Unsupported hash function: " + value + 
-            ". Supported values are: java, md5, sha1, sha256");
+        throw new IllegalArgumentException("Unsupported hash function: " + value +
+                ". Supported values are: java, md5, sha1, sha256");
     }
-} 
+}

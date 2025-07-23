@@ -143,7 +143,7 @@ public class BatchManager {
      */
     public void sendEventWithDynamicPartitionKey(EventData eventData, String partitionKey) {
         String effectivePartitionKey = Strings.isNullOrBlank(partitionKey) ? "default" : partitionKey;
-        
+
         if (hashMessageKey) {
             effectivePartitionKey = applyHashFunction(effectivePartitionKey, hashMessageFunction);
         }
@@ -200,7 +200,7 @@ public class BatchManager {
 
     /**
      * Applies the specified hash function to the input string.
-     * 
+     *
      * @param input the string to hash
      * @param hashFunction the hash function to use
      * @return the hashed string
@@ -222,7 +222,7 @@ public class BatchManager {
 
     /**
      * Computes a message digest hash for the input string.
-     * 
+     *
      * @param input the string to hash
      * @param algorithm the digest algorithm (MD5, SHA-1, SHA-256)
      * @return the hex-encoded hash string
@@ -231,7 +231,7 @@ public class BatchManager {
         try {
             MessageDigest digest = MessageDigest.getInstance(algorithm);
             byte[] hashBytes = digest.digest(input.getBytes());
-            
+
             // Convert to hex string
             StringBuilder hexString = new StringBuilder();
             for (byte b : hashBytes) {
