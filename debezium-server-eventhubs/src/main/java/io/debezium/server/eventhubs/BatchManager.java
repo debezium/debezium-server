@@ -5,6 +5,8 @@
  */
 package io.debezium.server.eventhubs;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 
 import org.slf4j.Logger;
@@ -23,6 +25,8 @@ public class BatchManager {
     private final String configuredPartitionId;
     private final String configuredPartitionKey;
     private final Integer maxBatchSize;
+    private final Boolean hashMessageKey;
+    private final HashFunction hashMessageFunction;
 
     static final Integer BATCH_INDEX_FOR_NO_PARTITION_ID = -1;
     static final Integer BATCH_INDEX_FOR_PARTITION_KEY = 0;
@@ -34,11 +38,13 @@ public class BatchManager {
     private final HashMap<String, EventDataBatchProxy> dynamicPartitionKeyBatches = new HashMap<>();
 
     public BatchManager(EventHubProducerClient producer, String configurePartitionId,
-                        String configuredPartitionKey, Integer maxBatchSize) {
+                        String configuredPartitionKey, Integer maxBatchSize, Boolean hashMessageKey, String hashMessageFunction) {
         this.producer = producer;
         this.configuredPartitionId = configurePartitionId;
         this.configuredPartitionKey = configuredPartitionKey;
         this.maxBatchSize = maxBatchSize;
+        this.hashMessageKey = hashMessageKey;
+        this.hashMessageFunction = HashFunction.fromString(hashMessageFunction);
     }
 
     public void initializeBatch() {
@@ -137,6 +143,10 @@ public class BatchManager {
      */
     public void sendEventWithDynamicPartitionKey(EventData eventData, String partitionKey) {
         String effectivePartitionKey = Strings.isNullOrBlank(partitionKey) ? "default" : partitionKey;
+        
+        if (hashMessageKey) {
+            effectivePartitionKey = applyHashFunction(effectivePartitionKey, hashMessageFunction);
+        }
 
         EventDataBatchProxy batch = dynamicPartitionKeyBatches.get(effectivePartitionKey);
 
@@ -185,6 +195,56 @@ public class BatchManager {
             catch (Exception e) {
                 throw new DebeziumException(e);
             }
+        }
+    }
+
+    /**
+     * Applies the specified hash function to the input string.
+     * 
+     * @param input the string to hash
+     * @param hashFunction the hash function to use
+     * @return the hashed string
+     */
+    private String applyHashFunction(String input, HashFunction hashFunction) {
+        switch (hashFunction) {
+            case JAVA:
+                return String.valueOf(input.hashCode());
+            case MD5:
+                return computeDigest(input, "MD5");
+            case SHA1:
+                return computeDigest(input, "SHA-1");
+            case SHA256:
+                return computeDigest(input, "SHA-256");
+            default:
+                throw new IllegalArgumentException("Unsupported hash function: " + hashFunction);
+        }
+    }
+
+    /**
+     * Computes a message digest hash for the input string.
+     * 
+     * @param input the string to hash
+     * @param algorithm the digest algorithm (MD5, SHA-1, SHA-256)
+     * @return the hex-encoded hash string
+     */
+    private String computeDigest(String input, String algorithm) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(algorithm);
+            byte[] hashBytes = digest.digest(input.getBytes());
+            
+            // Convert to hex string
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        }
+        catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Hash algorithm not available: " + algorithm, e);
         }
     }
 }
