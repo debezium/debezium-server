@@ -25,7 +25,7 @@ public class BatchManager {
     private final String configuredPartitionId;
     private final String configuredPartitionKey;
     private final Integer maxBatchSize;
-    private final Boolean hashMessageKey;
+    private final boolean hashMessageKey;
     private final HashFunction hashMessageFunction;
 
     static final Integer BATCH_INDEX_FOR_NO_PARTITION_ID = -1;
