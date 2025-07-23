@@ -51,7 +51,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     // maximum size for the batch of events (bytes)
     private static final String PROP_MAX_BATCH_SIZE = PROP_PREFIX + "maxbatchsize";
     private static final String PROP_HASH_MESSAGE_KEY = PROP_PREFIX + "hashmessagekey";
-    private static final String PROP_HASH_MESSAGE_KEY_FUNCTION = PROP_PREFIX + "hashmessagefunction";
+    private static final String PROP_HASH_MESSAGE_KEY_FUNCTION = PROP_PREFIX + "hashmessagekeyfunction";
 
     private String connectionString;
     private String eventHubName;
