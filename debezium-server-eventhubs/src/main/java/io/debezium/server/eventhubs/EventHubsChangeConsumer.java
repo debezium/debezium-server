@@ -6,6 +6,7 @@
 package io.debezium.server.eventhubs;
 
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -50,6 +51,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private static final String PROP_PARTITION_KEY = PROP_PREFIX + "partitionkey";
     // maximum size for the batch of events (bytes)
     private static final String PROP_MAX_BATCH_SIZE = PROP_PREFIX + "maxbatchsize";
+    private static final String PROP_HASH_MESSAGE_KEY_FUNCTION = PROP_PREFIX + "hashmessagekeyfunction";
 
     private String connectionString;
     private String eventHubName;
@@ -57,6 +59,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private String configuredPartitionKey;
     private Integer maxBatchSize;
     private Integer partitionCount;
+    private Optional<HashFunction> hashMessageFunction;
 
     // connection string format -
     // Endpoint=sb://<NAMESPACE>/;SharedAccessKeyName=<KEY_NAME>;SharedAccessKey=<ACCESS_KEY>;EntityPath=<HUB_NAME>
@@ -86,6 +89,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
         configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        hashMessageFunction = config.getOptionalValue(PROP_HASH_MESSAGE_KEY_FUNCTION, String.class)
+                .map(HashFunction::fromString);
 
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
 
@@ -166,7 +171,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 }
                 else {
                     if (record.key() != null) {
-                        dynamicPartitionKey = getString(record.key());
+                        String initialPartitionKey = getString(record.key());
+
+                        dynamicPartitionKey = hashMessageFunction
+                                .map(hasher -> hasher.hash().apply(initialPartitionKey))
+                                .orElse(initialPartitionKey);
+
                         targetPartitionId = null;
                     }
                     else {
