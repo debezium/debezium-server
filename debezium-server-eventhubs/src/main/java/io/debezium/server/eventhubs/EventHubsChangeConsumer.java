@@ -50,6 +50,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private static final String PROP_PARTITION_KEY = PROP_PREFIX + "partitionkey";
     // maximum size for the batch of events (bytes)
     private static final String PROP_MAX_BATCH_SIZE = PROP_PREFIX + "maxbatchsize";
+    private static final String PROP_HASH_MESSAGE_KEY = PROP_PREFIX + "hashmessagekey";
+    private static final String PROP_HASH_MESSAGE_KEY_FUNCTION = PROP_PREFIX + "hashmessagefunction";
 
     private String connectionString;
     private String eventHubName;
@@ -57,6 +59,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private String configuredPartitionKey;
     private Integer maxBatchSize;
     private Integer partitionCount;
+    private Boolean hashMessageKey;
+    private String hashMessageFunction;
 
     // connection string format -
     // Endpoint=sb://<NAMESPACE>/;SharedAccessKeyName=<KEY_NAME>;SharedAccessKey=<ACCESS_KEY>;EntityPath=<HUB_NAME>
@@ -86,12 +90,14 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
         configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        hashMessageKey = config.getOptionalValue(PROP_HASH_MESSAGE_KEY, Boolean.class).orElse(false);
+        hashMessageFunction = config.getOptionalValue(PROP_HASH_MESSAGE_KEY_FUNCTION, String.class).orElse("java");
 
         String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
 
         try {
             producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
-            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, maxBatchSize);
+            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, maxBatchSize, hashMessageKey, hashMessageFunction);
         }
         catch (Exception e) {
             throw new DebeziumException(e);
