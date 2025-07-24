@@ -172,12 +172,12 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 }
                 else {
                     if (record.key() != null) {
-                        dynamicPartitionKey = getString(record.key());
+                        String initialPartitionKey = getString(record.key());
 
-                        if (hashMessageFunction.isPresent()) {
-                            Function<String, String> hashFunc = hashMessageFunction.get().hash();
-                            dynamicPartitionKey = hashFunc.apply(dynamicPartitionKey);
-                        }
+                        dynamicPartitionKey = hashMessageFunction
+                            .map(hasher -> hasher.hash().apply(initialPartitionKey))
+                            .orElse(initialPartitionKey);
+
                         targetPartitionId = null;
                     }
                     else {
