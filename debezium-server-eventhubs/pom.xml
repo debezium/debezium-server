@@ -91,7 +91,7 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>io.smallrye</groupId>
+                <groupId>org.jboss.jandex</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>
                 <executions>
                     <execution>
