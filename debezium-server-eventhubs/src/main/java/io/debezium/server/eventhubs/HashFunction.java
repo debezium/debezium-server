@@ -5,6 +5,7 @@
  */
 package io.debezium.server.eventhubs;
 
+import io.debezium.util.HexConverter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -19,27 +20,27 @@ public enum HashFunction {
         }
     },
     MD5("md5") {
-        private final MessageDigest digest = createDigest("MD5");
+        private final ThreadLocal<MessageDigest> digest = ThreadLocal.withInitial(() -> createDigest("MD5"));
 
         @Override
         public String hash(String input) {
-            return computeDigest(input, digest);
+            return computeDigest(input, digest.get());
         }
     },
     SHA1("sha1") {
-        private final MessageDigest digest = createDigest("SHA-1");
+        private final ThreadLocal<MessageDigest> digest = ThreadLocal.withInitial(() -> createDigest("SHA-1"));
 
         @Override
         public String hash(String input) {
-            return computeDigest(input, digest);
+            return computeDigest(input, digest.get());
         }
     },
     SHA256("sha256") {
-        private final MessageDigest digest = createDigest("SHA-256");
+        private final ThreadLocal<MessageDigest> digest = ThreadLocal.withInitial(() -> createDigest("SHA-256"));
 
         @Override
         public String hash(String input) {
-            return computeDigest(input, digest);
+            return computeDigest(input, digest.get());
         }
     };
 
@@ -103,24 +104,12 @@ public enum HashFunction {
      * Computes a message digest hash for the input string.
      *
      * @param input the string to hash
-     * @param digest the MessageDigest to use (thread-safe since we synchronize)
+     * @param digest the MessageDigest to use (thread-safe via ThreadLocal)
      * @return the hex-encoded hash string
      */
     private static String computeDigest(String input, MessageDigest digest) {
-        synchronized (digest) {
-            digest.reset();
-            byte[] hashBytes = digest.digest(input.getBytes());
-
-            // Convert to hex string
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        }
+        digest.reset();
+        byte[] hashBytes = digest.digest(input.getBytes());
+        return HexConverter.convertToHexString(hashBytes);
     }
 }
