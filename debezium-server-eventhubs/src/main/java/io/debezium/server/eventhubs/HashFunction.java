@@ -7,6 +7,8 @@ package io.debezium.server.eventhubs;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.function.Function;
+
 import io.debezium.util.HexConverter;
 import io.debezium.util.Strings;
 
@@ -16,32 +18,47 @@ import io.debezium.util.Strings;
 public enum HashFunction {
     JAVA("java") {
         @Override
-        public String hash(String input) {
-            return String.valueOf(input.hashCode());
+        public Function<String, String> hash() {
+            return input -> String.valueOf(input.hashCode());
         }
     },
     MD5("md5") {
-        private final ThreadLocal<MessageDigest> digest = ThreadLocal.withInitial(() -> createDigest("MD5"));
-
         @Override
-        public String hash(String input) {
-            return computeDigest(input, digest.get());
+        public Function<String, String> hash() {
+            return new Function<String, String>() {
+                private final MessageDigest digest = createDigest("MD5");
+
+                @Override
+                public String apply(String input) {
+                    return computeDigest(input, digest);
+                }
+            };
         }
     },
     SHA1("sha1") {
-        private final ThreadLocal<MessageDigest> digest = ThreadLocal.withInitial(() -> createDigest("SHA-1"));
-
         @Override
-        public String hash(String input) {
-            return computeDigest(input, digest.get());
+        public Function<String, String> hash() {
+            return new Function<String, String>() {
+                private final MessageDigest digest = createDigest("SHA-1");
+
+                @Override
+                public String apply(String input) {
+                    return computeDigest(input, digest);
+                }
+            };
         }
     },
     SHA256("sha256") {
-        private final ThreadLocal<MessageDigest> digest = ThreadLocal.withInitial(() -> createDigest("SHA-256"));
-
         @Override
-        public String hash(String input) {
-            return computeDigest(input, digest.get());
+        public Function<String, String> hash() {
+            return new Function<String, String>() {
+                private final MessageDigest digest = createDigest("SHA-256");
+
+                @Override
+                public String apply(String input) {
+                    return computeDigest(input, digest);
+                }
+            };
         }
     };
 
@@ -56,12 +73,12 @@ public enum HashFunction {
     }
 
     /**
-     * Computes the hash of the input string using this hash function.
+     * Returns a function that computes the hash of the input string using this hash function.
+     * Each call returns a new function instance with its own MessageDigest for thread safety.
      *
-     * @param input the string to hash
-     * @return the hashed string
+     * @return a function that takes a string input and returns the hashed string
      */
-    public abstract String hash(String input);
+    public abstract Function<String, String> hash();
 
     /**
     * Parse a string value to a HashFunction enum.
@@ -105,7 +122,7 @@ public enum HashFunction {
      * Computes a message digest hash for the input string.
      *
      * @param input the string to hash
-     * @param digest the MessageDigest to use (thread-safe via ThreadLocal)
+     * @param digest the MessageDigest to use (thread-safe as each function has its own instance)
      * @return the hex-encoded hash string
      */
     private static String computeDigest(String input, MessageDigest digest) {
