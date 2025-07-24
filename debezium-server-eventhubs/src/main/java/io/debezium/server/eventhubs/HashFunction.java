@@ -5,9 +5,10 @@
  */
 package io.debezium.server.eventhubs;
 
-import io.debezium.util.HexConverter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import io.debezium.util.HexConverter;
+import io.debezium.util.Strings;
 
 /**
  * Enumeration of supported hash functions for message key hashing.
@@ -63,15 +64,15 @@ public enum HashFunction {
     public abstract String hash(String input);
 
     /**
-     * Parse a string value to a HashFunction enum.
-     *
-     * @param value the string value (case-insensitive)
-     * @return the corresponding HashFunction
-     * @throws IllegalArgumentException if the value is not supported
-     */
+    * Parse a string value to a HashFunction enum.
+    *
+    * @param value the string value (case-insensitive)
+    * @return the corresponding HashFunction, or null if value is null/blank
+    * @throws IllegalArgumentException if the value is not supported
+    */
     public static HashFunction fromString(String value) {
-        if (value == null) {
-            return JAVA; // default
+        if (Strings.isNullOrBlank(value)) {
+            return null;
         }
 
         String lowerValue = value.toLowerCase();
