@@ -7,7 +7,6 @@ package io.debezium.server.eventhubs;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Function;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
