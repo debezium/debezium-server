@@ -175,8 +175,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                         String initialPartitionKey = getString(record.key());
 
                         dynamicPartitionKey = hashMessageFunction
-                            .map(hasher -> hasher.hash().apply(initialPartitionKey))
-                            .orElse(initialPartitionKey);
+                                .map(hasher -> hasher.hash().apply(initialPartitionKey))
+                                .orElse(initialPartitionKey);
 
                         targetPartitionId = null;
                     }
