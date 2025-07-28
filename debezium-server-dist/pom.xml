@@ -617,6 +617,10 @@
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-connector-ibmi</artifactId>
                 </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-connector-cockroachdb</artifactId>
+                </dependency>
             </dependencies>
         </profile>
     </profiles>
