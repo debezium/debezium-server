@@ -37,6 +37,9 @@
         <maven.compiler.testSource>${debezium.java.source}</maven.compiler.testSource>
         <maven.compiler.testTarget>${debezium.java.specific.target}</maven.compiler.testTarget>
         <maven.compiler.testRelease>${debezium.java.specific.target}</maven.compiler.testRelease>
+
+        <mockito.argLine>-javaagent:${org.mockito:mockito-core:jar}</mockito.argLine>
+
     </properties>
 
     <repositories>
