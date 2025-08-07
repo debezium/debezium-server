@@ -12,8 +12,7 @@ import java.time.Duration;
 
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import org.awaitility.Awaitility;
 import org.eclipse.microprofile.health.HealthCheckResponse;
