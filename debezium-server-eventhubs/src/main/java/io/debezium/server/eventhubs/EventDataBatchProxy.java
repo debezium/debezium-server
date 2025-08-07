@@ -47,4 +47,8 @@ public class EventDataBatchProxy {
 
         producer.send(this.batch);
     }
+
+    public void clear() {
+        this.batch = null;
+    }
 }
