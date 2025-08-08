@@ -15,6 +15,6 @@ if [ -n "${JMX_HOST}" -a -n "${JMX_PORT}" ]; then
        -Dcom.sun.management.jmxremote.access.file=jmx/jmxremote.access \
        -Dcom.sun.management.jmxremote.password.file=jmx/jmxremote.password"
   else
-   export JAVA_OPT="${JAVA_OPTS} -Dcom.sun.management.jmxremote.authenticate=false"
+   export JAVA_OPTS="${JAVA_OPTS} -Dcom.sun.management.jmxremote.authenticate=false"
   fi
 fi
