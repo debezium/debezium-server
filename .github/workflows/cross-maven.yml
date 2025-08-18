@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Debezium Server repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: server
       - name: Check if pull request branch exists in debezium main repository
@@ -45,14 +45,14 @@ jobs:
           done < SORTED_PULLS.txt
       - name: Checkout core repository with pull request branch
         if: ${{ steps.branch.outputs.BRANCH_FOUND == 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ github.event.pull_request.user.login }}/debezium
           ref: ${{ github.head_ref }}
           path: core
       - name: Checkout core repository with default base branch
         if: ${{ steps.branch.outputs.BRANCH_FOUND != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: debezium/debezium
           ref: ${{ github.base_ref }}
@@ -93,7 +93,7 @@ jobs:
           distribution: 'temurin'
           java-version: 21
       - name: Checkout Debezium Server repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: server
       - name: Download Debezium distribution
