@@ -77,6 +77,27 @@ public class DebeziumServerTest {
 
         assertThat(properties.getProperty("predicates.topicNameMatch.pattern")).isNotNull();
         assertThat(properties.getProperty("predicates.topicNameMatch.pattern")).isEqualTo(".*");
+
+        assertThat(properties.getProperty("key.converter.schemas.enable")).isNotNull();
+        assertThat(properties.getProperty("key.converter.schemas.enable")).isEqualTo("true");
+
+        assertThat(properties.getProperty("value.converter.schemas.enable")).isNotNull();
+        assertThat(properties.getProperty("value.converter.schemas.enable")).isEqualTo("false");
+
+        assertThat(properties.getProperty("header.converter.schemas.enable")).isNotNull();
+        assertThat(properties.getProperty("header.converter.schemas.enable")).isEqualTo("false");
+
+        assertThat(properties).doesNotContainKeys("key.converter", "value.converter", "header.converter");
+        assertThat(properties).doesNotContainKeys(
+                "key.converter.key",
+                "key.converter.value",
+                "key.converter.header",
+                "value.converter.key",
+                "value.converter.value",
+                "value.converter.header",
+                "header.converter.key",
+                "header.converter.value",
+                "header.converter.header");
     }
 
     @Test

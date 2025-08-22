@@ -6,9 +6,11 @@
 package io.debezium.server;
 
 import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -46,12 +48,22 @@ import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.Startup;
 
 /**
- * <p>The entry point of the Quarkus-based standalone server. The server is configured via Quarkus/Microprofile Configuration sources
- * and provides few out-of-the-box target implementations.</p>
- * <p>The implementation uses CDI to find all classes that implements {@link DebeziumEngine.ChangeConsumer} interface.
- * The candidate classes should be annotated with {@code @Named} annotation and should be {@code Dependent}.</p>
- * <p>The configuration option {@code debezium.consumer} provides a name of the consumer that should be used and the value
- * must match to exactly one of the implementation classes.</p>
+ * <p>
+ * The entry point of the Quarkus-based standalone server. The server is
+ * configured via Quarkus/Microprofile Configuration sources
+ * and provides few out-of-the-box target implementations.
+ * </p>
+ * <p>
+ * The implementation uses CDI to find all classes that implements
+ * {@link DebeziumEngine.ChangeConsumer} interface.
+ * The candidate classes should be annotated with {@code @Named} annotation and
+ * should be {@code Dependent}.
+ * </p>
+ * <p>
+ * The configuration option {@code debezium.consumer} provides a name of the
+ * consumer that should be used and the value
+ * must match to exactly one of the implementation classes.
+ * </p>
  *
  * @author Jiri Pechanec
  *
@@ -126,33 +138,58 @@ public class DebeziumServer {
         final Class<Any> valueFormat = (Class<Any>) getFormat(config, PROP_VALUE_FORMAT);
         final Class<Any> headerFormat = (Class<Any>) getHeaderFormat(config);
 
-        configToProperties(config, props, PROP_SOURCE_PREFIX, "", true);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "key.converter.", true);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "value.converter.", true);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "header.converter.", true);
-        configToProperties(config, props, PROP_KEY_FORMAT_PREFIX, "key.converter.", true);
-        configToProperties(config, props, PROP_VALUE_FORMAT_PREFIX, "value.converter.", true);
-        configToProperties(config, props, PROP_HEADER_FORMAT_PREFIX, "header.converter.", true);
-        configToProperties(config, props, PROP_SINK_PREFIX + name + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", false);
-        configToProperties(config, props, PROP_SINK_PREFIX + name + ".", PROP_OFFSET_STORAGE_PREFIX + name + ".", false);
+        // Get property names as a mutable set to remove properties as they get processed, avoiding duplication
+        Set<String> remainingPropertyNames = new HashSet<>();
+        for (String propName : config.getPropertyNames()) {
+            remainingPropertyNames.add(propName);
+        }
+
+        configToProperties(config, props, PROP_SOURCE_PREFIX, "", true, remainingPropertyNames, true);
+        // Simple smart prefix handling - works for any prefix
+
+        // Handle granular (debezium.format.key|value|header.*) props first and remove from the potential names
+        configToProperties(config, props, PROP_KEY_FORMAT_PREFIX, "key.converter.", true, remainingPropertyNames, true);
+        configToProperties(config, props, PROP_VALUE_FORMAT_PREFIX, "value.converter.", true, remainingPropertyNames, true);
+        configToProperties(config, props, PROP_HEADER_FORMAT_PREFIX, "header.converter.", true, remainingPropertyNames,
+                true);
+
+        // Remove the format-selector properties (debezium.format.key/value/header = avro|json|...) so that
+        // the generic debezium.format.* pass below does not propagate them as nonsensical converter
+        // sub-properties (e.g. key.converter.key = avro, header.converter.value = avro).
+        // Their values have already been consumed above via getFormat() / getHeaderFormat().
+        remainingPropertyNames.remove(PROP_KEY_FORMAT);
+        remainingPropertyNames.remove(PROP_VALUE_FORMAT);
+        remainingPropertyNames.remove(PROP_HEADER_FORMAT);
+
+        // Handle the remaining generic (debezium.format.*) props. Don't remove them so that they can apply to key, value and header
+        configToProperties(config, props, PROP_FORMAT_PREFIX, "key.converter.", false, remainingPropertyNames, false);
+        configToProperties(config, props, PROP_FORMAT_PREFIX, "value.converter.", false, remainingPropertyNames, false);
+        configToProperties(config, props, PROP_FORMAT_PREFIX, "header.converter.", false, remainingPropertyNames, false);
+
+        configToProperties(config, props, PROP_SINK_PREFIX + name + ".",
+                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", false, remainingPropertyNames, true);
+        configToProperties(config, props, PROP_SINK_PREFIX + name + ".", PROP_OFFSET_STORAGE_PREFIX + name + ".",
+                false, remainingPropertyNames, true);
 
         final Optional<String> transforms = config.getOptionalValue(PROP_TRANSFORMS, String.class);
         if (transforms.isPresent()) {
             props.setProperty("transforms", transforms.get());
-            configToProperties(config, props, PROP_TRANSFORMS_PREFIX, "transforms.", true);
+            configToProperties(config, props, PROP_TRANSFORMS_PREFIX, "transforms.", true, remainingPropertyNames, true);
         }
 
         final Optional<String> predicates = config.getOptionalValue(PROP_PREDICATES, String.class);
         if (predicates.isPresent()) {
             props.setProperty("predicates", predicates.get());
-            configToProperties(config, props, PROP_PREDICATES_PREFIX, "predicates.", true);
+            configToProperties(config, props, PROP_PREDICATES_PREFIX, "predicates.", true, remainingPropertyNames, true);
         }
 
         props.setProperty("name", name);
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
         final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
-        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
+        engine = DebeziumEngine
+                .create(keyFormat, valueFormat, headerFormat,
+                        engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
                 .using(props)
                 .using((DebeziumEngine.ConnectorCallback) health)
                 .using((DebeziumEngine.CompletionCallback) health)
@@ -170,8 +207,15 @@ public class DebeziumServer {
         LOGGER.info("Engine executor started");
     }
 
-    private void configToProperties(Config config, Properties props, String oldPrefix, String newPrefix, boolean overwrite) {
-        for (String name : config.getPropertyNames()) {
+    private void configToProperties(Config config, Properties props, String oldPrefix, String newPrefix,
+                                    boolean overwrite, Set<String> propertyNames, boolean removeName) {
+
+        // Use iterator to safely remove items while iterating
+        java.util.Iterator<String> iterator = propertyNames.iterator();
+        while (iterator.hasNext()) {
+            String name = iterator.next();
+            boolean processed = false;
+
             String updatedPropertyName = null;
             if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
                 updatedPropertyName = name.replace("_", ".").toLowerCase();
@@ -181,12 +225,19 @@ public class DebeziumServer {
                 if (overwrite || !props.containsKey(finalPropertyName)) {
                     props.setProperty(finalPropertyName, config.getOptionalValue(name, String.class).orElse(""));
                 }
+                processed = true;
             }
             else if (name.startsWith(oldPrefix)) {
                 String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
                 if (overwrite || !props.containsKey(finalPropertyName)) {
                     props.setProperty(finalPropertyName, config.getConfigValue(name).getValue());
                 }
+                processed = true;
+            }
+
+            // Remove processed properties to avoid duplicate processing
+            if (processed && removeName) {
+                iterator.remove();
             }
         }
     }
