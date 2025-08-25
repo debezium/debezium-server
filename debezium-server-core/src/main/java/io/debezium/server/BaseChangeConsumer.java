@@ -84,6 +84,15 @@ public class BaseChangeConsumer {
         throw new DebeziumException(unsupportedTypeMessage(object));
     }
 
+    protected String asString(Object object) {
+        return switch (object) {
+            case null -> "null";
+            case String s -> s;
+            case byte[] b -> new String(b, StandardCharsets.UTF_8);
+            default -> object.toString();
+        };
+    }
+
     protected String unsupportedTypeMessage(Object object) {
         final String type = (object == null) ? "null" : object.getClass().getName();
         return "Unexpected data type '" + type + "'";
