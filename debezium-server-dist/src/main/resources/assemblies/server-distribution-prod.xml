@@ -20,7 +20,7 @@
             <exclude>javax.ws.rs:javax.ws.rs-api:*</exclude>
             <exclude>org.apache.kafka:connect-file:*</exclude>
             <exclude>org.glassfish.jersey.*:*:*</exclude>
-            <exclude>org.apache.maven:*:*</exclude>
+            <exclude>org.codehaus.plexus:*:*</exclude>
             <exclude>log4j:log4j:*</exclude>
             <exclude>ch.qos.reload4j:reload4j</exclude>
             <exclude>io.debezium:debezium-scripting</exclude>
