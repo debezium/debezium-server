@@ -37,7 +37,7 @@ public class DebeziumMetrics {
     private ObjectName streamingMetricsObjectName;
     private ObjectName streamingPartitionMetricsObjectName;
 
-    private static ObjectName getDebeziumMbean(String context, boolean partition) {
+    private static ObjectName getDebeziumMbean(String context, boolean partitioned) {
         ObjectName debeziumMbean = null;
 
         for (ObjectName mbean : mbeanServer.queryNames(null, null)) {
@@ -46,7 +46,7 @@ public class DebeziumMetrics {
                     && mbean.getCanonicalName().contains("type=connector-metrics")
                     && mbean.getCanonicalName().contains("context=" + context)
                     && (mbean.getCanonicalName().contains("debezium.sql_server:")
-                            ? mbean.getCanonicalName().contains("database=") == partition
+                            ? mbean.getCanonicalName().contains("database=") == partitioned
                             : true)) {
                 LOGGER.debug("Using {} MBean to get {} metrics", mbean, context);
                 debeziumMbean = mbean;
