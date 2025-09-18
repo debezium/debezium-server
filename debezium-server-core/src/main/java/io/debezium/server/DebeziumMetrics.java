@@ -33,16 +33,21 @@ public class DebeziumMetrics {
     public static final MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
 
     private ObjectName snapshotMetricsObjectName;
+    private ObjectName snapshotPartitionMetricsObjectName;
     private ObjectName streamingMetricsObjectName;
+    private ObjectName streamingPartitionMetricsObjectName;
 
-    private static ObjectName getDebeziumMbean(String context) {
+    private static ObjectName getDebeziumMbean(String context, boolean partition) {
         ObjectName debeziumMbean = null;
 
         for (ObjectName mbean : mbeanServer.queryNames(null, null)) {
 
             if (mbean.getCanonicalName().contains("debezium.")
                     && mbean.getCanonicalName().contains("type=connector-metrics")
-                    && mbean.getCanonicalName().contains("context=" + context)) {
+                    && mbean.getCanonicalName().contains("context=" + context)
+                    && (mbean.getCanonicalName().contains("debezium.sql_server:")
+                            ? mbean.getCanonicalName().contains("database=") == partition
+                            : true)) {
                 LOGGER.debug("Using {} MBean to get {} metrics", mbean, context);
                 debeziumMbean = mbean;
                 break;
@@ -58,19 +63,37 @@ public class DebeziumMetrics {
     public ObjectName getSnapshotMetricsObjectName() {
 
         if (snapshotMetricsObjectName == null) {
-            snapshotMetricsObjectName = getDebeziumMbean("snapshot");
+            snapshotMetricsObjectName = getDebeziumMbean("snapshot", false);
         }
 
         return snapshotMetricsObjectName;
     }
 
+    public ObjectName getSnapshotPartitionMetricsObjectName() {
+
+        if (snapshotPartitionMetricsObjectName == null) {
+            snapshotPartitionMetricsObjectName = getDebeziumMbean("snapshot", true);
+        }
+
+        return snapshotPartitionMetricsObjectName;
+    }
+
     public ObjectName getStreamingMetricsObjectName() {
 
         if (streamingMetricsObjectName == null) {
-            streamingMetricsObjectName = getDebeziumMbean("streaming");
+            streamingMetricsObjectName = getDebeziumMbean("streaming", false);
         }
 
         return streamingMetricsObjectName;
+    }
+
+    public ObjectName getStreamingPartitionMetricsObjectName() {
+
+        if (streamingPartitionMetricsObjectName == null) {
+            streamingPartitionMetricsObjectName = getDebeziumMbean("streaming", true);
+        }
+
+        return streamingPartitionMetricsObjectName;
     }
 
     public int maxQueueSize() {
@@ -84,7 +107,7 @@ public class DebeziumMetrics {
 
     public boolean snapshotRunning() {
         try {
-            return (boolean) mbeanServer.getAttribute(getSnapshotMetricsObjectName(), "SnapshotRunning");
+            return (boolean) mbeanServer.getAttribute(getSnapshotPartitionMetricsObjectName(), "SnapshotRunning");
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -93,7 +116,7 @@ public class DebeziumMetrics {
 
     public boolean snapshotCompleted() {
         try {
-            return (boolean) mbeanServer.getAttribute(getSnapshotMetricsObjectName(), "SnapshotCompleted");
+            return (boolean) mbeanServer.getAttribute(getSnapshotPartitionMetricsObjectName(), "SnapshotCompleted");
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -115,7 +138,7 @@ public class DebeziumMetrics {
 
     public long streamingMilliSecondsBehindSource() {
         try {
-            return (long) mbeanServer.getAttribute(getStreamingMetricsObjectName(), "MilliSecondsBehindSource");
+            return (long) mbeanServer.getAttribute(getStreamingPartitionMetricsObjectName(), "MilliSecondsBehindSource");
         }
         catch (Exception e) {
             throw new DebeziumException(e);
