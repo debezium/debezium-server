@@ -9,8 +9,12 @@ import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -40,6 +44,7 @@ import io.nats.client.JetStream;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.Nats;
 import io.nats.client.Options;
+import io.nats.client.api.PublishAck;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import io.nats.client.impl.Headers;
@@ -61,6 +66,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private static final String PROP_CREATE_STREAM = PROP_PREFIX + "create-stream";
     private static final String PROP_SUBJECTS = PROP_PREFIX + "subjects";
     private static final String PROP_STORAGE = PROP_PREFIX + "storage";
+    private static final String PROP_PUBLISH_ASYNC = PROP_PREFIX + "publish-async";
 
     private static final String PROP_AUTH_JWT = PROP_PREFIX + "auth.jwt";
     private static final String PROP_AUTH_SEED = PROP_PREFIX + "auth.seed";
@@ -96,6 +102,9 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     @ConfigProperty(name = PROP_AUTH_TLS_PASSWORD)
     Optional<String> tlsPassword;
+
+    @ConfigProperty(name = PROP_PUBLISH_ASYNC, defaultValue = "false")
+    boolean publishAsync;
 
     @Inject
     @CustomConsumerBuilder
@@ -178,6 +187,18 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                             RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
 
+        if (publishAsync) {
+            handleBatchAsync(records, committer);
+        }
+        else {
+            handleBatchSync(records, committer);
+        }
+    }
+
+    private void handleBatchSync(List<ChangeEvent<Object, Object>> records,
+                                 RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+
         for (ChangeEvent<Object, Object> rec : records) {
             if (rec.value() != null) {
                 String subject = streamNameMapper.map(rec.destination());
@@ -230,5 +251,61 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), new SecureRandom());
 
         return ctx;
+    }
+
+    private void handleBatchAsync(List<ChangeEvent<Object, Object>> records,
+                                  RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+
+        final List<PendingDelivery> pendingDeliveries = new ArrayList<>();
+
+        for (ChangeEvent<Object, Object> rec : records) {
+            if (rec.value() != null) {
+                final var subject = streamNameMapper.map(rec.destination());
+                final var recordBytes = getBytes(rec.value());
+                LOGGER.trace("Received event @ {} = '{}'", subject, getString(rec.value()));
+
+                try {
+                    pendingDeliveries.add(new PendingDelivery(rec, js.publishAsync(subject, recordBytes)));
+                }
+                catch (Exception e) {
+                    throw new DebeziumException(e);
+                }
+            }
+            else {
+                // For tombstone events we don't send anything to NATS, just mark as processed
+                pendingDeliveries.add(new PendingDelivery(rec, null));
+            }
+        }
+
+        for (PendingDelivery pendingDelivery : pendingDeliveries) {
+            try {
+                if (pendingDelivery.ack != null) {
+                    final var ack = pendingDelivery.ack.get();
+                    if (ack == null) {
+                        throw new DebeziumException("Failed to receive publish acknowledgement from NATS JetStream");
+                    }
+                    else if (ack.hasError()) {
+                        throw new DebeziumException("Received error ack from NATS JetStream: " + ack.getError());
+                    }
+                }
+                committer.markProcessed(pendingDelivery.record);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
+            }
+            catch (ExecutionException e) {
+                final var cause = e.getCause();
+                throw new DebeziumException(cause != null ? cause : e);
+            }
+            catch (CancellationException e) {
+                throw new DebeziumException(e);
+            }
+        }
+        committer.markBatchFinished();
+    }
+
+    private record PendingDelivery(ChangeEvent<Object, Object> record, CompletableFuture<PublishAck> ack) {
     }
 }
