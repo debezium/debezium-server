@@ -11,6 +11,10 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -38,11 +42,14 @@ import io.debezium.server.CustomConsumerBuilder;
 import io.nats.client.Connection;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamManagement;
+import io.nats.client.Message;
 import io.nats.client.Nats;
 import io.nats.client.Options;
+import io.nats.client.api.PublishAck;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import io.nats.client.impl.Headers;
+import io.nats.client.impl.NatsMessage;
 
 /**
  * Implementation of the consumer that delivers the messages into a NATS Jetstream stream.
@@ -70,6 +77,9 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private static final String PROP_AUTH_TLS_KEYSTORE_PASSWORD = PROP_PREFIX + "auth.tls.keystore.password";
     private static final String PROP_AUTH_TLS_PASSWORD = PROP_PREFIX + "auth.tls.password";
 
+    private static final String PROP_ASYNC_ENABLED = PROP_PREFIX + "async.enabled";
+    private static final String PROP_ASYNC_TIMEOUT_MS = PROP_PREFIX + "async.timeout-ms";
+
     private Connection nc;
     private JetStream js;
 
@@ -96,6 +106,12 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     @ConfigProperty(name = PROP_AUTH_TLS_PASSWORD)
     Optional<String> tlsPassword;
+
+    @ConfigProperty(name = PROP_ASYNC_ENABLED, defaultValue = "true")
+    boolean asyncEnabled;
+
+    @ConfigProperty(name = PROP_ASYNC_TIMEOUT_MS, defaultValue = "5000")
+    long asyncTimeoutMs;
 
     @Inject
     @CustomConsumerBuilder
@@ -158,6 +174,13 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         catch (Exception e) {
             throw new DebeziumException(e);
         }
+
+        if (asyncEnabled) {
+            LOGGER.info("Async publishing enabled with timeout: {}ms", asyncTimeoutMs);
+        }
+        else {
+            LOGGER.info("Synchronous publishing mode enabled");
+        }
     }
 
     @PreDestroy
@@ -176,6 +199,16 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records,
                             RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+        if (!asyncEnabled || records.isEmpty()) {
+            handleBatchSync(records, committer);
+            return;
+        }
+        handleBatchAsync(records, committer);
+    }
+
+    private void handleBatchSync(List<ChangeEvent<Object, Object>> records,
+                                 RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
 
         for (ChangeEvent<Object, Object> rec : records) {
@@ -209,6 +242,69 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             committer.markProcessed(rec);
         }
         committer.markBatchFinished();
+    }
+
+    private void handleBatchAsync(List<ChangeEvent<Object, Object>> records,
+                                  RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+
+        List<CompletableFuture<PublishAck>> futures = records.stream()
+                .filter(rec -> rec.value() != null)
+                .map(rec -> {
+                    String subject = streamNameMapper.map(rec.destination());
+                    byte[] recordBytes = getBytes(rec.value());
+
+                    Headers natsHeaders = new Headers();
+                    var headers = convertHeaders(rec);
+                    if (!headers.isEmpty()) {
+                        headers.forEach((key, value) -> {
+                            if (value != null) {
+                                natsHeaders.add(key, value);
+                            }
+                        });
+                    }
+
+                    Message msg = NatsMessage.builder()
+                            .subject(subject)
+                            .headers(natsHeaders)
+                            .data(recordBytes)
+                            .build();
+
+                    LOGGER.trace("Sending async message to subject: {} (data length: {} bytes)", subject, recordBytes.length);
+
+                    CompletableFuture<PublishAck> future = js.publishAsync(msg).orTimeout(asyncTimeoutMs, TimeUnit.MILLISECONDS);
+
+                    future.thenAccept(ack -> {
+                        LOGGER.trace("Received ACK for subject: {} (stream: {}, seq: {})", subject, ack.getStream(), ack.getSeqno());
+                    });
+                    return future;
+                })
+                .toList();
+        if (futures.isEmpty()) {
+            for (ChangeEvent<Object, Object> rec : records) {
+                committer.markProcessed(rec);
+            }
+            committer.markBatchFinished();
+            return;
+        }
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    .get(asyncTimeoutMs, TimeUnit.MILLISECONDS);
+
+            for (ChangeEvent<Object, Object> rec : records) {
+                committer.markProcessed(rec);
+            }
+            committer.markBatchFinished();
+            LOGGER.debug("Successfully published batch of {} messages", records.size());
+        }
+        catch (TimeoutException e) {
+            LOGGER.error("Timeout waiting for publish acknowledgments after {}ms", asyncTimeoutMs);
+            throw new DebeziumException("Timeout waiting for publish acknowledgments", e);
+        }
+        catch (ExecutionException e) {
+            LOGGER.error("Failed to publish batch", e.getCause());
+            throw new DebeziumException("Failed to publish batch", e.getCause());
+        }
     }
 
     private static SSLContext sslAuthContext(String keystorePath, String keystorePassword,
