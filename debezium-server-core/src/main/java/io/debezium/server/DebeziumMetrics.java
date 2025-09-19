@@ -45,9 +45,7 @@ public class DebeziumMetrics {
             if (mbean.getCanonicalName().contains("debezium.")
                     && mbean.getCanonicalName().contains("type=connector-metrics")
                     && mbean.getCanonicalName().contains("context=" + context)
-                    && (mbean.getCanonicalName().contains("debezium.sql_server:")
-                            ? mbean.getCanonicalName().contains("database=") == partitioned
-                            : true)) {
+                    && checkConnectorSpecificTags(mbean, partitioned)) {
                 LOGGER.debug("Using {} MBean to get {} metrics", mbean, context);
                 debeziumMbean = mbean;
                 break;
@@ -58,6 +56,13 @@ public class DebeziumMetrics {
         Objects.requireNonNull(debeziumMbean, "Debezium MBean (context=" + context + ") not found!");
 
         return debeziumMbean;
+    }
+
+    private static boolean checkConnectorSpecificTags(ObjectName mbean, boolean partitioned) {
+        if (mbean.getCanonicalName().contains("debezium.sql_server:")) {
+            return mbean.getCanonicalName().contains("database=") == partitioned;
+        }
+        return true;
     }
 
     public ObjectName getSnapshotMetricsObjectName() {
