@@ -70,6 +70,11 @@
             <artifactId>debezium-common</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-openlineage-api</artifactId>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>io.debezium</groupId>

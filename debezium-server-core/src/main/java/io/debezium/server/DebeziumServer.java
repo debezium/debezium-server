@@ -9,18 +9,14 @@ import java.nio.file.Paths;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 
@@ -34,7 +30,6 @@ import io.debezium.DebeziumException;
 import io.debezium.embedded.ClientProvided;
 import io.debezium.embedded.Connect;
 import io.debezium.embedded.async.ConvertingAsyncEngineBuilderFactory;
-import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.ChangeConsumer;
 import io.debezium.engine.format.Avro;
@@ -68,7 +63,7 @@ public class DebeziumServer {
     private static final Logger LOGGER = LoggerFactory.getLogger(DebeziumServer.class);
 
     private static final String PROP_PREFIX = "debezium.";
-    private static final String PROP_SOURCE_PREFIX = PROP_PREFIX + "source.";
+    static final String PROP_SOURCE_PREFIX = PROP_PREFIX + "source.";
     private static final String PROP_SINK_PREFIX = PROP_PREFIX + "sink.";
     private static final String PROP_FORMAT_PREFIX = PROP_PREFIX + "format.";
     private static final String PROP_PREDICATES_PREFIX = PROP_PREFIX + "predicates.";
@@ -80,7 +75,7 @@ public class DebeziumServer {
 
     private static final String PROP_PREDICATES = PROP_PREFIX + "predicates";
     private static final String PROP_TRANSFORMS = PROP_PREFIX + "transforms";
-    private static final String PROP_SINK_TYPE = PROP_SINK_PREFIX + "type";
+    static final String PROP_SINK_TYPE = PROP_SINK_PREFIX + "type";
 
     private static final String PROP_HEADER_FORMAT = PROP_FORMAT_PREFIX + "header";
     private static final String PROP_KEY_FORMAT = PROP_FORMAT_PREFIX + "key";
@@ -101,19 +96,21 @@ public class DebeziumServer {
 
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
 
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private int returnCode = 0;
 
     @Inject
     BeanManager beanManager;
 
     @Inject
+    ChangeConsumerFactory changeConsumerFactory;
+
+    @Inject
     @Liveness
     ConnectorLifecycle health;
 
-    private Bean<DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>> consumerBean;
-    private CreationalContext<ChangeConsumer<ChangeEvent<Object, Object>>> consumerBeanCreationalContext;
-    private DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> consumer;
+    private DefaultChangeConsumer consumer;
+
     private DebeziumEngine<?> engine;
     private final Properties props = new Properties();
 
@@ -123,22 +120,7 @@ public class DebeziumServer {
         final Config config = loadConfigOrDie();
         final String name = config.getValue(PROP_SINK_TYPE, String.class);
 
-        final Set<Bean<?>> beans = beanManager.getBeans(name).stream()
-                .filter(x -> DebeziumEngine.ChangeConsumer.class.isAssignableFrom(x.getBeanClass()))
-                .collect(Collectors.toSet());
-        LOGGER.debug("Found {} candidate consumer(s)", beans.size());
-
-        if (beans.size() == 0) {
-            throw new DebeziumException("No Debezium consumer named '" + name + "' is available");
-        }
-        else if (beans.size() > 1) {
-            throw new DebeziumException("Multiple Debezium consumers named '" + name + "' were found");
-        }
-
-        consumerBean = (Bean<DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>>) beans.iterator().next();
-        consumerBeanCreationalContext = beanManager.createCreationalContext(consumerBean);
-        consumer = consumerBean.create(consumerBeanCreationalContext);
-        LOGGER.info("Consumer '{}' instantiated", consumer.getClass().getName());
+        consumer = changeConsumerFactory.create();
 
         final Class<Any> keyFormat = (Class<Any>) getFormat(config, PROP_KEY_FORMAT);
         final Class<Any> valueFormat = (Class<Any>) getFormat(config, PROP_VALUE_FORMAT);
@@ -275,7 +257,6 @@ public class DebeziumServer {
         catch (Exception e) {
             LOGGER.error("Exception while shutting down Debezium", e);
         }
-        consumerBean.destroy(consumer, consumerBeanCreationalContext);
     }
 
     void connectorCompleted(@Observes ConnectorCompletedEvent event) {
@@ -310,7 +291,7 @@ public class DebeziumServer {
      * For test purposes only
      */
     DebeziumEngine.ChangeConsumer<?> getConsumer() {
-        return consumer;
+        return consumer.getDelegateConsumer();
     }
 
     public Properties getProps() {
