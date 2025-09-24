@@ -50,7 +50,7 @@ import io.debezium.util.Metronome;
  */
 @Named("http")
 @Dependent
-public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class HttpChangeConsumer extends BaseChangeConsumer {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpChangeConsumer.class);
 
     public static final String PROP_PREFIX = "debezium.sink.http.";
@@ -145,7 +145,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void consumeBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);

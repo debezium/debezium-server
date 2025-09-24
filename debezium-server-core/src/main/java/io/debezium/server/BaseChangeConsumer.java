@@ -10,11 +10,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.connector.common.DebeziumTaskState;
+import io.debezium.embedded.EmbeddedEngineChangeEvent;
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.openlineage.ConnectorContext;
+import io.debezium.openlineage.DebeziumOpenLineageEmitter;
+import io.debezium.openlineage.dataset.DatasetDataExtractor;
+import io.debezium.openlineage.dataset.DatasetMetadata;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
+import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,13 +33,17 @@ import io.debezium.DebeziumException;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.Header;
 
+import static io.debezium.openlineage.dataset.DatasetMetadata.DataStore.KAFKA;
+import static io.debezium.openlineage.dataset.DatasetMetadata.DatasetKind.OUTPUT;
+import static io.debezium.openlineage.dataset.DatasetMetadata.STREAM_DATASET_TYPE;
+
 /**
  * Basic services provided to all change consumers.
  *
  * @author Jiri Pechanec
  *
  */
-public class BaseChangeConsumer {
+public abstract class BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BaseChangeConsumer.class);
 
@@ -36,6 +51,8 @@ public class BaseChangeConsumer {
 
     @Inject
     Instance<StreamNameMapper> customStreamNameMapper;
+    private Config config;
+    private DatasetDataExtractor datasetDataExtractor;
 
     @PostConstruct
     void init() {
@@ -43,6 +60,8 @@ public class BaseChangeConsumer {
             streamNameMapper = customStreamNameMapper.get();
         }
         LOGGER.info("Using '{}' stream name mapper", streamNameMapper);
+        config = ConfigProvider.getConfig();
+        datasetDataExtractor = new DatasetDataExtractor();
     }
 
     /**
@@ -106,4 +125,33 @@ public class BaseChangeConsumer {
         }
         return result;
     }
+
+    @Override
+    public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+
+        final String sink = config.getValue("debezium.sink.type", String.class);
+
+        try {
+            consumeBatch(records, committer);
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        records.forEach(record-> {
+            ConnectHeaders headers = new ConnectHeaders();
+
+            convertHeaders(record).forEach(headers::addString);
+            ConnectorContext connectorContext = ConnectorContext.from(headers);
+            String theName = "the name"; //TODO resolve based on the sink type
+            DatasetMetadata.DataStore dataStore = KAFKA; //TODO revolve based on the sink type
+
+            List<DatasetMetadata.FieldDefinition> fieldDefinitions = datasetDataExtractor.extract(((EmbeddedEngineChangeEvent<Object, Object, Object>) record).sourceRecord());
+            DebeziumOpenLineageEmitter.emit(connectorContext, DebeziumTaskState.RUNNING,
+                    List.of(new DatasetMetadata(theName, OUTPUT, STREAM_DATASET_TYPE, dataStore, fieldDefinitions)));
+        });
+    }
+
+    public abstract void consumeBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer) throws Exception;
 }
