@@ -78,7 +78,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private static final String PROP_AUTH_TLS_PASSWORD = PROP_PREFIX + "auth.tls.password";
 
     private static final String PROP_ASYNC_ENABLED = PROP_PREFIX + "async.enabled";
-    private static final String PROP_ASYNC_TIMEOUT_MS = PROP_PREFIX + "async.timeout-ms";
+    private static final String PROP_ASYNC_TIMEOUT_MS = PROP_PREFIX + "async.timeout.ms";
 
     private Connection nc;
     private JetStream js;
@@ -252,6 +252,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                 .filter(rec -> rec.value() != null)
                 .map(rec -> {
                     String subject = streamNameMapper.map(rec.destination());
+                    LOGGER.trace("Received event for async processing @ {} = '{}'", subject, rec.value());
                     byte[] recordBytes = getBytes(rec.value());
 
                     Headers natsHeaders = new Headers();
@@ -270,13 +271,18 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                             .data(recordBytes)
                             .build();
 
-                    LOGGER.trace("Sending async message to subject: {} (data length: {} bytes)", subject, recordBytes.length);
+                    if (LOGGER.isTraceEnabled()) {
+                        LOGGER.trace("Sending async message to subject: {} (data length: {} bytes)", subject, recordBytes.length);
+                    }
 
                     CompletableFuture<PublishAck> future = js.publishAsync(msg).orTimeout(asyncTimeoutMs, TimeUnit.MILLISECONDS);
 
-                    future.thenAccept(ack -> {
-                        LOGGER.trace("Received ACK for subject: {} (stream: {}, seq: {})", subject, ack.getStream(), ack.getSeqno());
-                    });
+                    if (LOGGER.isTraceEnabled()) {
+                        future.thenAccept(ack -> {
+                            LOGGER.trace("Received ACK for subject: {} (stream: {}, seq: {})", subject, ack.getStream(), ack.getSeqno());
+                        });
+                    }
+
                     return future;
                 })
                 .toList();
@@ -288,7 +294,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             return;
         }
         try {
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]))
                     .get(asyncTimeoutMs, TimeUnit.MILLISECONDS);
 
             for (ChangeEvent<Object, Object> rec : records) {
@@ -298,7 +304,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             LOGGER.debug("Successfully published batch of {} messages", records.size());
         }
         catch (TimeoutException e) {
-            LOGGER.error("Timeout waiting for publish acknowledgments after {}ms", asyncTimeoutMs);
+            LOGGER.error("Timeout waiting for publish acknowledgments after {} ms", asyncTimeoutMs);
             throw new DebeziumException("Timeout waiting for publish acknowledgments", e);
         }
         catch (ExecutionException e) {
