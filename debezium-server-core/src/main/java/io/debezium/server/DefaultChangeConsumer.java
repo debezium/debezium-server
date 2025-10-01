@@ -59,7 +59,7 @@ public class DefaultChangeConsumer extends BaseChangeConsumer implements Debeziu
             throw new DebeziumException("Error while executing batch", e);
         }
 
-        Boolean isOpenLineageEnabled = config.getValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, Boolean.class);
+        Boolean isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, Boolean.class).orElse(false);
         if (isOpenLineageEnabled) {
             Optional<DatasetMetadata.DataStore> dataStore = getDataStore(sink);
             dataStore.ifPresentOrElse(
