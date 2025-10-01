@@ -16,11 +16,11 @@ public class OpenLineageProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = new HashMap<String, String>();
 
-        config.put("openlineage.integration.enabled", "true");
-        config.put("openlineage.integration.config.file.path", getClass().getClassLoader().getResource("openlineage/openlineage.yml").getPath());
-        config.put("openlineage.integration.job.description", "This connector does cdc for products");
-        config.put("openlineage.integration.job.tags", "env=prod,team=cdc");
-        config.put("openlineage.integration.job.owners", "Mario=maintainer,John Doe=Data scientist");
+        config.put("debezium.source.openlineage.integration.enabled", "true");
+        config.put("debezium.source.openlineage.integration.config.file.path", getClass().getClassLoader().getResource("openlineage/openlineage.yml").getPath());
+        config.put("debezium.source.openlineage.integration.job.description", "This connector does cdc for products");
+        config.put("debezium.source.openlineage.integration.job.tags", "env=prod,team=cdc");
+        config.put("debezium.source.openlineage.integration.job.owners", "Mario=maintainer,John Doe=Data scientist");
 
         return config;
     }

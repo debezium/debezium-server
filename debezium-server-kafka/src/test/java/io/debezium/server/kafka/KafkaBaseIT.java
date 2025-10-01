@@ -1,0 +1,89 @@
+/*
+ * Copyright Debezium Authors.
+ *
+ * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
+ */
+package io.debezium.server.kafka;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import jakarta.enterprise.event.Observes;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterAll;
+
+import io.debezium.server.events.ConnectorCompletedEvent;
+import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.util.Testing;
+
+public abstract class KafkaBaseIT {
+
+    private static final String TOPIC_NAME = "testc.inventory.customers";
+    private static final int MESSAGE_COUNT = 4;
+
+    protected static KafkaConsumer<String, String> consumer;
+
+    {
+        Testing.Files.delete(KafkaTestConfigSource.OFFSET_STORE_PATH);
+        Testing.Files.createTestingFile(KafkaTestConfigSource.OFFSET_STORE_PATH);
+    }
+
+    void setupDependencies(@Observes final ConnectorStartedEvent event) {
+        Testing.Print.enable();
+
+        final Map<String, Object> configs = new ConcurrentHashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaTestResourceLifecycleManager.getBootstrapServers());
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "test-" + UUID.randomUUID());
+
+        consumer = new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer());
+    }
+
+    void connectorCompleted(@Observes final ConnectorCompletedEvent event) throws Exception {
+        if (!event.isSuccess()) {
+            throw (Exception) event.getError().get();
+        }
+    }
+
+    @AfterAll
+    static void stop() {
+        if (consumer != null) {
+            consumer.unsubscribe();
+            consumer.close();
+        }
+    }
+
+    protected void testKafka() {
+        Awaitility.await().atMost(Duration.ofSeconds(KafkaTestConfigSource.waitForSeconds())).until(() -> consumer != null);
+        consumer.subscribe(Arrays.asList(TOPIC_NAME));
+
+        final List<ConsumerRecord<String, String>> actual = new ArrayList<>();
+
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(KafkaTestConfigSource.waitForSeconds()))
+                .until(() -> {
+                    consumer.poll(Duration.ofSeconds(KafkaTestConfigSource.waitForSeconds()))
+                            .iterator()
+                            .forEachRemaining(actual::add);
+                    return actual.size() >= MESSAGE_COUNT;
+                });
+        assertThat(actual.size()).isGreaterThanOrEqualTo(MESSAGE_COUNT);
+        Headers headers = actual.get(0).headers();
+        assertThat(headers.headers("headerKey")).isNotEmpty();
+        assertThat(headers.headers("headerKey"))
+                .allMatch(h -> h.key().equals("headerKey") && Arrays.equals(h.value(), "\"headerValue\"".getBytes(StandardCharsets.UTF_8)));
+    }
+}
