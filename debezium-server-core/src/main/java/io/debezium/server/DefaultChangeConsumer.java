@@ -39,11 +39,13 @@ public class DefaultChangeConsumer extends BaseChangeConsumer implements Debeziu
     private final DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> delegateConsumer;
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
+    private final boolean isOpenLineageEnabled;
 
     public DefaultChangeConsumer(DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> delegateConsumer, Config config) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
-        datasetDataExtractor = new DatasetDataExtractor();
+        this.datasetDataExtractor = new DatasetDataExtractor();
+        this.isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, boolean.class).orElse(false);
     }
 
     @Override
@@ -59,7 +61,6 @@ public class DefaultChangeConsumer extends BaseChangeConsumer implements Debeziu
             throw new DebeziumException("Error while executing batch", e);
         }
 
-        Boolean isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, Boolean.class).orElse(false);
         if (isOpenLineageEnabled) {
             Optional<DatasetMetadata.DataStore> dataStore = getDataStore(sink);
             dataStore.ifPresentOrElse(
