@@ -35,7 +35,7 @@ jobs:
         env:
           branch_name: ${{ github.head_ref }}
         run: |
-          curl --silent -X "GET" https://api.github.com/repos/debezium/debezium/pulls | jq '.[] | {branch: .head.ref}' | jq -r '.branch' >> SORTED_PULLS.txt
+          curl --silent -X "GET" https://api.github.com/repos/RedisLabs/debezium/pulls | jq '.[] | {branch: .head.ref}' | jq -r '.branch' >> SORTED_PULLS.txt
 
           while IFS=" " read -r BRANCH;
           do
@@ -54,7 +54,7 @@ jobs:
         if: ${{ steps.branch.outputs.BRANCH_FOUND != 'true' }}
         uses: actions/checkout@v5
         with:
-          repository: debezium/debezium
+          repository: RedisLabs/debezium
           ref: ${{ github.base_ref }}
           path: core
       - name: Set up JDK
