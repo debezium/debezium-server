@@ -8,7 +8,6 @@ package io.debezium.server;
 import java.util.Collections;
 import java.util.List;
 
-import io.debezium.testing.testcontainers.SchemaRegistryTestResourceLifecycleManager;
 import io.quarkus.test.junit.QuarkusTestProfile;
 
 public class DebeziumServerSchemaRegistryProfile implements QuarkusTestProfile {
