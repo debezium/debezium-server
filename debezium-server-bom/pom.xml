@@ -14,7 +14,7 @@
     <properties>
         <version.kinesis>2.17.241</version.kinesis>
         <version.sqs>2.13.13</version.sqs>
-        <version.pubsub>26.17.0</version.pubsub>
+        <version.pubsub>26.48.0</version.pubsub>
         <version.pulsar>2.10.1</version.pulsar>
         <version.milvus>2.5.4</version.milvus>
         <version.qdrant>1.14.0</version.qdrant>
