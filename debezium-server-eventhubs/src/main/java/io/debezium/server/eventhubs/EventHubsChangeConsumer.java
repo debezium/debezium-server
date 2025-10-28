@@ -49,6 +49,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private static final String PROP_EVENTHUB_NAME = PROP_PREFIX + "hubname";
     private static final String PROP_PARTITION_ID = PROP_PREFIX + "partitionid";
     private static final String PROP_PARTITION_KEY = PROP_PREFIX + "partitionkey";
+    private static final String PROP_DYNAMIC_PARTITION_ROUTING_KEY = PROP_PREFIX + "dynamicpartitionrouting";
     // maximum size for the batch of events (bytes)
     private static final String PROP_MAX_BATCH_SIZE = PROP_PREFIX + "maxbatchsize";
     private static final String PROP_HASH_MESSAGE_KEY_FUNCTION = PROP_PREFIX + "hashmessagekeyfunction";
@@ -57,6 +58,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private String eventHubName;
     private String configuredPartitionId;
     private String configuredPartitionKey;
+    private DynamicPartitionRoutingStrategy dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.DEFAULT;
     private Integer maxBatchSize;
     private Integer partitionCount;
     private Optional<HashFunction> hashMessageFunction;
@@ -89,6 +91,10 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
         configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        if (configuredPartitionId.isEmpty() && configuredPartitionKey.isEmpty()) {
+            final var routingValue = config.getOptionalValue(PROP_DYNAMIC_PARTITION_ROUTING_KEY, String.class).orElse(DynamicPartitionRoutingStrategy.DEFAULT.name());
+            dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.fromString(routingValue);
+        }
         hashMessageFunction = config.getOptionalValue(PROP_HASH_MESSAGE_KEY_FUNCTION, String.class)
                 .map(HashFunction::fromString);
 
@@ -122,6 +128,22 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
         catch (Exception e) {
             LOGGER.warn("Exception while closing Event Hubs producer: {}", e);
+        }
+    }
+
+    private String getPartitionKey(ChangeEvent<Object, Object> record) {
+        String initialPartitionKey = getString(record.key());
+        return hashMessageFunction
+                .map(hasher -> hasher.hash().apply(initialPartitionKey))
+                .orElse(initialPartitionKey);
+    }
+
+    private Integer getPartitionId(ChangeEvent<Object, Object> record) {
+        if (record.partition() == null) {
+            return BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
+        }
+        else {
+            return record.partition();
         }
     }
 
@@ -159,7 +181,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 }
 
                 // Find the partition to send eventData to.
-                Integer targetPartitionId;
+                Integer targetPartitionId = null;
                 String dynamicPartitionKey = null;
 
                 if (!configuredPartitionId.isEmpty()) {
@@ -170,20 +192,25 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     targetPartitionId = BatchManager.BATCH_INDEX_FOR_PARTITION_KEY;
                 }
                 else {
-                    if (record.key() != null) {
-                        String initialPartitionKey = getString(record.key());
-
-                        dynamicPartitionKey = hashMessageFunction
-                                .map(hasher -> hasher.hash().apply(initialPartitionKey))
-                                .orElse(initialPartitionKey);
-
-                        targetPartitionId = null;
-                    }
-                    else {
-                        targetPartitionId = record.partition();
-                        if (targetPartitionId == null) {
-                            targetPartitionId = BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
-                        }
+                    switch (dynamicPartitionRoutingStrategy) {
+                        case KEY:
+                            if (record.key() != null) {
+                                dynamicPartitionKey = getPartitionKey(record);
+                            }
+                            else {
+                                targetPartitionId = BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
+                            }
+                            break;
+                        case PARTITIONID:
+                            targetPartitionId = getPartitionId(record);
+                            break;
+                        default:
+                            if (record.key() != null) {
+                                dynamicPartitionKey = getPartitionKey(record);
+                            }
+                            else {
+                                targetPartitionId = getPartitionId(record);
+                            }
                     }
                 }
 
