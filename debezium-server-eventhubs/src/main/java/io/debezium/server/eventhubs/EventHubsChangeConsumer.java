@@ -134,7 +134,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
     }
 
-    String getPartitionKey(ChangeEvent<Object, Object> record) {
+    private String getPartitionKey(ChangeEvent<Object, Object> record) {
         String initialPartitionKey = getString(record.key());
         return hashMessageFunction
                 .map(hasher -> hasher.hash().apply(initialPartitionKey))
