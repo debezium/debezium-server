@@ -58,7 +58,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     private String eventHubName;
     private String configuredPartitionId;
     private String configuredPartitionKey;
-    private DynamicPartitionRoutingStrategy dynamicPartitionRoutingStrategy;
+    private DynamicPartitionRoutingStrategy dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.DEFAULT;
     private Integer maxBatchSize;
     private Integer partitionCount;
     private Optional<HashFunction> hashMessageFunction;
