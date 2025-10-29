@@ -138,7 +138,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 .orElse(initialPartitionKey);
     }
 
-    Integer getPartitionId(ChangeEvent<Object, Object> record) {
+    private Integer getPartitionId(ChangeEvent<Object, Object> record) {
         if (record.partition() == null) {
             return BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
         }
