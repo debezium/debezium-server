@@ -91,11 +91,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
         configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
         configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
-        if (!configuredPartitionId.isEmpty() || !configuredPartitionKey.isEmpty()) {
-            dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.DEFAULT;
-        }
-        else {
-            String routingValue = config.getOptionalValue(PROP_DYNAMIC_PARTITION_ROUTING_KEY, String.class).orElse("default");
+        if (configuredPartitionId.isEmpty() && configuredPartitionKey.isEmpty()) {
+            final var routingValue = config.getOptionalValue(PROP_DYNAMIC_PARTITION_ROUTING_KEY, String.class).orElse(DynamicPartitionRoutingStrategy.DEFAULT.name());
             dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.fromString(routingValue);
         }
         hashMessageFunction = config.getOptionalValue(PROP_HASH_MESSAGE_KEY_FUNCTION, String.class)
