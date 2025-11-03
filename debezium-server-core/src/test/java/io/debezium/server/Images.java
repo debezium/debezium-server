@@ -24,7 +24,7 @@ public class Images {
     public static final String QDRANT_IMAGE = "qdrant/qdrant:" + QDRANT_VERSION;
     public static final String INFINISPAN_IMAGE = "quay.io/infinispan/server:" + System.getProperty("tag.infinispan", "latest");
     public static final String LOCALSTACK_IMAGE = "mirror.gcr.io/localstack/localstack";
-    public static final String RABBITMQ_IMAGE = "mirror.gcr.io/library/rabbitmq:3.12.9-management";
+    public static final String RABBITMQ_IMAGE = "mirror.gcr.io/library/rabbitmq:4.2.0-management";
     public static final String ROCKETMQ_IMAGE = "mirror.gcr.io/apache/rocketmq";
     public static final String WIREMOCK_IMAGE = "mirror.gcr.io/wiremock/wiremock:3.2.0";
     public static final String NATS_IMAGE = "mirror.gcr.io/library/nats:latest";

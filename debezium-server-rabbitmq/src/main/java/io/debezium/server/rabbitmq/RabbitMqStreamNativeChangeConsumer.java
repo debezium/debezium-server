@@ -26,7 +26,10 @@ import org.slf4j.LoggerFactory;
 import com.rabbitmq.stream.Address;
 import com.rabbitmq.stream.ByteCapacity;
 import com.rabbitmq.stream.Environment;
+import com.rabbitmq.stream.Message;
+import com.rabbitmq.stream.MessageBuilder;
 import com.rabbitmq.stream.Producer;
+import com.rabbitmq.stream.ProducerBuilder;
 import com.rabbitmq.stream.StreamCreator;
 import com.rabbitmq.stream.StreamException;
 
@@ -106,8 +109,20 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     @ConfigProperty(name = PROP_PREFIX + "stream.maxSegmentSize")
     Optional<String> streamMaxSegmentSize;
 
+    @ConfigProperty(name = PROP_PREFIX + "superStream.enable", defaultValue = "false")
+    boolean superStreamEnable;
+
+    @ConfigProperty(name = PROP_PREFIX + "superStream.partitions", defaultValue = "3")
+    int superStreamPartitions;
+
+    @ConfigProperty(name = PROP_PREFIX + "superStream.bindingKeys")
+    Optional<String[]> superStreamBindingKeys;
+
     @ConfigProperty(name = PROP_PREFIX + "producer.name")
     Optional<String> producerName;
+
+    @ConfigProperty(name = PROP_PREFIX + "producer.filterValue")
+    Optional<String> producerFilterValue;
 
     @ConfigProperty(name = PROP_PREFIX + "producer.batchSize", defaultValue = "100")
     int producerBatchSize;
@@ -138,14 +153,80 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     Map<String, Producer> streamProducers = new HashMap<>();
 
     private void createStream(Environment env, String name) {
-        LOGGER.info("Creating stream '{}'", name);
-        StreamCreator stream = env.streamCreator().stream(name);
+        StreamCreator stream = env.streamCreator();
+        if (superStreamEnable) {
+            LOGGER.info("Creating super stream '{}' with {} partitions", name, superStreamPartitions);
+            StreamCreator.SuperStreamConfiguration superStreamConfiguration = stream
+                    .name(name)
+                    .superStream()
+                    .partitions(superStreamPartitions);
+
+            superStreamBindingKeys.ifPresent(superStreamConfiguration::bindingKeys);
+            stream = superStreamConfiguration.creator();
+        }
+        else {
+            LOGGER.info("Creating stream '{}'", name);
+            stream = stream.stream(name);
+        }
 
         streamMaxAge.ifPresent(stream::maxAge);
         streamMaxLength.map(ByteCapacity::from).ifPresent(stream::maxLengthBytes);
         streamMaxSegmentSize.map(ByteCapacity::from).ifPresent(stream::maxSegmentSizeBytes);
 
         stream.create();
+    }
+
+    private Message createMessage(Producer producer, ChangeEvent<Object, Object> record) {
+        MessageBuilder message = producer.messageBuilder();
+        MessageBuilder.ApplicationPropertiesBuilder applicationProperties = message.applicationProperties();
+        for (Header<Object> header : record.headers()) {
+            applicationProperties = applicationProperties.entry(header.getKey(), getString(header.getValue()));
+        }
+        message = applicationProperties.messageBuilder();
+        message = message.properties().messageId(getString(record.key())).messageBuilder();
+
+        final Object value = (record.value() != null) ? record.value() : nullValue;
+
+        return message.addData(getBytes(value)).build();
+    }
+
+    private Producer createProducer(String topic) {
+        ProducerBuilder producer = environment.producerBuilder();
+
+        if (superStreamEnable) {
+            producer = producer
+                    .superStream(topic)
+                    .routing(msg -> msg.getProperties().getMessageIdAsString())
+                    .producerBuilder();
+        }
+        else {
+            producer = producer
+                    .stream(topic)
+                    .subEntrySize(producerSubEntrySize);
+        }
+
+        if (producerFilterValue.isPresent()) {
+            String filterKey = producerFilterValue.get();
+            producer = producer.filterValue(msg -> {
+                Map<String, Object> properties = msg.getApplicationProperties();
+                if (properties == null || !properties.containsKey(filterKey)) {
+                    LOGGER.warn("Property '{}' not found in message application properties. Filter will return null.", filterKey);
+                    return null;
+                }
+
+                Object filterValue = properties.get(filterKey);
+                return filterValue != null ? filterValue.toString() : null;
+            });
+        }
+
+        return producer
+                .confirmTimeout(Duration.ofSeconds(producerConfirmTimeout))
+                .enqueueTimeout(Duration.ofSeconds(producerEnqueueTimeout))
+                .batchPublishingDelay(Duration.ofMillis(producerBatchPublishingDelay))
+                .maxUnconfirmedMessages(producerMaxUnconfirmedMessages)
+                .batchSize(producerBatchSize)
+                .name(producerName.orElse(null))
+                .build();
     }
 
     @PostConstruct
@@ -220,23 +301,12 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
                         createStream(environment, topic);
                     }
 
-                    producer = environment.producerBuilder()
-                            .confirmTimeout(Duration.ofSeconds(producerConfirmTimeout))
-                            .enqueueTimeout(Duration.ofSeconds(producerEnqueueTimeout))
-                            .batchPublishingDelay(Duration.ofMillis(producerBatchPublishingDelay))
-                            .maxUnconfirmedMessages(producerMaxUnconfirmedMessages)
-                            .subEntrySize(producerSubEntrySize)
-                            .batchSize(producerBatchSize)
-                            .name(producerName.orElse(null))
-                            .stream(topic)
-                            .build();
-
+                    producer = createProducer(topic);
                     streamProducers.put(topic, producer);
                 }
 
-                final Object value = (record.value() != null) ? record.value() : nullValue;
                 producer.send(
-                        producer.messageBuilder().addData(getBytes(value)).build(),
+                        createMessage(producer, record),
                         confirmationStatus -> {
                             try {
                                 if (confirmationStatus.isConfirmed()) {
@@ -274,14 +344,4 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
             throw new DebeziumException("Batch processing was incomplete due to record processing errors.");
         }
     }
-
-    private Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
-        List<Header<Object>> headers = record.headers();
-        Map<String, Object> rabbitMqHeaders = new HashMap<>();
-        for (Header<Object> header : headers) {
-            rabbitMqHeaders.put(header.getKey(), header.getValue());
-        }
-        return rabbitMqHeaders;
-    }
-
 }
