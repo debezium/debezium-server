@@ -6,6 +6,7 @@
 package io.debezium.server.rabbitmq;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,11 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
+import javax.net.ssl.SNIHostName;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLParameters;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import com.rabbitmq.stream.Address;
 import com.rabbitmq.stream.ByteCapacity;
 import com.rabbitmq.stream.Environment;
+import com.rabbitmq.stream.EnvironmentBuilder;
 import com.rabbitmq.stream.Message;
 import com.rabbitmq.stream.MessageBuilder;
 import com.rabbitmq.stream.Producer;
@@ -39,6 +46,10 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
 import io.debezium.server.BaseChangeConsumer;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
 
 /**
  * Implementation of the consumer that delivers the messages into RabbitMQ Stream destination.
@@ -75,6 +86,12 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     @ConfigProperty(name = PROP_PREFIX + "virtualHost", defaultValue = "/")
     String virtualHost;
+
+    @ConfigProperty(name = PROP_PREFIX + "tls.enable", defaultValue = "false")
+    boolean tlsEnable;
+
+    @ConfigProperty(name = PROP_PREFIX + "tls.serverName")
+    Optional<String> tlsServerName;
 
     @ConfigProperty(name = PROP_PREFIX + "rpcTimeout", defaultValue = "10")
     int rpcTimeout;
@@ -242,7 +259,34 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
         try {
             Address entryPoint = new Address(connectionHost, connectionPort);
-            environment = Environment.builder()
+            EnvironmentBuilder environmentBuilder = Environment.builder();
+
+            if (tlsEnable) {
+                try {
+                    SslContext sslContext = SslContextBuilder.forClient()
+                            .sslProvider(SslProvider.JDK)
+                            .protocols("TLSv1.2", "TLSv1.3")
+                            .build();
+
+                    if (tlsServerName.isPresent()) {
+                        SSLParameters sslParameters = new SSLParameters();
+                        sslParameters.setServerNames(Collections.singletonList(new SNIHostName(tlsServerName.get())));
+
+                        SSLEngine sslEngine = sslContext.newEngine(ByteBufAllocator.DEFAULT);
+                        sslEngine.setSSLParameters(sslParameters);
+                    }
+
+                    environmentBuilder = environmentBuilder
+                            .tls()
+                            .sslContext(sslContext)
+                            .environmentBuilder();
+                }
+                catch (SSLException e) {
+                    LOGGER.error("Failed to set SSL context: {}", e.getMessage());
+                }
+            }
+
+            environment = environmentBuilder
                     .host(entryPoint.host())
                     .port(entryPoint.port())
                     .addressResolver(address -> entryPoint)
