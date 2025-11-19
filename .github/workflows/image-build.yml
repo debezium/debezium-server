@@ -3,8 +3,7 @@ on:
   push:
     branches:
       - main
-      - PLT-897
-      - debezium-server-3.2
+      - 'custom-build-*.Final'
     paths-ignore:
         - '*.md'
 
