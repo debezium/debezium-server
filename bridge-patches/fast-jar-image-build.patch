@@ -1,0 +1,381 @@
+From 31dcd1ec13f28d5a9eadfb1887ff81358ac8c282 Mon Sep 17 00:00:00 2001
+From: Szonja <szonja.jakab@getbridge.com>
+Date: Tue, 1 Jul 2025 19:39:29 +0200
+Subject: [PATCH 1/3] Add fast jar
+
+---
+ .github/workflows/image-build.yml | 110 ++++++++++++++++++++++++++++++
+ Dockerfile                        |  87 +++++++++++++++++++++++
+ bridge-run.sh                     |  63 +++++++++++++++++
+ pom.xml                           |  12 ++++
+ 4 files changed, 272 insertions(+)
+ create mode 100644 .github/workflows/image-build.yml
+ create mode 100644 Dockerfile
+ create mode 100644 bridge-run.sh
+
+diff --git a/.github/workflows/image-build.yml b/.github/workflows/image-build.yml
+new file mode 100644
+index 0000000..d20ec17
+--- /dev/null
++++ b/.github/workflows/image-build.yml
+@@ -0,0 +1,110 @@
++name: Image build
++on:
++  push:
++    branches:
++      - main
++      - PLT-897
++      - debezium-server-3.2
++    paths-ignore:
++        - '*.md'
++
++jobs:
++  build:
++    runs-on: ubuntu-latest
++
++    steps:
++      - name: Checkout core repository
++        uses: actions/checkout@v4
++        with:
++          repository: get-bridge/debezium
++          ref: main
++          path: core
++      - name: Checkout Debezium Server
++        uses: actions/checkout@v4
++        with:
++          repository: get-bridge/debezium-server
++          ref: ${{ github.ref }}
++          path: server
++      - name: Set up JDK
++        uses: actions/setup-java@v4
++        with:
++          distribution: 'temurin'
++          java-version: 21
++
++      - name: Cache Maven packages
++        uses: actions/cache@v4
++        with:
++          path: ~/.m2
++          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
++          restore-keys: ${{ runner.os }}-m2
++
++      - name: Maven build core
++        run: |
++          ./server/mvnw clean install -B -ntp -f core/pom.xml \
++          -DskipTests=true \
++          -DskipITs=true \
++          -Dformat.formatter.goal=validate \
++          -Dformat.imports.goal=check \
++          -Dhttp.keepAlive=false \
++          -Dmaven.wagon.http.pool=false \
++          -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
++          -Dcheckstyle.skip=true \
++          -Dformat.skip=true \
++          -Drevapi.skip \
++          -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
++      - name: Maven build Debezium Server
++        id: build_server
++        run: |
++          ./server/mvnw clean install -B -ntp -fae -f server/pom.xml \
++          -Passembly,pulsar-and-postgres \
++          -Dformat.formatter.goal=validate \
++          -Dformat.imports.goal=check \
++          -Dhttp.keepAlive=false \
++          -Dmaven.wagon.http.pool=false \
++          -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 \
++          -DskipNonCore \
++          -DskipTests=true \
++          -DskipITs=true \
++          -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
++          -DfailFlakyTests=false
++          ARTIFACT_PATH=$(find server/debezium-server-dist/target/ -maxdepth 1 -name "debezium-server-dist-*.tar.gz" | head -n 1)
++          if [ -f "$ARTIFACT_PATH" ]; then
++            ARTIFACT_FILENAME=$(basename "$ARTIFACT_PATH")
++            echo "Discovered artifact: $ARTIFACT_FILENAME"
++            echo "artifact_filename=$ARTIFACT_FILENAME" >> $GITHUB_OUTPUT
++          else
++            echo "Error: Could not find artifact 'debezium-server-dist-*.tar.gz' in server/debezium-server-dist/target/"
++            echo "Available files in target directory:"
++            ls -la server/debezium-server-dist/target/
++            exit 1
++          fi 
++      
++      - name: Configure AWS credentials
++        uses: aws-actions/configure-aws-credentials@v2
++        with:
++          aws-access-key-id: ${{ secrets.TRUSS_AWS_ACCESS_KEY_ID }}
++          aws-secret-access-key: ${{ secrets.TRUSS_AWS_SECRET_ACCESS_KEY }}
++          aws-region: us-east-2
++
++      - name: Login to AWS ECR
++        id: login-ecr
++        uses: aws-actions/amazon-ecr-login@v1
++
++      - name: Build Server Docker image
++        env:
++          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
++          ECR_REPOSITORY: debezium-server
++        run: |
++          ARTIFACT_FILE="${{ steps.build_server.outputs.artifact_filename }}"
++          if [ -z "$ARTIFACT_FILE" ]; then
++              echo "Error: Artifact filename not found from previous step. Docker build cannot proceed."
++              exit 1
++          fi
++          echo "Building Docker image with artifact: $ARTIFACT_FILE"
++          docker build \
++            --build-arg DEBEZIUM_SERVER_DIST_FILENAME="$ARTIFACT_FILE" \
++            --tag $ECR_REGISTRY/$ECR_REPOSITORY:latest \
++            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA \
++            server/ # Context for Dockerfile is 'server/'
++          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
++          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+\ No newline at end of file
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..41ba9cf
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,87 @@
++#
++# Tracing agent prep
++#
++FROM curlimages/curl:latest AS downloader
++RUN curl --progress-bar --location --output /tmp/otel-javaagent.jar \
++  https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.9.0/opentelemetry-javaagent.jar
++
++FROM registry.access.redhat.com/ubi8/openjdk-21 AS builder
++LABEL maintainer="Debezium Community"
++ENV SERVER_HOME=/debezium \
++    DEBEZIUM_ARCHIVE=/tmp/debezium.tar.gz
++
++#
++# Create a directory for Debezium Server
++#
++USER root
++RUN microdnf -y install gzip && \
++    microdnf clean all && \
++    mkdir $SERVER_HOME && \
++    chmod 755 $SERVER_HOME
++
++#
++# Change ownership and switch user
++#
++RUN chown -R jboss $SERVER_HOME && \
++    chgrp -R jboss $SERVER_HOME
++USER jboss
++RUN mkdir $SERVER_HOME/conf && \
++    mkdir $SERVER_HOME/data
++
++ARG DEBEZIUM_SERVER_DIST_FILENAME
++
++#
++# Copy the debezium distribution file
++#
++COPY --chown=jboss:jboss debezium-server-dist/target/${DEBEZIUM_SERVER_DIST_FILENAME} $DEBEZIUM_ARCHIVE
++
++#
++# Verify the contents and then install ...
++#
++RUN tar xzf $DEBEZIUM_ARCHIVE -C $SERVER_HOME --strip-components 1 && \
++    rm -f $DEBEZIUM_ARCHIVE
++
++# Final stage
++FROM registry.access.redhat.com/ubi8/openjdk-21 AS final
++ENV SERVER_HOME=/debezium
++
++USER root
++RUN microdnf -y install gzip && \
++    microdnf clean all && \
++    mkdir $SERVER_HOME && \
++    chmod 755 $SERVER_HOME
++
++RUN chown -R jboss $SERVER_HOME && \
++    chgrp -R jboss $SERVER_HOME
++
++USER jboss
++
++# Copy the prepared Debezium installation from builder stage
++COPY --from=builder --chown=jboss:jboss $SERVER_HOME $SERVER_HOME
++
++# Copy the OpenTelemetry agent from downloader stage
++COPY --from=downloader --chown=jboss:jboss /tmp/otel-javaagent.jar $SERVER_HOME/otel-javaagent.jar
++
++#
++# Add jolokia for healthchecks over jmx
++#
++ADD --chown=jboss:jboss https://repo1.maven.org/maven2/org/jolokia/jolokia-jvm/1.7.2/jolokia-jvm-1.7.2.jar $SERVER_HOME/jolokia.jar
++
++# Copy the run script
++COPY --chown=jboss:jboss bridge-run.sh $SERVER_HOME
++
++#
++# Allow random UID to use Debezium Server
++#
++RUN chmod -R g+w,o+w $SERVER_HOME
++RUN chmod +x $SERVER_HOME/bridge-run.sh
++
++# Set the working directory to the Debezium Server home directory
++WORKDIR $SERVER_HOME
++
++#
++# Expose the ports and set up volumes for the data, transaction log, and configuration
++#
++EXPOSE 8080
++VOLUME ["/debezium/conf","/debezium/data"]
++CMD ["/debezium/bridge-run.sh"]
+\ No newline at end of file
+diff --git a/bridge-run.sh b/bridge-run.sh
+new file mode 100644
+index 0000000..ed20606
+--- /dev/null
++++ b/bridge-run.sh
+@@ -0,0 +1,63 @@
++#!/bin/bash
++
++export JAVA_OPTS="-javaagent:jolokia.jar -Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.port=9012 -Dcom.sun.management.jmxremote.rmi.port=9012 -Djava.rmi.server.hostname=$POD_IP"
++
++if [[ -v PULSAR_SERVICE_ACCOUNT_JSON ]]; then
++  echo "$PULSAR_SERVICE_ACCOUNT_JSON" > /tmp/pulsar_creds.json
++else
++  echo "Pulsar service account environment variable (PULSAR_SERVICE_ACCOUNT_JSON) was not found."
++fi
++
++# Change to the correct working directory
++cd /debezium
++
++# Find the main runner JAR (Quarkus fast-jar format)
++DEBEZIUM_JAR=$(find /debezium -name "*-runner.jar" | head -1)
++
++if [ -z "$DEBEZIUM_JAR" ]; then
++    echo "Error: Debezium Server runner JAR not found"
++    echo "Looking for available JARs:"
++    find /debezium -name "*.jar" -type f
++    exit 1
++fi
++
++echo "Found Debezium JAR: $DEBEZIUM_JAR"
++
++echo "Starting Debezium Server with OpenTelemetry tracing..."
++echo "Working directory: $(pwd)"
++echo "JAR file: $DEBEZIUM_JAR"
++
++# Check if there's a quarkus-run.jar (proper Quarkus fast-jar)
++QUARKUS_RUN_JAR="/debezium/quarkus-app/quarkus-run.jar"
++if [ -f "$QUARKUS_RUN_JAR" ]; then
++    echo "Found proper Quarkus application structure, using quarkus-run.jar"
++    exec java \
++        -javaagent:/debezium/otel-javaagent.jar \
++        -javaagent:/debezium/jolokia.jar \
++        -Dcom.sun.management.jmxremote=true \
++        -Dcom.sun.management.jmxremote.authenticate=false \
++        -Dcom.sun.management.jmxremote.ssl=false \
++        -Dcom.sun.management.jmxremote.port=9012 \
++        -Dcom.sun.management.jmxremote.rmi.port=9012 \
++        -Djava.rmi.server.hostname=${POD_IP} \
++        -jar "$QUARKUS_RUN_JAR" "$@"
++else
++    echo "Using runner JAR with explicit classpath"
++    # For Quarkus fast-jar, we need to build the classpath explicitly
++    CLASSPATH="$DEBEZIUM_JAR"
++    for jar in /debezium/lib/*.jar; do
++        CLASSPATH="$CLASSPATH:$jar"
++    done
++
++    echo "Running with classpath approach..."
++    exec java \
++        -javaagent:/debezium/otel-javaagent.jar \
++        -javaagent:/debezium/jolokia.jar \
++        -Dcom.sun.management.jmxremote=true \
++        -Dcom.sun.management.jmxremote.authenticate=false \
++        -Dcom.sun.management.jmxremote.ssl=false \
++        -Dcom.sun.management.jmxremote.port=9012 \
++        -Dcom.sun.management.jmxremote.rmi.port=9012 \
++        -Djava.rmi.server.hostname=${POD_IP} \
++        -cp "$CLASSPATH" \
++        io.debezium.server.Main "$@"
+\ No newline at end of file
+diff --git a/pom.xml b/pom.xml
+index 771eead..2ba6a9d 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -42,6 +42,18 @@
+ 
+     </properties>
+ 
++    <build>
++        <plugins>
++            <plugin>
++                <groupId>io.quarkus</groupId>
++                <artifactId>quarkus-maven-plugin</artifactId>
++                <configuration>
++                    <packageType>fast-jar</packageType> 
++                </configuration>
++            </plugin>
++        </plugins>
++    </build>
++
+     <repositories>
+         <repository>
+             <id>central-snapshots</id>
+-- 
+2.50.1 (Apple Git-155)
+
+
+From 5590189579f8a9b2dcbc472a35aeebe0896855a6 Mon Sep 17 00:00:00 2001
+From: Szonja <szonja.jakab@getbridge.com>
+Date: Wed, 19 Nov 2025 22:13:36 +0100
+Subject: [PATCH 2/3] Use regex pattern for custom build branches
+
+- Changed from specific branch names to 'custom-build-*.Final' pattern
+- Enables automatic deployment for any custom build version
+- Future-proof for new Debezium versions
+---
+ .github/workflows/image-build.yml | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/.github/workflows/image-build.yml b/.github/workflows/image-build.yml
+index d20ec17..517167e 100644
+--- a/.github/workflows/image-build.yml
++++ b/.github/workflows/image-build.yml
+@@ -3,8 +3,7 @@ on:
+   push:
+     branches:
+       - main
+-      - PLT-897
+-      - debezium-server-3.2
++      - 'custom-build-*.Final'
+     paths-ignore:
+         - '*.md'
+ 
+-- 
+2.50.1 (Apple Git-155)
+
+
+From 55a9401f91dcbb17660876fd98624cf202f68f01 Mon Sep 17 00:00:00 2001
+From: Szonja <szonja.jakab@getbridge.com>
+Date: Wed, 19 Nov 2025 22:19:52 +0100
+Subject: [PATCH 3/3] Make workflow regex more flexible
+
+- Changed from 'custom-build-*.Final' to 'custom-build-*.Final*'
+- Now supports branches with suffixes after .Final (e.g., -clean, -test)
+- Maintains compatibility while being more flexible
+---
+ .github/workflows/image-build.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.github/workflows/image-build.yml b/.github/workflows/image-build.yml
+index 517167e..eba454d 100644
+--- a/.github/workflows/image-build.yml
++++ b/.github/workflows/image-build.yml
+@@ -3,7 +3,7 @@ on:
+   push:
+     branches:
+       - main
+-      - 'custom-build-*.Final'
++      - 'custom-build-*.Final*'
+     paths-ignore:
+         - '*.md'
+ 
+-- 
+2.50.1 (Apple Git-155)
+
