@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-      - 'custom-build-*.Final'
+      - 'custom-build-*.Final*'
     paths-ignore:
         - '*.md'
 
