@@ -6,31 +6,36 @@
 package io.debezium.server.http;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.Header;
+import io.smallrye.config.PropertiesConfigSource;
+import io.smallrye.config.SmallRyeConfigBuilder;
 
 public class HttpChangeConsumerTest {
 
     @Test
-    public void verifyGenerateRequestWithDefaultConfig() throws URISyntaxException {
-        HttpChangeConsumer changeConsumer = new HttpChangeConsumer();
-        changeConsumer.initWithConfig(generateMockConfig(Map.of(
+    public void verifyGenerateRequestWithDefaultConfig() throws Exception {
+
+        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                "debezium.format.value", "avro")));
+                "debezium.format.value", "avro"));
         HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
         String value = request.headers().firstValue("X-DEBEZIUM-h1key").orElse(null);
@@ -38,12 +43,11 @@ public class HttpChangeConsumerTest {
     }
 
     @Test
-    public void verifyGenerateRequestWithBase64EncodingDisabled() throws URISyntaxException {
-        HttpChangeConsumer changeConsumer = new HttpChangeConsumer();
-        changeConsumer.initWithConfig(generateMockConfig(Map.of(
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, false,
+    public void verifyGenerateRequestWithBase64EncodingDisabled() throws Exception {
+        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
+                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, "false",
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                "debezium.format.value", "avro")));
+                "debezium.format.value", "avro"));
         HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
         String value = request.headers().firstValue("X-DEBEZIUM-h1key").orElse(null);
@@ -51,20 +55,77 @@ public class HttpChangeConsumerTest {
     }
 
     @Test
-    public void verifyGenerateRequestWithDifferentHeaderPrefix() throws URISyntaxException {
-        HttpChangeConsumer changeConsumer = new HttpChangeConsumer();
-        changeConsumer.initWithConfig(generateMockConfig(Map.of(
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, false,
+    public void verifyGenerateRequestWithDifferentHeaderPrefix() throws Exception {
+        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
+                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, "false",
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_PREFIX, "XYZ-DBZ-",
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                "debezium.format.value", "avro")));
+                "debezium.format.value", "avro"));
         HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
         String value = request.headers().firstValue("XYZ-DBZ-h1key").orElse(null);
         assertEquals("h1Value", value);
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
+    @Test
+    public void testRecordSentWithIOExceptionNullMessage() throws Exception {
+        HttpClient mockHttpClient = mock(HttpClient.class);
+        when(mockHttpClient.send(any(), any())).thenThrow(new IOException());
+
+        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
+                Map.of(
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                        "debezium.format.value", "json"
+                ),
+                mockHttpClient
+        );
+
+
+        ChangeEvent<Object, Object> event = createChangeEvent();
+
+        assertThrows(InterruptedException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+    }
+
+    @Test
+    public void testRecordSentWithIOExceptionGoawayMessage() throws Exception {
+        HttpClient mockHttpClient = mock(HttpClient.class);
+        when(mockHttpClient.send(any(), any())).thenThrow(new IOException("HTTP/2 GOAWAY received"));
+
+        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
+                Map.of(
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "2",
+                        "debezium.format.value", "json"),
+                mockHttpClient
+        );
+
+        ChangeEvent<Object, Object> event = createChangeEvent();
+
+        // Should retry when GOAWAY is received and eventually throw DebeziumException
+        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+        verify(mockHttpClient, times(2)).send(any(), any());
+    }
+
+    @Test
+    public void testRecordSentWithIOExceptionWithNonGoawayMessage() throws Exception {
+        HttpClient mockHttpClient = mock(HttpClient.class);
+        when(mockHttpClient.send(any(), any())).thenThrow(new IOException("Some other I/O error"));
+
+        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
+                Map.of(
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "2",
+                        "debezium.format.value", "json"),
+                mockHttpClient
+        );
+
+        ChangeEvent<Object, Object> event = createChangeEvent();
+
+        assertThrows(InterruptedException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+    }
+
+    // Test subclass that allows injecting a mock HttpClient
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private static ChangeEvent<Object, Object> createChangeEvent() {
 
         ChangeEvent<Object, Object> result = mock(ChangeEvent.class);
@@ -79,14 +140,23 @@ public class HttpChangeConsumerTest {
 
     }
 
-    private Config generateMockConfig(Map<String, Object> config) {
-        Config result = mock(Config.class);
+    private HttpChangeConsumer createTestHttpChangeConsumer(Map<String, String> testValues) throws URISyntaxException, IOException {
+        return createTestHttpChangeConsumer(testValues, mock(HttpClient.class));
+    }
 
-        for (Map.Entry<String, Object> entry : config.entrySet()) {
-            Object value = entry.getValue();
-            when(result.getValue(eq(entry.getKey()), any())).thenReturn(value);
-            when(result.getOptionalValue(eq(entry.getKey()), any())).thenReturn(Optional.of(value));
-        }
+    private HttpChangeConsumer createTestHttpChangeConsumer(Map<String, String> testValues, HttpClient mockClient) throws URISyntaxException, IOException {
+        // 'inject' HttpClient mock
+        HttpChangeConsumer result = new HttpChangeConsumer() {
+            @Override
+            HttpClient createHttpClient() {
+                return mockClient;
+            }
+        };
+        Config testConfig = new SmallRyeConfigBuilder()
+                .withSources(new PropertiesConfigSource(testValues, "test.properties"))
+                .build();
+
+        result.initWithConfig(testConfig);
 
         return result;
     }

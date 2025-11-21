@@ -96,7 +96,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         String sinkUrl;
         String contentType;
 
-        client = HttpClient.newHttpClient();
+        client = createHttpClient();
         String sink = System.getenv("K_SINK");
         timeoutDuration = Duration.ofMillis(HTTP_TIMEOUT);
         retries = DEFAULT_RETRIES;
@@ -210,11 +210,13 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
             r = client.send(request, HttpResponse.BodyHandlers.ofString());
         }
         catch (IOException ioe) {
-            if (!ioe.getMessage().contains("GOAWAY")) {
-                throw new InterruptedException(ioe.toString());
+            String message = ioe.getMessage();
+            if (message != null && message.contains("GOAWAY")) {
+                LOGGER.info("HTTP/2 GOAWAY received: {}", message);
+                return false;
             }
-            LOGGER.info("HTTP/2 GOAWAY received: {}", ioe.getMessage());
-            return false;
+
+            throw new InterruptedException(ioe.toString());
         }
 
         if ((r.statusCode() == HTTP_OK) || (r.statusCode() == HTTP_NO_CONTENT) || (r.statusCode() == HTTP_ACCEPTED)) {
@@ -243,5 +245,10 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         }
 
         return builder;
+    }
+
+    @VisibleForTesting
+    HttpClient createHttpClient() {
+        return HttpClient.newHttpClient();
     }
 }
