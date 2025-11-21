@@ -75,11 +75,8 @@ public class HttpChangeConsumerTest {
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                        "debezium.format.value", "json"
-                ),
-                mockHttpClient
-        );
-
+                        "debezium.format.value", "json"),
+                mockHttpClient);
 
         ChangeEvent<Object, Object> event = createChangeEvent();
 
@@ -96,8 +93,7 @@ public class HttpChangeConsumerTest {
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "2",
                         "debezium.format.value", "json"),
-                mockHttpClient
-        );
+                mockHttpClient);
 
         ChangeEvent<Object, Object> event = createChangeEvent();
 
@@ -116,8 +112,7 @@ public class HttpChangeConsumerTest {
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "2",
                         "debezium.format.value", "json"),
-                mockHttpClient
-        );
+                mockHttpClient);
 
         ChangeEvent<Object, Object> event = createChangeEvent();
 
@@ -125,7 +120,7 @@ public class HttpChangeConsumerTest {
     }
 
     // Test subclass that allows injecting a mock HttpClient
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     private static ChangeEvent<Object, Object> createChangeEvent() {
 
         ChangeEvent<Object, Object> result = mock(ChangeEvent.class);
