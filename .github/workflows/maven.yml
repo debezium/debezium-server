@@ -22,13 +22,13 @@ jobs:
 
     steps:
       - name: Checkout core repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: debezium/debezium
           ref: ${{ github.ref }}
           path: core
       - name: Checkout Debezium Server
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           path: server
       - name: Set up JDK
