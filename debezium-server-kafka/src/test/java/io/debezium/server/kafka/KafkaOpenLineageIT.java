@@ -83,7 +83,7 @@ public class KafkaOpenLineageIT extends KafkaBaseIT {
                 "internal.task.management.timeout.ms=40000",
                 "errors.max.retries=-1",
                 "transforms.addheader.value.literal=headerValue",
-                "database.password=postgres",
+                "database.password=********",
                 "name=kafka",
                 "transforms.addheader.header=headerKey",
                 "openlineage.integration.job.description=This connector does cdc for products",
