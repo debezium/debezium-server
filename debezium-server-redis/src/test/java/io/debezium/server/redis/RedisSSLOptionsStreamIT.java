@@ -5,7 +5,7 @@
  */
 package io.debezium.server.redis;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.net.URL;
@@ -40,7 +40,7 @@ public class RedisSSLOptionsStreamIT {
         TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, MESSAGE_COUNT);
 
         Long streamLength = jedis.xlen(STREAM_NAME);
-        assertTrue("Redis Basic Stream Test Failed", streamLength == MESSAGE_COUNT);
+        assertTrue(streamLength == MESSAGE_COUNT, "Redis Basic Stream Test Failed");
 
         // wait until the offsets are re-written
         TestUtils.awaitHashSizeGte(jedis, HASH_NAME, 1);
