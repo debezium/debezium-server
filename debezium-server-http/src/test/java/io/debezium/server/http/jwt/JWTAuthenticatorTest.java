@@ -10,11 +10,12 @@ import java.net.URISyntaxException;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class JWTAuthenticatorTest {
 
@@ -32,8 +33,7 @@ public class JWTAuthenticatorTest {
 
         HttpRequest initialRequest = authenticator.generateInitialAuthenticationRequest();
 
-        Assertions.assertEquals(initialRequest.uri(),
-                authURI);
+        Assertions.assertEquals(authURI, initialRequest.uri());
         Assertions.assertTrue(initialRequest.method().equalsIgnoreCase("POST"));
         Assertions.assertTrue(initialRequest.bodyPublisher().isPresent());
     }
@@ -52,14 +52,13 @@ public class JWTAuthenticatorTest {
 
         authenticator.setJwtToken("fakeToken");
         authenticator.setJwtRefreshToken("fakeRefreshToken");
-        authenticator.setAuthenticationState(JWTAuthenticator.AuthenticationState.EXPIRED);
+        authenticator.setAuthenticationState(JWTAuthenticator.AuthenticationState.EXPIRED, Optional.empty());
 
-        HttpRequest initialRequest = authenticator.generateRefreshAuthenticationRequest();
+        HttpRequest refreshRequest = authenticator.generateRefreshAuthenticationRequest();
 
-        Assertions.assertEquals(initialRequest.uri(),
-                refreshURI);
-        Assertions.assertTrue(initialRequest.method().equalsIgnoreCase("POST"));
-        Assertions.assertTrue(initialRequest.bodyPublisher().isPresent());
+        Assertions.assertEquals(refreshURI, refreshRequest.uri());
+        Assertions.assertTrue(refreshRequest.method().equalsIgnoreCase("POST"));
+        Assertions.assertTrue(refreshRequest.bodyPublisher().isPresent());
     }
 
     @Test
@@ -72,10 +71,11 @@ public class JWTAuthenticatorTest {
                 "testPassword",
                 10000,
                 10000,
-                Duration.ofMillis(100000));
+                Duration.ofDays(100000));
 
         authenticator.setJwtToken("fakeToken");
-        authenticator.setAuthenticationState(JWTAuthenticator.AuthenticationState.ACTIVE);
+        authenticator.setAuthenticationState(JWTAuthenticator.AuthenticationState.ACTIVE,
+                Optional.of(Instant.now().plusSeconds(10000)));
 
         URI testURI = new URI("http://test.com/cookies");
         HttpRequest.Builder builder = HttpRequest.newBuilder(testURI);
@@ -88,6 +88,6 @@ public class JWTAuthenticatorTest {
         HttpRequest initialRequest = authenticator.generateInitialAuthenticationRequest();
 
         Assertions.assertTrue(authValue.isPresent());
-        Assertions.assertEquals(authValue.get(), "Bearer: fakeToken");
+        Assertions.assertEquals("Bearer: fakeToken", authValue.get());
     }
 }

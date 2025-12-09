@@ -16,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -83,8 +84,9 @@ public class JWTAuthenticator implements Authenticator {
     }
 
     @VisibleForTesting
-    void setAuthenticationState(AuthenticationState state) {
+    void setAuthenticationState(AuthenticationState state, Optional<Instant> expirationDateTime) {
         this.authenticationState = state;
+        expirationDateTime.ifPresent(dateTime -> this.expirationDateTime = dateTime);
     }
 
     @VisibleForTesting
@@ -142,7 +144,7 @@ public class JWTAuthenticator implements Authenticator {
         }
 
         String payloadJSON = payloadWriter.toString();
-        HttpRequest.Builder builder = authRequestBuilder.POST(HttpRequest.BodyPublishers.ofString(payloadJSON));
+        HttpRequest.Builder builder = refreshRequestBuilder.POST(HttpRequest.BodyPublishers.ofString(payloadJSON));
 
         return builder.build();
     }
