@@ -5,7 +5,7 @@
  */
 package io.debezium.server.redis;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -90,7 +90,7 @@ public class RedisStreamHeartbeatDisabledIT {
         Testing.print("Data streams found: " + dataStreams);
 
         // Verify that we have data streams
-        assertTrue("Expected to find at least one data stream", !dataStreams.isEmpty());
+        assertFalse(dataStreams.isEmpty(), "Expected to find at least one data stream");
 
         jedis.close();
     }

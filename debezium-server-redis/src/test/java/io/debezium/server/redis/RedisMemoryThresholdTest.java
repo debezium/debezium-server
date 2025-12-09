@@ -5,11 +5,13 @@
  */
 package io.debezium.server.redis;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.config.Configuration;
@@ -31,11 +33,11 @@ public class RedisMemoryThresholdTest {
         RedisMemoryThreshold redisMemoryThreshold = new RedisMemoryThreshold(new RedisClientImpl(_10MB, _20MB),
                 new RedisStreamChangeConsumerConfig(config));
         for (int i = 0; i < 8; i++) {
-            Assert.assertEquals(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND), true);
+            assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
         }
-        Assert.assertEquals(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND), false);
+        assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
         redisMemoryThreshold.setRedisClient(new RedisClientImpl(_5MB, _20MB));
-        Assert.assertEquals(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND), true);
+        assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
     }
 
     private static class RedisClientImpl implements RedisClient {
