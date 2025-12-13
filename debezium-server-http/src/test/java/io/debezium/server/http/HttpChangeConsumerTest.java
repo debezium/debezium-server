@@ -55,6 +55,23 @@ public class HttpChangeConsumerTest {
     }
 
     @Test
+    public void verifyGenerateRequestHasNoDuplicateHeaders() throws Exception {
+        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
+                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, "false",
+                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                "debezium.format.value", "avro"));
+        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
+
+        List<String> headers1 = request.headers().allValues("X-DEBEZIUM-h1key");
+        assertEquals(1, headers1.size());
+
+        HttpRequest request2 = changeConsumer.generateRequest(createChangeEvent()).build();
+
+        List<String> headers2 = request2.headers().allValues("X-DEBEZIUM-h1key");
+        assertEquals(1, headers2.size());
+    }
+
+    @Test
     public void verifyGenerateRequestWithDifferentHeaderPrefix() throws Exception {
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
                 HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, "false",

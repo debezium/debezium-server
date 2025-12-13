@@ -140,8 +140,9 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
         LOGGER.info("Using http content-type type {}", contentType);
         LOGGER.info("Using sink URL: {}", sinkUrl);
-        requestBuilder = HttpRequest.newBuilder(new URI(sinkUrl)).timeout(timeoutDuration);
-        requestBuilder.setHeader("content-type", contentType);
+        requestBuilder = HttpRequest
+                .newBuilder(new URI(sinkUrl)).timeout(timeoutDuration)
+                .setHeader("content-type", contentType);
     }
 
     @Override
@@ -241,7 +242,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
             if (base64EncodeHeaders) {
                 headerValue = Base64.getEncoder().encodeToString(headerValue.getBytes(StandardCharsets.UTF_8));
             }
-            builder.header(headersPrefix + entry.getKey().toUpperCase(Locale.ROOT), headerValue);
+            builder.setHeader(headersPrefix + entry.getKey().toUpperCase(Locale.ROOT), headerValue);
         }
 
         return builder;
