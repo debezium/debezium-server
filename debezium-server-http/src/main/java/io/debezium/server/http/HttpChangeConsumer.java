@@ -78,7 +78,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     private String headersPrefix = DEFAULT_HEADERS_PREFIX;
 
     private HttpClient client;
-    private HttpRequest.Builder requestBuilder;
+    private HttpRequest.Builder baseRequestBuilder;
 
     // not null if using authentication; null otherwise
     private Authenticator authenticator;
@@ -140,8 +140,9 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
         LOGGER.info("Using http content-type type {}", contentType);
         LOGGER.info("Using sink URL: {}", sinkUrl);
-        requestBuilder = HttpRequest.newBuilder(new URI(sinkUrl)).timeout(timeoutDuration);
-        requestBuilder.setHeader("content-type", contentType);
+        baseRequestBuilder = HttpRequest
+                .newBuilder(new URI(sinkUrl)).timeout(timeoutDuration)
+                .setHeader("content-type", contentType);
     }
 
     @Override
@@ -232,7 +233,8 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     @VisibleForTesting
     HttpRequest.Builder generateRequest(ChangeEvent<Object, Object> record) {
         String value = (String) record.value();
-        HttpRequest.Builder builder = requestBuilder.POST(HttpRequest.BodyPublishers.ofString(value));
+        HttpRequest.Builder builder = baseRequestBuilder.copy()
+                .POST(HttpRequest.BodyPublishers.ofString(value));
 
         Map<String, String> headers = convertHeaders(record);
 
