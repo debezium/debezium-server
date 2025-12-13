@@ -139,8 +139,9 @@ public class HttpIT {
         for (ServeEvent e : events) {
             LoggedRequest request = e.getRequest();
             // Assert the content type is set correctly to reflect a cloudevent
-            Assertions.assertEquals(request.getHeader("content-type"), "application/cloudevents+json");
+            Assertions.assertEquals("application/cloudevents+json", request.getHeader("content-type"));
             Assertions.assertTrue(request.containsHeader("X-DEBEZIUM-HEADERKEY"));
+            Assertions.assertEquals(1, request.getHeaders().getHeader("X-DEBEZIUM-HEADERKEY").values().size());
 
             // deserialize the cloudevent into a HashMap<String, Object> and assert the cloudevent metadata is set properly
             try {
