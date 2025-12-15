@@ -73,7 +73,7 @@ jobs:
       - name: Maven build Debezium Server
         run: ./server/mvnw clean install -fae -f server/pom.xml -Passembly -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore
       - name: Archive Debezium distribution
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: debezium-dist-artifact
           path: ./server/debezium-server-dist/target/debezium-server-dist*.tar.gz
