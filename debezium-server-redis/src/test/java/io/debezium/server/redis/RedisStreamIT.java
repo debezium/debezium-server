@@ -5,7 +5,7 @@
  */
 package io.debezium.server.redis;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -48,15 +48,15 @@ public class RedisStreamIT {
         TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, MESSAGE_COUNT);
 
         Long streamLength = jedis.xlen(STREAM_NAME);
-        assertTrue("Expected stream length of " + MESSAGE_COUNT, streamLength == MESSAGE_COUNT);
+        assertTrue(streamLength == MESSAGE_COUNT, "Expected stream length of " + MESSAGE_COUNT);
 
         final List<StreamEntry> entries = jedis.xrange(STREAM_NAME, (StreamEntryID) null, (StreamEntryID) null);
         for (StreamEntry entry : entries) {
             Map<String, String> map = entry.getFields();
-            assertTrue("Expected map of size 1", map.size() == 1);
+            assertTrue(map.size() == 1, "Expected map of size 1");
             Map.Entry<String, String> mapEntry = map.entrySet().iterator().next();
-            assertTrue("Expected json like key starting with {\"schema\":...", mapEntry.getKey().startsWith("{\"schema\":"));
-            assertTrue("Expected json like value starting with {\"schema\":...", mapEntry.getValue().startsWith("{\"schema\":"));
+            assertTrue(mapEntry.getKey().startsWith("{\"schema\":"), "Expected json like key starting with {\"schema\":...");
+            assertTrue(mapEntry.getValue().startsWith("{\"schema\":"), "Expected json like value starting with {\"schema\":...");
         }
 
         jedis.close();
@@ -99,7 +99,7 @@ public class RedisStreamIT {
         Long streamLength = jedis.xlen(STREAM_NAME);
         Testing.print("Entries in " + STREAM_NAME + ":" + streamLength);
         jedis.close();
-        assertTrue("Redis Connection Test Failed", streamLength == MESSAGE_COUNT);
+        assertTrue(streamLength == MESSAGE_COUNT, "Redis Connection Test Failed");
     }
 
     /**
@@ -139,6 +139,6 @@ public class RedisStreamIT {
         TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, TOTAL_RECORDS);
 
         long streamLength = jedis.xlen(STREAM_NAME);
-        assertTrue("Redis OOM Test Failed", streamLength == TOTAL_RECORDS);
+        assertTrue(streamLength == TOTAL_RECORDS, "Redis OOM Test Failed");
     }
 }

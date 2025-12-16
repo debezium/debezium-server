@@ -92,12 +92,15 @@ public class HttpChangeConsumerTest {
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "3",
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRY_INTERVAL, "1",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
         ChangeEvent<Object, Object> event = createChangeEvent();
 
-        assertThrows(InterruptedException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+        verify(mockHttpClient, times(3)).send(any(), any());
     }
 
     @Test
@@ -109,6 +112,7 @@ public class HttpChangeConsumerTest {
                 Map.of(
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
                         HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "2",
+                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRY_INTERVAL, "1",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
@@ -117,23 +121,6 @@ public class HttpChangeConsumerTest {
         // Should retry when GOAWAY is received and eventually throw DebeziumException
         assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
         verify(mockHttpClient, times(2)).send(any(), any());
-    }
-
-    @Test
-    public void testRecordSentWithIOExceptionWithNonGoawayMessage() throws Exception {
-        HttpClient mockHttpClient = mock(HttpClient.class);
-        when(mockHttpClient.send(any(), any())).thenThrow(new IOException("Some other I/O error"));
-
-        HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
-                Map.of(
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "2",
-                        "debezium.format.value", "json"),
-                mockHttpClient);
-
-        ChangeEvent<Object, Object> event = createChangeEvent();
-
-        assertThrows(InterruptedException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
     }
 
     // Test subclass that allows injecting a mock HttpClient

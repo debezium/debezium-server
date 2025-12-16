@@ -5,8 +5,8 @@
  */
 package io.debezium.server.redis;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -109,9 +109,9 @@ public class RedisStreamHeartbeatSkipIT {
         Testing.print("Heartbeat streams found: " + heartbeatStreams);
 
         // Verify that we have data streams but no heartbeat streams
-        assertTrue("Expected to find at least one data stream", !dataStreams.isEmpty());
-        assertEquals("Expected no heartbeat streams with skip.heartbeat.messages=true",
-                0, heartbeatStreams.size());
+        assertFalse(dataStreams.isEmpty(), "Expected to find at least one data stream");
+        assertEquals(0, heartbeatStreams.size(),
+                "Expected no heartbeat streams with skip.heartbeat.messages=true");
 
         jedis.close();
     }

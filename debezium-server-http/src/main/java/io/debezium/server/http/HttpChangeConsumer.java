@@ -5,10 +5,6 @@
  */
 package io.debezium.server.http;
 
-import static java.net.HttpURLConnection.HTTP_ACCEPTED;
-import static java.net.HttpURLConnection.HTTP_NO_CONTENT;
-import static java.net.HttpURLConnection.HTTP_OK;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -66,9 +62,9 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     public static final String JWT_AUTHENTICATION = "jwt";
     public static final String STANDARD_WEBHOOKS_AUTHENTICATION = "standard-webhooks";
 
-    private static final Long HTTP_TIMEOUT = Integer.toUnsignedLong(60000); // Default to 60s
+    private static final long HTTP_TIMEOUT = 60_000L; // Default to 60s
     private static final int DEFAULT_RETRIES = 5;
-    private static final Long RETRY_INTERVAL = Integer.toUnsignedLong(1_000); // Default to 1s
+    private static final long RETRY_INTERVAL = 1_000L; // Default to 1s
     private static final String DEFAULT_HEADERS_PREFIX = "X-DEBEZIUM-";
 
     private static Duration timeoutDuration;
@@ -124,24 +120,21 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         config.getOptionalValue(PROP_PREFIX + PROP_HEADERS_ENCODE_BASE64, Boolean.class)
                 .ifPresent(b -> base64EncodeHeaders = b);
 
-        switch (config.getValue("debezium.format.value", String.class)) {
-            case "avro":
-                contentType = "avro/bytes";
-                break;
-            case "cloudevents":
-                contentType = "application/cloudevents+json";
-                break;
-            default:
-                // Note: will default to JSON if it cannot be determined, but should not reach this point
-                contentType = "application/json";
-        }
+        contentType = switch (config.getValue("debezium.format.value", String.class).toLowerCase()) {
+            case "avro" -> "avro/bytes";
+            case "cloudevents" -> "application/cloudevents+json";
+            case "json" -> "application/json";
+            // Note: will default to JSON if it cannot be determined, but should not reach this point
+            default -> "application/json";
+        };
 
         authenticator = buildAuthenticator(config);
 
         LOGGER.info("Using http content-type type {}", contentType);
         LOGGER.info("Using sink URL: {}", sinkUrl);
         baseRequestBuilder = HttpRequest
-                .newBuilder(new URI(sinkUrl)).timeout(timeoutDuration)
+                .newBuilder(new URI(sinkUrl))
+                .timeout(timeoutDuration)
                 .setHeader("content-type", contentType);
     }
 
@@ -171,63 +164,48 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     private Authenticator buildAuthenticator(Config config) {
-        // Need to be able to throw an exception
-        // so not using ifPresent() syntax
         Optional<String> authenticationType = config.getOptionalValue(PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE, String.class);
-        if (authenticationType.isPresent()) {
-            String t = authenticationType.get();
-            if (t.equalsIgnoreCase(JWT_AUTHENTICATION)) {
-                JWTAuthenticatorBuilder builder = JWTAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
-                return builder.build();
-            }
-            else if (t.equalsIgnoreCase(STANDARD_WEBHOOKS_AUTHENTICATION)) {
-                StandardWebhooksAuthenticatorBuilder builder = StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX);
-                return builder.build();
-            }
-            else {
-                throw new DebeziumException("Unknown value '" + t + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
-            }
+
+        if (authenticationType.isEmpty()) {
+            return null;
         }
 
-        return null;
+        return switch (authenticationType.get().toLowerCase()) {
+            case JWT_AUTHENTICATION -> JWTAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
+                    .setHttpClient(client)
+                    .build();
+            case STANDARD_WEBHOOKS_AUTHENTICATION -> StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
+                    .build();
+            default -> throw new DebeziumException(
+                    "Unknown value '" + authenticationType.get() + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
+        };
     }
 
     private boolean recordSent(ChangeEvent<Object, Object> record, UUID messageId) throws InterruptedException {
-        boolean sent = false;
         HttpResponse<String> r;
 
         HttpRequest.Builder requestBuilder = generateRequest(record);
 
+        if (authenticator != null) {
+            authenticator.authenticate();
+            authenticator.setAuthorizationHeader(requestBuilder, (String) record.value(), messageId);
+        }
+
         try {
-            if (authenticator != null) {
-                if (!authenticator.authenticate()) {
-                    throw new DebeziumException("Failed to authenticate successfully.  Cannot continue.");
-                }
-                authenticator.setAuthorizationHeader(requestBuilder, (String) record.value(), messageId);
-            }
-
-            HttpRequest request = requestBuilder.build();
-
-            r = client.send(request, HttpResponse.BodyHandlers.ofString());
+            r = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
         }
         catch (IOException ioe) {
-            String message = ioe.getMessage();
-            if (message != null && message.contains("GOAWAY")) {
-                LOGGER.info("HTTP/2 GOAWAY received: {}", message);
-                return false;
-            }
-
-            throw new InterruptedException(ioe.toString());
+            LOGGER.info("Failed to send event: {}", ioe.getMessage());
+            return false;
         }
 
-        if ((r.statusCode() == HTTP_OK) || (r.statusCode() == HTTP_NO_CONTENT) || (r.statusCode() == HTTP_ACCEPTED)) {
-            sent = true;
+        if (r.statusCode() >= 200 && r.statusCode() < 300) {
+            return true;
         }
         else {
-            LOGGER.info("Failed to publish event: " + r.body());
+            LOGGER.info("Failed to publish event: {}", r.body());
+            return false;
         }
-
-        return sent;
     }
 
     @VisibleForTesting

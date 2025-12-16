@@ -31,14 +31,7 @@ public class StandardWebhooksAuthenticator implements Authenticator {
     private final Clock clock;
     private final Mac sha512Hmac;
 
-    public StandardWebhooksAuthenticator(final String secret) {
-        this(secret, Clock.systemUTC());
-    }
-
-    @VisibleForTesting
-    StandardWebhooksAuthenticator(final String secret, Clock clock) {
-        super();
-
+    public StandardWebhooksAuthenticator(final String secret, Clock clock) {
         this.clock = clock;
 
         String sec = secret;
@@ -75,8 +68,7 @@ public class StandardWebhooksAuthenticator implements Authenticator {
     }
 
     @Override
-    public boolean authenticate() throws InterruptedException {
-        return true;
+    public void authenticate() {
     }
 
     @VisibleForTesting
