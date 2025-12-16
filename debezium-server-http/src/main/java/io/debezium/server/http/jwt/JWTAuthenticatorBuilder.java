@@ -7,6 +7,8 @@ package io.debezium.server.http.jwt;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.NoSuchElementException;
 
@@ -36,6 +38,8 @@ public class JWTAuthenticatorBuilder {
     private long tokenExpirationDuration = Integer.toUnsignedLong(60); // Default to 60 min
     private long refreshTokenExpirationDuration = Integer.toUnsignedLong(60 * 24); // Default to 24 hours
     private Duration httpTimeoutDuration = Duration.ofMillis(HTTP_TIMEOUT); // in ms
+    private HttpClient client;
+    private Clock clock = Clock.systemUTC();
 
     public static JWTAuthenticatorBuilder fromConfig(Config config, String prop_prefix) {
         JWTAuthenticatorBuilder builder = new JWTAuthenticatorBuilder();
@@ -106,6 +110,11 @@ public class JWTAuthenticatorBuilder {
         return this;
     }
 
+    public JWTAuthenticatorBuilder setHttpClient(HttpClient client) {
+        this.client = client;
+        return this;
+    }
+
     public JWTAuthenticator build() {
         if (authUri == null) {
             String msg = "Cannot build JWTAuthenticator.  Initialization authorization URI must be set.";
@@ -131,6 +140,10 @@ public class JWTAuthenticatorBuilder {
             throw new NoSuchElementException(msg);
         }
 
-        return new JWTAuthenticator(authUri, refreshUri, username, password, tokenExpirationDuration, refreshTokenExpirationDuration, httpTimeoutDuration);
+        if (client == null) {
+            client = HttpClient.newHttpClient();
+        }
+
+        return new JWTAuthenticator(client, clock, authUri, refreshUri, username, password, tokenExpirationDuration, refreshTokenExpirationDuration, httpTimeoutDuration);
     }
 }
