@@ -5,7 +5,7 @@
  */
 package io.debezium.server.redis;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +52,7 @@ public class RedisStreamMemoryThresholdIT {
         TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, TOTAL_RECORDS);
 
         long streamLength = jedis.xlen(STREAM_NAME);
-        assertTrue("Redis Memory Threshold Test Failed", streamLength == TOTAL_RECORDS);
+        assertTrue(streamLength == TOTAL_RECORDS, "Redis Memory Threshold Test Failed");
     }
 
 }
