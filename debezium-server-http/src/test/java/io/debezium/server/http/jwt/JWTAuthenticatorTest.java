@@ -5,89 +5,198 @@
  */
 package io.debezium.server.http.jwt;
 
+import static java.util.Collections.emptyMap;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.junit.Test;
-import org.junit.jupiter.api.Assertions;
+import javax.net.ssl.SSLSession;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import io.debezium.server.http.util.MutableClock;
 
 public class JWTAuthenticatorTest {
 
     @Test
-    public void generateInitialAuthenticationRequest() throws URISyntaxException {
+    public void unauthenticated_performs_initial_auth_and_sets_header() throws Exception {
+        HttpClient client = mock(HttpClient.class);
         URI authURI = new URI("http://test.com/auth/authenticate");
         URI refreshURI = new URI("http://test.com/auth/refreshToken");
-        JWTAuthenticator authenticator = new JWTAuthenticator(authURI,
+        Clock clock = Clock.fixed(Instant.now(), ZoneId.systemDefault());
+
+        String initialAuthBody = "{\"jwt\":\"token-1\",\"jwt_refresh_token\":\"refresh-1\",\"expires_in\":10000}";
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(mockResponse(200, initialAuthBody));
+
+        JWTAuthenticator authenticator = new JWTAuthenticator(
+                client,
+                clock,
+                authURI,
                 refreshURI,
                 "testUser",
                 "testPassword",
                 10000,
                 10000,
-                Duration.ofMillis(100000));
+                Duration.ofSeconds(10));
 
-        HttpRequest initialRequest = authenticator.generateInitialAuthenticationRequest();
+        // Act: perform authentication
+        authenticator.authenticate();
 
-        Assertions.assertEquals(initialRequest.uri(),
-                authURI);
-        Assertions.assertTrue(initialRequest.method().equalsIgnoreCase("POST"));
-        Assertions.assertTrue(initialRequest.bodyPublisher().isPresent());
-    }
+        // Assert: correct endpoint was called
+        ArgumentCaptor<HttpRequest> reqCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        verify(client, times(1)).send(reqCaptor.capture(), any(HttpResponse.BodyHandler.class));
+        assertEquals(authURI, reqCaptor.getValue().uri());
 
-    @Test
-    public void generateRefreshAuthenticationRequest() throws URISyntaxException {
-        URI authURI = new URI("http://test.com/auth/authenticate");
-        URI refreshURI = new URI("http://test.com/auth/refreshToken");
-        JWTAuthenticator authenticator = new JWTAuthenticator(authURI,
-                refreshURI,
-                "testUser",
-                "testPassword",
-                10000,
-                10000,
-                Duration.ofMillis(100000));
-
-        authenticator.setJwtToken("fakeToken");
-        authenticator.setJwtRefreshToken("fakeRefreshToken");
-        authenticator.setAuthenticationState(JWTAuthenticator.AuthenticationState.EXPIRED);
-
-        HttpRequest initialRequest = authenticator.generateRefreshAuthenticationRequest();
-
-        Assertions.assertEquals(initialRequest.uri(),
-                refreshURI);
-        Assertions.assertTrue(initialRequest.method().equalsIgnoreCase("POST"));
-        Assertions.assertTrue(initialRequest.bodyPublisher().isPresent());
-    }
-
-    @Test
-    public void addAuthorizationHeader() throws URISyntaxException {
-        URI authURI = new URI("http://test.com/auth/authenticate");
-        URI refreshURI = new URI("http://test.com/auth/refreshToken");
-        JWTAuthenticator authenticator = new JWTAuthenticator(authURI,
-                refreshURI,
-                "testUser",
-                "testPassword",
-                10000,
-                10000,
-                Duration.ofMillis(100000));
-
-        authenticator.setJwtToken("fakeToken");
-        authenticator.setAuthenticationState(JWTAuthenticator.AuthenticationState.ACTIVE);
-
-        URI testURI = new URI("http://test.com/cookies");
-        HttpRequest.Builder builder = HttpRequest.newBuilder(testURI);
+        // And header can be set
+        HttpRequest.Builder builder = HttpRequest.newBuilder(new URI("http://test.com/endpoint"));
         authenticator.setAuthorizationHeader(builder, "", new UUID(0, 0));
-        HttpRequest request = builder.build();
-
-        HttpHeaders headers = request.headers();
+        HttpHeaders headers = builder.build().headers();
         Optional<String> authValue = headers.firstValue("Authorization");
+        assertTrue(authValue.isPresent());
+        assertEquals("Bearer: token-1", authValue.get());
+        assertEquals(1, headers.allValues("Authorization").size());
+    }
 
-        HttpRequest initialRequest = authenticator.generateInitialAuthenticationRequest();
+    @Test
+    public void expired_triggers_refresh_call() throws Exception {
+        HttpClient client = mock(HttpClient.class);
+        URI authURI = new URI("http://test.com/auth/authenticate");
+        URI refreshURI = new URI("http://test.com/auth/refreshToken");
 
-        Assertions.assertTrue(authValue.isPresent());
-        Assertions.assertEquals(authValue.get(), "Bearer: fakeToken");
+        String initialAuthBody = "{\"jwt\":\"token-1\",\"jwt_refresh_token\":\"refresh-1\",\"expires_in\":1000}";
+        String refreshBody = "{\"jwt\":\"token-2\",\"jwt_refresh_token\":\"refresh-2\",\"expires_in\":1000}";
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(
+                mockResponse(200, initialAuthBody),
+                mockResponse(200, refreshBody));
+
+        Instant start = Instant.now();
+        MutableClock testClock = new MutableClock(start, ZoneId.systemDefault());
+
+        JWTAuthenticator authenticator = new JWTAuthenticator(
+                client,
+                testClock,
+                authURI,
+                refreshURI,
+                "testUser",
+                "testPassword",
+                1000,
+                1000,
+                Duration.ofSeconds(10));
+
+        // Act: initial authenticate
+        authenticator.authenticate();
+
+        // Advance time far into the future beyond expiration, then authenticate again to trigger refresh
+        testClock.setNow(start.plus(Duration.ofDays(1)));
+        authenticator.authenticate();
+
+        // Assert: first call went to auth, second to refresh
+        ArgumentCaptor<HttpRequest> reqCaptor = ArgumentCaptor.forClass(HttpRequest.class);
+        verify(client, times(2)).send(reqCaptor.capture(), any(HttpResponse.BodyHandler.class));
+        assertEquals(authURI, reqCaptor.getAllValues().get(0).uri());
+        assertEquals(refreshURI, reqCaptor.getAllValues().get(1).uri());
+
+        // And header now uses refreshed token
+        HttpRequest.Builder builder = HttpRequest.newBuilder(new URI("http://test.com/endpoint"));
+        authenticator.setAuthorizationHeader(builder, "", new UUID(0, 0));
+        String header = builder.build().headers().firstValue("Authorization").orElse("");
+        assertEquals("Bearer: token-2", header);
+    }
+
+    @Test
+    public void active_does_not_reauthenticate_and_sets_header() throws Exception {
+        HttpClient client = mock(HttpClient.class);
+        URI authURI = new URI("http://test.com/auth/authenticate");
+        URI refreshURI = new URI("http://test.com/auth/refreshToken");
+        Clock clock = Clock.fixed(Instant.now(), ZoneId.systemDefault());
+
+        String initialAuthBody = "{\"jwt\":\"token-1\",\"jwt_refresh_token\":\"refresh-1\",\"expires_in\":600000}"; // 10 minutes
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(mockResponse(200, initialAuthBody));
+
+        JWTAuthenticator authenticator = new JWTAuthenticator(
+                client,
+                clock,
+                authURI,
+                refreshURI,
+                "testUser",
+                "testPassword",
+                600000,
+                600000,
+                Duration.ofSeconds(10));
+
+        // Act: initial authenticate
+        authenticator.authenticate();
+        // Act: authenticate again while still active (no additional send should occur)
+        authenticator.authenticate();
+
+        // Assert: send called only once
+        verify(client, times(1)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+
+        // Header is set with current token
+        HttpRequest.Builder builder = HttpRequest.newBuilder(new URI("http://test.com/endpoint"));
+        authenticator.setAuthorizationHeader(builder, "", new UUID(0, 0));
+        String header = builder.build().headers().firstValue("Authorization").orElse("");
+        assertEquals("Bearer: token-1", header);
+    }
+
+    private static HttpResponse<String> mockResponse(int status, String body) {
+        return new HttpResponse<>() {
+            @Override
+            public int statusCode() {
+                return status;
+            }
+
+            @Override
+            public HttpRequest request() {
+                return null;
+            }
+
+            @Override
+            public Optional<HttpResponse<String>> previousResponse() {
+                return Optional.empty();
+            }
+
+            @Override
+            public HttpHeaders headers() {
+                return HttpHeaders.of(emptyMap(), (a, b) -> true);
+            }
+
+            @Override
+            public String body() {
+                return body;
+            }
+
+            @Override
+            public java.util.Optional<SSLSession> sslSession() {
+                return Optional.empty();
+            }
+
+            @Override
+            public URI uri() {
+                return null;
+            }
+
+            @Override
+            public HttpClient.Version version() {
+                return null;
+            }
+        };
     }
 }

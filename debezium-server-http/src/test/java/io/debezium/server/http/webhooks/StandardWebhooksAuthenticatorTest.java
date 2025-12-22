@@ -15,8 +15,8 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class StandardWebhooksAuthenticatorTest {
 

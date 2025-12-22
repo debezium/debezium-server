@@ -5,6 +5,8 @@
  */
 package io.debezium.server.http.webhooks;
 
+import java.time.Clock;
+
 import org.eclipse.microprofile.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +39,6 @@ public class StandardWebhooksAuthenticatorBuilder {
             throw new DebeziumException(msg);
         }
 
-        return new StandardWebhooksAuthenticator(secret);
+        return new StandardWebhooksAuthenticator(secret, Clock.systemUTC());
     }
 }
