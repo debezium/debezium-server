@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.debezium.DebeziumException;
 import io.debezium.server.http.Authenticator;
+import io.debezium.server.http.HttpUtil;
 
 /**
  * Implements the logic for authenticating against an endpoint supporting the
@@ -156,7 +157,7 @@ public class JWTAuthenticator implements Authenticator {
             throw new DebeziumException("Failed to send authentication request", e);
         }
 
-        if (r.statusCode() >= 200 && r.statusCode() < 300) {
+        if (HttpUtil.isSuccessStatusCode(r.statusCode())) {
             String responseBody = r.body();
 
             JWTAuthorizationResponse response;

@@ -199,7 +199,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
             return false;
         }
 
-        if (r.statusCode() >= 200 && r.statusCode() < 300) {
+        if (HttpUtil.isSuccessStatusCode(r.statusCode())) {
             return true;
         }
         else {
