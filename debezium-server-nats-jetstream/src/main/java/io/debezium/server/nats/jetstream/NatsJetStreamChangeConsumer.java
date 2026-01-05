@@ -9,6 +9,7 @@ import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -39,6 +40,8 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.util.Clock;
+import io.debezium.util.Metronome;
 import io.nats.client.Connection;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamManagement;
@@ -77,6 +80,11 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private static final String PROP_AUTH_TLS_KEYSTORE_PASSWORD = PROP_PREFIX + "auth.tls.keystore.password";
     private static final String PROP_AUTH_TLS_PASSWORD = PROP_PREFIX + "auth.tls.password";
 
+    private static final String PROP_SYNC_RETRIES = PROP_PREFIX + "sync.retries";
+    private static final String PROP_SYNC_RETRY_INTERVAL_MS = PROP_PREFIX + "sync.retry.interval.ms";
+    private static final String PROP_SYNC_RETRY_MAX_INTERVAL_MS = PROP_PREFIX + "sync.retry.max.interval.ms";
+    private static final String PROP_SYNC_RETRY_BACKOFF_MULTIPLIER = PROP_PREFIX + "sync.retry.backoff.multiplier";
+
     private static final String PROP_ASYNC_ENABLED = PROP_PREFIX + "async.enabled";
     private static final String PROP_ASYNC_TIMEOUT_MS = PROP_PREFIX + "async.timeout.ms";
 
@@ -112,6 +120,18 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     @ConfigProperty(name = PROP_ASYNC_TIMEOUT_MS, defaultValue = "5000")
     long asyncTimeoutMs;
+
+    @ConfigProperty(name = PROP_SYNC_RETRIES, defaultValue = "5")
+    int syncMaxRetryAttempts;
+
+    @ConfigProperty(name = PROP_SYNC_RETRY_INTERVAL_MS, defaultValue = "1000")
+    long syncRetryIntervalMs;
+
+    @ConfigProperty(name = PROP_SYNC_RETRY_MAX_INTERVAL_MS, defaultValue = "60000")
+    long syncRetryMaxIntervalMs;
+
+    @ConfigProperty(name = PROP_SYNC_RETRY_BACKOFF_MULTIPLIER, defaultValue = "2.0")
+    double syncRetryBackoffMultiplier;
 
     @Inject
     @CustomConsumerBuilder
@@ -227,17 +247,8 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                     });
                 }
 
-                try {
-                    if (!natsHeaders.isEmpty()) {
-                        js.publish(subject, natsHeaders, recordBytes);
-                    }
-                    else {
-                        js.publish(subject, recordBytes);
-                    }
-                }
-                catch (Exception e) {
-                    throw new DebeziumException(e);
-                }
+                publishWithRetry(subject, natsHeaders, recordBytes);
+
             }
             committer.markProcessed(rec);
         }
@@ -311,6 +322,100 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             LOGGER.error("Failed to publish batch", e.getCause());
             throw new DebeziumException("Failed to publish batch", e.getCause());
         }
+    }
+
+    /**
+     * Publishes a message to NATS JetStream with retry logic.
+     *
+     * @param subject The subject to publish to
+     * @param headers The NATS headers
+     * @param data The message payload
+     * @throws InterruptedException if interrupted during retry sleep
+     * @throws DebeziumException if max retries exceeded or non-retryable error occurs
+     */
+    private void publishWithRetry(String subject, Headers headers, byte[] data) throws InterruptedException {
+        int attempts = 0;
+        long currentRetryInterval = syncRetryIntervalMs;
+
+        while (true) {
+            try {
+                if (!headers.isEmpty()) {
+                    js.publish(subject, headers, data);
+                }
+                else {
+                    js.publish(subject, data);
+                }
+
+                if (attempts > 0) {
+                    LOGGER.info("Successfully published to {} after {} retry attempt(s)", subject, attempts);
+                }
+                return;
+            }
+            catch (Exception e) {
+                attempts++;
+
+                // Check if this is a retryable error
+                if (!isRetryableNATSException(e)) {
+                    LOGGER.error("Non-retryable error publishing to {}: {}", subject, e.getMessage());
+                    throw new DebeziumException("Non-retryable publish error", e);
+                }
+
+                // Check if we've exceeded max retries
+                if (attempts >= syncMaxRetryAttempts) {
+                    LOGGER.error("Exceeded maximum retry attempts ({}) publishing to {}", syncMaxRetryAttempts, subject);
+                    throw new DebeziumException(
+                            String.format("Exceeded maximum number of attempts (%d) to publish event to %s",
+                                    syncMaxRetryAttempts, subject), e);
+                }
+
+                // Log retry attempt
+                LOGGER.warn("Failed to publish to {} (attempt {}, {} retries remaining): {}. Retrying in {}ms...",
+                        subject, attempts, String.valueOf(syncMaxRetryAttempts - attempts),
+                        e.getMessage(), currentRetryInterval);
+
+                // Sleep before retry
+                Metronome.sleeper(Duration.ofMillis(currentRetryInterval), Clock.SYSTEM).pause();
+
+                // Next retry interval with exponential backoff, capped at max
+                currentRetryInterval = Math.min((long) (currentRetryInterval * syncRetryBackoffMultiplier),
+                        syncRetryMaxIntervalMs);
+            }
+        }
+    }
+
+    private boolean isRetryableNATSException(Exception e) {
+        String message = e.getMessage();
+        if (message == null && e.getCause() != null) {
+            message = e.getCause().getMessage();
+        }
+        if (message == null) {
+            message = "";
+        }
+        String lowerMessage = message.toLowerCase();
+
+        // JetStream API transient exceptions that ARE retryable
+        if (lowerMessage.contains("maximum messages exceeded") ||
+                lowerMessage.contains("maximum bytes exceeded") ||
+                lowerMessage.contains("insufficient resources") ||
+                lowerMessage.contains("timeout") ||
+                lowerMessage.contains("connection") ||
+                lowerMessage.contains("no responders")) {
+            return true;
+        }
+
+        // JetStream API exceptions that are NOT retryable (configuration errors)
+        if (lowerMessage.contains("stream not found") ||
+                lowerMessage.contains("bad request") ||
+                lowerMessage.contains("invalid") ||
+                lowerMessage.contains("not authorized") ||
+                lowerMessage.contains("authentication") ||
+                lowerMessage.contains("permission denied")) {
+            return false;
+        }
+
+        // Unknown error is not classified as fatal, treat as retryable
+        LOGGER.debug("Unknown exception type, treating as retryable: {}", message);
+        return true;
     }
 
     private static SSLContext sslAuthContext(String keystorePath, String keystorePassword,
