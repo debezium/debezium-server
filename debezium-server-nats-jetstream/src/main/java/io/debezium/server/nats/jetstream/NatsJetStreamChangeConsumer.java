@@ -346,7 +346,6 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                     js.publish(subject, data);
                 }
 
-                // Success - log if we had to retry
                 if (attempts > 0) {
                     LOGGER.info("Successfully published to {} after {} retry attempt(s)", subject, attempts);
                 }
