@@ -7,11 +7,12 @@ package io.debezium.server.nats.jetstream;
 
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -40,10 +41,10 @@ import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
-import io.debezium.util.Clock;
-import io.debezium.util.Metronome;
+import io.debezium.server.util.RetryExecutor;
 import io.nats.client.Connection;
 import io.nats.client.JetStream;
+import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.Message;
 import io.nats.client.Nats;
@@ -90,6 +91,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     private Connection nc;
     private JetStream js;
+    private RetryExecutor retryExecutor;
 
     @ConfigProperty(name = PROP_CREATE_STREAM, defaultValue = "false")
     boolean createStream;
@@ -201,6 +203,12 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         else {
             LOGGER.info("Synchronous publishing mode enabled");
         }
+
+        this.retryExecutor = new RetryExecutor(
+                syncMaxRetryAttempts,
+                syncRetryIntervalMs,
+                syncRetryMaxIntervalMs,
+                syncRetryBackoffMultiplier);
     }
 
     @PreDestroy
@@ -334,87 +342,73 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
      * @throws DebeziumException if max retries exceeded or non-retryable error occurs
      */
     private void publishWithRetry(String subject, Headers headers, byte[] data) throws InterruptedException {
-        int attempts = 0;
-        long currentRetryInterval = syncRetryIntervalMs;
 
-        while (true) {
-            try {
-                if (!headers.isEmpty()) {
-                    js.publish(subject, headers, data);
-                }
-                else {
-                    js.publish(subject, data);
-                }
-
-                if (attempts > 0) {
-                    LOGGER.info("Successfully published to {} after {} retry attempt(s)", subject, attempts);
-                }
-                return;
-            }
-            catch (Exception e) {
-                attempts++;
-
-                // Check if this is a retryable error
-                if (!isRetryableNATSException(e)) {
-                    LOGGER.error("Non-retryable error publishing to {}: {}", subject, e.getMessage());
-                    throw new DebeziumException("Non-retryable publish error", e);
-                }
-
-                // Check if we've exceeded max retries
-                if (attempts >= syncMaxRetryAttempts) {
-                    LOGGER.error("Exceeded maximum retry attempts ({}) publishing to {}", syncMaxRetryAttempts, subject);
-                    throw new DebeziumException(
-                            String.format("Exceeded maximum number of attempts (%d) to publish event to %s",
-                                    syncMaxRetryAttempts, subject), e);
-                }
-
-                // Log retry attempt
-                LOGGER.warn("Failed to publish to {} (attempt {}, {} retries remaining): {}. Retrying in {}ms...",
-                        subject, attempts, String.valueOf(syncMaxRetryAttempts - attempts),
-                        e.getMessage(), currentRetryInterval);
-
-                // Sleep before retry
-                Metronome.sleeper(Duration.ofMillis(currentRetryInterval), Clock.SYSTEM).pause();
-
-                // Next retry interval with exponential backoff, capped at max
-                currentRetryInterval = Math.min((long) (currentRetryInterval * syncRetryBackoffMultiplier),
-                        syncRetryMaxIntervalMs);
-            }
-        }
+        retryExecutor.executeWithRetry(
+                () -> {
+                    if (!headers.isEmpty()) {
+                        js.publish(subject, headers, data);
+                    }
+                    else {
+                        js.publish(subject, data);
+                    }
+                    return null;
+                },
+                this::isRetryableNATSException,
+                "publish to NATS:" + subject);
     }
 
+    /**
+     * Determines if a NATS exception is retryable based on its type and error codes.
+     *
+     * @param e Exception to evaluate
+     * @return true if retryable, false otherwise
+     */
     private boolean isRetryableNATSException(Exception e) {
-        String message = e.getMessage();
-        if (message == null && e.getCause() != null) {
-            message = e.getCause().getMessage();
-        }
-        if (message == null) {
-            message = "";
-        }
-        String lowerMessage = message.toLowerCase();
+        // Handle JetStreamApiException with error codes
+        if (e instanceof JetStreamApiException jsEx) {
+            int apiErrorCode = jsEx.getApiErrorCode();
+            // http style codes io.nats.client.api.Error
+            int errCode = jsEx.getErrorCode();
 
-        // JetStream API transient exceptions that ARE retryable
-        if (lowerMessage.contains("maximum messages exceeded") ||
-                lowerMessage.contains("maximum bytes exceeded") ||
-                lowerMessage.contains("insufficient resources") ||
-                lowerMessage.contains("timeout") ||
-                lowerMessage.contains("connection") ||
-                lowerMessage.contains("no responders")) {
+            // Check specific JetStream API error codes in NATS repository
+            // https://github.com/nats-io/nats-server/blob/main/server/errors.json
+
+            // Non-retryable configuration/client errors
+            Set<Integer> nonRetryableApiCodes = Set.of(
+                    10059, // JSStreamNotFoundErr
+                    10003, // JSBadRequestErr
+                    10039, // JSNotEnabledForAccountErr
+                    10076 // JSNotEnabledEre
+            );
+
+            if (nonRetryableApiCodes.contains(apiErrorCode)) {
+                return false;
+            }
+
+            // Retryable transient errors
+            Set<Integer> retryableApiCodes = Set.of(
+                    10008, // JSClusterNotAvailErr
+                    10023, // JSInsufficientResourcesErr
+                    10077, // JSStreamStoreFailedF
+                    10167, // JSStreamTooManyRequests - when too many requests are made in a short time can be retried after a delay
+                    10122 // JSStreamMaxStreamBytesExceeded - when stream is full but can be retried after consumers have processed messages
+            );
+
+            if (retryableApiCodes.contains(apiErrorCode)) {
+                return true;
+            }
+
+            // Typically 503 error codes are retryable
+            return errCode > 500;
+        }
+
+        // Transport issues generally indicate transient problems thus retryable
+        if (e instanceof IOException) {
             return true;
         }
 
-        // JetStream API exceptions that are NOT retryable (configuration errors)
-        if (lowerMessage.contains("stream not found") ||
-                lowerMessage.contains("bad request") ||
-                lowerMessage.contains("invalid") ||
-                lowerMessage.contains("not authorized") ||
-                lowerMessage.contains("authentication") ||
-                lowerMessage.contains("permission denied")) {
-            return false;
-        }
-
-        // Unknown error is not classified as fatal, treat as retryable
-        LOGGER.debug("Unknown exception type, treating as retryable: {}", message);
+        // Unknown error possibly transient, treat as retryable
+        LOGGER.warn("Unknown exception type, treating as retryable: {}", e.getClass().getName());
         return true;
     }
 
