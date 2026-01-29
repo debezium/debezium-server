@@ -69,6 +69,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     private static final String PROP_PREFIX = "debezium.sink.nats-jetstream.";
     private static final String PROP_URL = PROP_PREFIX + "url";
+    private static final String PROP_STREAM_NAME = PROP_PREFIX + "stream-name";
     private static final String PROP_CREATE_STREAM = PROP_PREFIX + "create-stream";
     private static final String PROP_SUBJECTS = PROP_PREFIX + "subjects";
     private static final String PROP_STORAGE = PROP_PREFIX + "storage";
@@ -92,6 +93,9 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     private Connection nc;
     private JetStream js;
     private RetryExecutor retryExecutor;
+
+    @ConfigProperty(name = PROP_STREAM_NAME, defaultValue = "DebeziumStream")
+    String streamName;
 
     @ConfigProperty(name = PROP_CREATE_STREAM, defaultValue = "false")
     boolean createStream;
@@ -179,7 +183,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                 StorageType storageType = storage.equals("file") ? StorageType.File : StorageType.Memory;
 
                 StreamConfiguration streamConfig = StreamConfiguration.builder()
-                        .name("DebeziumStream")
+                        .name(streamName)
                         .description("The debezium stream, contains messages which are coming from debezium")
                         .subjects(subjects.split(","))
                         .storageType(storageType)
