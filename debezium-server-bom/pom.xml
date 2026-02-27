@@ -7,7 +7,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <artifactId>debezium-server-bom</artifactId>
-    <version>3.2.7-SNAPSHOT</version>
+    <version>3.2.7.Final</version>
     <name>Debezium Server BOM</name>
     <packaging>jar</packaging>
 
