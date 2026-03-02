@@ -7,9 +7,15 @@ package io.debezium.server.redis;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.management.ManagementFactory;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
@@ -58,6 +64,19 @@ public class RedisStreamIT {
             assertTrue(mapEntry.getKey().startsWith("{\"schema\":"), "Expected json like key starting with {\"schema\":...");
             assertTrue(mapEntry.getValue().startsWith("{\"schema\":"), "Expected json like value starting with {\"schema\":...");
         }
+
+        final MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
+        final ObjectName snapshotMetric = new ObjectName("debezium.postgres:type=connector-metrics,context=snapshot,server=testc");
+
+        Awaitility.await().atMost(Duration.ofSeconds(30)).until(() -> {
+            try {
+                long eventsSeen = (long) mbeanServer.getAttribute(snapshotMetric, "TotalNumberOfEventsSeen");
+                return eventsSeen >= MESSAGE_COUNT;
+            }
+            catch (Exception e) {
+                return false;
+            }
+        });
 
         jedis.close();
     }
