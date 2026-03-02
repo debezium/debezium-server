@@ -104,7 +104,7 @@ jobs:
         with:
           path: server
       - name: Download Debezium distribution
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: debezium-dist-artifact
       - name: Unzip Debezium distribution
