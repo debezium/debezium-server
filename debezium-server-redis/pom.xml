@@ -133,6 +133,9 @@
                     <reuseForks>false</reuseForks>
                     <skipTests>${skipITs}</skipTests>
                     <enableAssertions>true</enableAssertions>
+                    <systemPropertyVariables>
+                         <quarkus.test.arg-line>-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=1099 -Dcom.sun.management.jmxremote.rmi.port=1099 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=localhost</quarkus.test.arg-line>
+                    </systemPropertyVariables>
                     <systemProperties>
                         <test.type>IT</test.type>
                     </systemProperties>
