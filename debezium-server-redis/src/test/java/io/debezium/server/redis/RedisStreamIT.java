@@ -8,13 +8,17 @@ package io.debezium.server.redis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.management.ManagementFactory;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-import javax.management.MBeanServer;
+import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
+import javax.management.remote.JMXConnector;
+import javax.management.remote.JMXConnectorFactory;
+import javax.management.remote.JMXServiceURL;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
@@ -66,15 +70,27 @@ public class RedisStreamIT {
             assertTrue(mapEntry.getValue().startsWith("{\"schema\":"), "Expected json like value starting with {\"schema\":...");
         }
 
-        final MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
-        final ObjectName snapshotMetric = new ObjectName("debezium.postgres:type=connector-metrics,context=snapshot,server=testc");
-
         Awaitility.await()
-                .atMost(Duration.ofSeconds(30))
+                .atMost(Duration.ofSeconds(TestUtils.waitTimeForRecords()))
+                .pollInterval(Duration.ofSeconds(1))
                 .ignoreExceptions()
-                .untilAsserted(() -> assertThat((Long) mbeanServer.getAttribute(snapshotMetric, "TotalNumberOfEventsSeen"))
-                        .as("JMX metric for total events seen")
-                        .isGreaterThanOrEqualTo((long) MESSAGE_COUNT));
+                .untilAsserted(() -> {
+                    JMXConnector jmxc = createJmxConnection();
+                    MBeanServerConnection connection = jmxc.getMBeanServerConnection();
+
+                    Set<ObjectName> beans = connection.queryNames(new ObjectName("debezium.postgres:type=connector-metrics,*"), null);
+                    assertThat(beans).as("JMX beans not found").isNotEmpty();
+
+                    long totalEventsSeen = beans.stream()
+                            .mapToLong(bean -> getAttribute(connection, bean, "TotalNumberOfEventsSeen"))
+                            .sum();
+
+                    jmxc.close();
+
+                    assertThat(totalEventsSeen)
+                            .as("Total events seen across all JMX contexts")
+                            .isGreaterThanOrEqualTo((long) MESSAGE_COUNT);
+                });
         jedis.close();
     }
 
@@ -156,5 +172,24 @@ public class RedisStreamIT {
 
         long streamLength = jedis.xlen(STREAM_NAME);
         assertTrue(streamLength == TOTAL_RECORDS, "Redis OOM Test Failed");
+    }
+
+    private JMXConnector createJmxConnection() {
+        try {
+            JMXServiceURL url = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://localhost:1099/jmxrmi");
+            return JMXConnectorFactory.connect(url, null);
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private long getAttribute(MBeanServerConnection connection, ObjectName bean, String attribute) {
+        try {
+            return ((Number) connection.getAttribute(bean, attribute)).longValue();
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
