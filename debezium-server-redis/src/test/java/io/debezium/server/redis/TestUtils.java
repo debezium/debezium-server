@@ -54,4 +54,8 @@ public class TestUtils {
         });
     }
 
+    public static int waitTimeForRecords() {
+        return Integer.parseInt(System.getProperty("test.wait.for.records", "60"));
+    }
+
 }
