@@ -10,26 +10,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import io.debezium.junit.FixFor;
 import io.quarkus.test.LogCollectingTestResource;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.common.ResourceArg;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
-/**
- * Verifies that an invalid connector class causes a clean startup failure with ClassNotFoundException,
- * not an infinite retry loop or StackOverflowError (DBZ-8703).
- */
 @QuarkusTest
 @TestProfile(InvalidConnectorTestProfile.class)
+@FixFor("DBZ-8703")
 @QuarkusTestResource(value = LogCollectingTestResource.class, restrictToAnnotatedClass = true, initArgs = {
         @ResourceArg(name = LogCollectingTestResource.INCLUDE, value = "io\\.debezium\\..*"),
 })
 public class InvalidConnectorStartupIT {
 
     @Test
+    @DisplayName("Invalid connector class causes clean startup failure with ClassNotFoundException")
     public void shouldFailCleanlyWithInvalidConnectorClass() {
         Awaitility.await()
                 .atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
