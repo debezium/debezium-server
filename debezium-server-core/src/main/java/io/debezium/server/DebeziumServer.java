@@ -62,6 +62,8 @@ public class DebeziumServer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DebeziumServer.class);
 
+    private static final int EXIT_CODE_ERROR = 1;
+
     private static final String PROP_PREFIX = "debezium.";
     static final String PROP_SOURCE_PREFIX = PROP_PREFIX + "source.";
     private static final String PROP_SINK_PREFIX = PROP_PREFIX + "sink.";
@@ -152,12 +154,20 @@ public class DebeziumServer {
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
         final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
-        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
-                .using(props)
-                .using((DebeziumEngine.ConnectorCallback) health)
-                .using((DebeziumEngine.CompletionCallback) health)
-                .notifying(consumer)
-                .build();
+        try {
+            engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
+                    .using(props)
+                    .using((DebeziumEngine.ConnectorCallback) health)
+                    .using((DebeziumEngine.CompletionCallback) health)
+                    .notifying(consumer)
+                    .build();
+        }
+        catch (Exception e) {
+            LOGGER.error("Failed to build engine, connector will not start", e);
+            returnCode = EXIT_CODE_ERROR;
+            Quarkus.asyncExit(returnCode);
+            return;
+        }
 
         executor.execute(() -> {
             try {
@@ -241,6 +251,9 @@ public class DebeziumServer {
     }
 
     public void stop(@Observes ShutdownEvent event) {
+        if (engine == null) {
+            return;
+        }
         try {
             LOGGER.info("Received request to stop the engine");
             final Config config = ConfigProvider.getConfig();
@@ -261,7 +274,7 @@ public class DebeziumServer {
 
     void connectorCompleted(@Observes ConnectorCompletedEvent event) {
         if (!event.isSuccess()) {
-            returnCode = 1;
+            returnCode = EXIT_CODE_ERROR;
         }
     }
 
