@@ -23,7 +23,7 @@
             <exclude>org.codehaus.plexus:*:*</exclude>
             <exclude>log4j:log4j:*</exclude>
             <exclude>ch.qos.reload4j:reload4j</exclude>
-    	    <exclude>io.debezium:debezium-scripting</exclude>
+            <exclude>io.debezium:debezium-scripting</exclude>
             <exclude>io.debezium:debezium-scripting-languages</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-3</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-4</exclude>
