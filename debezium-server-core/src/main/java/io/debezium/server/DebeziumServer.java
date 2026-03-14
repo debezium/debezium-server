@@ -152,12 +152,20 @@ public class DebeziumServer {
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
         final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
-        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
-                .using(props)
-                .using((DebeziumEngine.ConnectorCallback) health)
-                .using((DebeziumEngine.CompletionCallback) health)
-                .notifying(consumer)
-                .build();
+        try {
+            engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
+                    .using(props)
+                    .using((DebeziumEngine.ConnectorCallback) health)
+                    .using((DebeziumEngine.CompletionCallback) health)
+                    .notifying(consumer)
+                    .build();
+        }
+        catch (Exception e) {
+            LOGGER.error("Failed to build engine, connector will not start", e);
+            returnCode = 1;
+            Quarkus.asyncExit(returnCode);
+            return;
+        }
 
         executor.execute(() -> {
             try {
@@ -245,7 +253,9 @@ public class DebeziumServer {
             LOGGER.info("Received request to stop the engine");
             final Config config = ConfigProvider.getConfig();
             try {
-                engine.close();
+                if (engine != null) {
+                    engine.close();
+                }
             }
             // TODO: eventually catch more specific exception if DBZ-8732 is implemented
             catch (IllegalStateException e) {
