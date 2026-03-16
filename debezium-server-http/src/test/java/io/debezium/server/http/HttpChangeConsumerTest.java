@@ -34,7 +34,7 @@ public class HttpChangeConsumerTest {
     public void verifyGenerateRequestWithDefaultConfig() throws Exception {
 
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
         HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
@@ -45,8 +45,8 @@ public class HttpChangeConsumerTest {
     @Test
     public void verifyGenerateRequestWithBase64EncodingDisabled() throws Exception {
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, "false",
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                "debezium.sink.http.headers.encode.base64", "false",
+                "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
         HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
@@ -57,8 +57,8 @@ public class HttpChangeConsumerTest {
     @Test
     public void verifyGenerateRequestHasNoDuplicateHeaders() throws Exception {
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, "false",
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                "debezium.sink.http.headers.encode.base64", "false",
+                "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
         HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
@@ -74,9 +74,9 @@ public class HttpChangeConsumerTest {
     @Test
     public void verifyGenerateRequestWithDifferentHeaderPrefix() throws Exception {
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_ENCODE_BASE64, "false",
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_HEADERS_PREFIX, "XYZ-DBZ-",
-                HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                "debezium.sink.http.headers.encode.base64", "false",
+                "debezium.sink.http.headers.prefix", "XYZ-DBZ-",
+                "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
         HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
 
@@ -91,9 +91,9 @@ public class HttpChangeConsumerTest {
 
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "3",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRY_INTERVAL, "1",
+                        "debezium.sink.http.url", "http://url",
+                        "debezium.sink.http.retries", "3",
+                        "debezium.sink.http.retry.interval.ms", "1",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
@@ -110,9 +110,9 @@ public class HttpChangeConsumerTest {
 
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRIES, "2",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_RETRY_INTERVAL, "1",
+                        "debezium.sink.http.url", "http://url",
+                        "debezium.sink.http.retries", "2",
+                        "debezium.sink.http.retry.interval.ms", "1",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
