@@ -38,7 +38,7 @@ import io.quarkus.test.junit.QuarkusTest;
  * @author Jiri Pechanec
  */
 @QuarkusTest
-@QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
+@QuarkusTestResource(value = PostgresTestResourceLifecycleManager.class, restrictToAnnotatedClass = true)
 @QuarkusTestResource(value = LogCollectingTestResource.class, restrictToAnnotatedClass = true, initArgs = {
         @ResourceArg(name = LogCollectingTestResource.INCLUDE, value = "io\\.debezium\\..*"),
 })

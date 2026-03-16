@@ -6,53 +6,51 @@
 package io.debezium.server;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
-import java.time.Duration;
-
-import org.awaitility.Awaitility;
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.debezium.junit.FixFor;
-import io.quarkus.test.LogCollectingTestResource;
-import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.common.ResourceArg;
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.TestProfile;
+import io.debezium.doc.FixFor;
+import io.quarkus.test.QuarkusUnitTest;
 
-@QuarkusTest
-@TestProfile(InvalidConnectorTestProfile.class)
-@FixFor("DBZ-8703")
-@QuarkusTestResource(value = LogCollectingTestResource.class, restrictToAnnotatedClass = true, initArgs = {
-        @ResourceArg(name = LogCollectingTestResource.INCLUDE, value = "io\\.debezium\\..*"),
-})
 public class InvalidConnectorStartupIT {
 
+    // System properties (ordinal 400) win over all config sources without going through
+    // Quarkus-validated application.properties (which rejects unknown config roots).
+    static {
+        System.setProperty("debezium.sink.type", "test");
+        System.setProperty("debezium.source.connector.class", "invalid.connector.ClassName");
+    }
+
+    @RegisterExtension
+    static final QuarkusUnitTest config = new QuarkusUnitTest()
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+                    .addClasses(DebeziumServer.class, ChangeConsumerFactory.class,
+                            DefaultChangeConsumer.class, ConnectorLifecycle.class,
+                            TestConsumer.class, TestConfigSource.class)
+                    .addPackages(true, "io.debezium.server.events"))
+            .overrideConfigKey("quarkus.arc.remove-unused-beans", "false")
+            .overrideConfigKey("quarkus.kubernetes-client.devservices.enabled", "false")
+            .assertException(t -> {
+                assertThat(t).isNotInstanceOf(StackOverflowError.class);
+                assertThat(t).hasRootCauseInstanceOf(ClassNotFoundException.class);
+            });
+
+    @AfterAll
+    static void cleanup() {
+        System.clearProperty("debezium.sink.type");
+        System.clearProperty("debezium.source.connector.class");
+    }
+
     @Test
+    @FixFor("DBZ-8703")
     @DisplayName("Invalid connector class causes clean startup failure with ClassNotFoundException")
     public void shouldFailCleanlyWithInvalidConnectorClass() {
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
-                .until(() -> LogCollectingTestResource.current()
-                        .getRecords()
-                        .stream()
-                        .anyMatch(r -> r.getMessage() != null && r.getMessage().contains("Connector completed")));
-
-        boolean hasClassNotFound = LogCollectingTestResource.current()
-                .getRecords()
-                .stream()
-                .anyMatch(r -> r.getMessage() != null && r.getMessage().contains("ClassNotFoundException"));
-
-        boolean hasStackOverflow = LogCollectingTestResource.current()
-                .getRecords()
-                .stream()
-                .anyMatch(r -> r.getMessage() != null && r.getMessage().contains("StackOverflowError"));
-
-        assertThat(hasClassNotFound)
-                .as("Expected ClassNotFoundException in logs")
-                .isTrue();
-        assertThat(hasStackOverflow)
-                .as("Expected no StackOverflowError in logs")
-                .isFalse();
+        fail("Quarkus should have failed to start due to invalid connector class");
     }
 }
