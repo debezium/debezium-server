@@ -153,21 +153,22 @@ public class DebeziumServer {
         props.setProperty("name", name);
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
-        final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
+        final String connectorClass = props.getProperty("connector.class");
         try {
-            engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
-                    .using(props)
-                    .using((DebeziumEngine.ConnectorCallback) health)
-                    .using((DebeziumEngine.CompletionCallback) health)
-                    .notifying(consumer)
-                    .build();
+            Thread.currentThread().getContextClassLoader().loadClass(connectorClass);
         }
-        catch (Exception e) {
-            LOGGER.error("Failed to build engine, connector will not start", e);
-            returnCode = EXIT_CODE_ERROR;
-            Quarkus.asyncExit(returnCode);
-            return;
+        catch (ClassNotFoundException e) {
+            throw new DebeziumException("Unable to find connector class '" + connectorClass
+                    + "'. Please verify the 'debezium.source.connector.class' configuration property.", e);
         }
+
+        final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
+        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
+                .using(props)
+                .using((DebeziumEngine.ConnectorCallback) health)
+                .using((DebeziumEngine.CompletionCallback) health)
+                .notifying(consumer)
+                .build();
 
         executor.execute(() -> {
             try {
