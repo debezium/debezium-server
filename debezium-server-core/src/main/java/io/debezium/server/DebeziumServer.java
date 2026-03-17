@@ -153,15 +153,6 @@ public class DebeziumServer {
         props.setProperty("name", name);
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
-        final String connectorClass = props.getProperty("connector.class");
-        try {
-            Thread.currentThread().getContextClassLoader().loadClass(connectorClass);
-        }
-        catch (ClassNotFoundException e) {
-            throw new DebeziumException("Unable to find connector class '" + connectorClass
-                    + "'. Please verify the 'debezium.source.connector.class' configuration property.", e);
-        }
-
         final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
         engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
                 .using(props)
