@@ -8,6 +8,7 @@ package io.debezium.server;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -116,12 +117,12 @@ public class DebeziumServer {
      * This is not a pure value object since it holds mutable collections that are modified during iteration.
      */
     private static final class ConfigToPropertiesMapping {
-        private final String oldPrefix;
-        private final String newPrefix;
-        private final Set<String> propertyNames;
-        private final Map<String, String> normalizedNames;
-        private final boolean overwrite;
-        private final boolean removeProcessedPropertyNames;
+        final String oldPrefix;
+        final String newPrefix;
+        final Set<String> propertyNames;
+        final Map<String, String> normalizedNames;
+        final boolean overwrite;
+        final boolean removeProcessedPropertyNames;
 
         private ConfigToPropertiesMapping(String oldPrefix, String newPrefix, Set<String> propertyNames,
                                           Map<String, String> normalizedNames, boolean overwrite, boolean removeProcessedPropertyNames) {
@@ -133,29 +134,6 @@ public class DebeziumServer {
             this.removeProcessedPropertyNames = removeProcessedPropertyNames;
         }
 
-        String oldPrefix() {
-            return oldPrefix;
-        }
-
-        String newPrefix() {
-            return newPrefix;
-        }
-
-        Set<String> propertyNames() {
-            return propertyNames;
-        }
-
-        Map<String, String> normalizedNames() {
-            return normalizedNames;
-        }
-
-        boolean overwrite() {
-            return overwrite;
-        }
-
-        boolean removeProcessedPropertyNames() {
-            return removeProcessedPropertyNames;
-        }
     }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -275,29 +253,31 @@ public class DebeziumServer {
     private void configToProperties(Config config, Properties props, ConfigToPropertiesMapping mapping) {
 
         // Use iterator to safely remove items while iterating
-        java.util.Iterator<String> iterator = mapping.propertyNames().iterator();
+        Iterator<String> iterator = mapping.propertyNames.iterator();
         while (iterator.hasNext()) {
             String name = iterator.next();
             boolean processed = false;
 
-            String normalizedName = mapping.normalizedNames().get(name);
-            if (normalizedName.startsWith(mapping.oldPrefix())) {
-                String finalPropertyName = mapping.newPrefix() + normalizedName.substring(mapping.oldPrefix().length());
-                if (mapping.overwrite() || !props.containsKey(finalPropertyName)) {
-                    props.setProperty(finalPropertyName, config.getConfigValue(name).getValue());
+            String normalizedName = mapping.normalizedNames.get(name);
+            if (normalizedName.startsWith(mapping.oldPrefix)) {
+                String finalPropertyName = mapping.newPrefix + normalizedName.substring(mapping.oldPrefix.length());
+                if (mapping.overwrite || !props.containsKey(finalPropertyName)) {
+                    String value = config.getConfigValue(name).getValue();
+                    props.setProperty(finalPropertyName, value == null ? "" : value);
                 }
                 processed = true;
             }
-            else if (name.startsWith(mapping.oldPrefix())) {
-                String finalPropertyName = mapping.newPrefix() + name.substring(mapping.oldPrefix().length());
-                if (mapping.overwrite() || !props.containsKey(finalPropertyName)) {
-                    props.setProperty(finalPropertyName, config.getConfigValue(name).getValue());
+            else if (name.startsWith(mapping.oldPrefix)) {
+                String finalPropertyName = mapping.newPrefix + name.substring(mapping.oldPrefix.length());
+                if (mapping.overwrite || !props.containsKey(finalPropertyName)) {
+                    String value = config.getConfigValue(name).getValue();
+                    props.setProperty(finalPropertyName, value == null ? "" : value);
                 }
                 processed = true;
             }
 
             // Remove processed properties to avoid duplicate processing
-            if (processed && mapping.removeProcessedPropertyNames()) {
+            if (processed && mapping.removeProcessedPropertyNames) {
                 iterator.remove();
             }
         }
