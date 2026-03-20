@@ -204,7 +204,7 @@ public class DebeziumServer {
                 new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, false, false));
 
         configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
-                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", new HashSet<>(remainingPropertyNames), false, true));
+                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", remainingPropertyNames, false, false));
         configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
                 PROP_OFFSET_STORAGE_PREFIX + name + ".", remainingPropertyNames, false, true));
 
@@ -233,14 +233,11 @@ public class DebeziumServer {
             String name = iterator.next();
             boolean processed = false;
 
-            String updatedPropertyName = null;
-            if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
-                updatedPropertyName = normalizePropertyName(name);
-            }
-            if (updatedPropertyName != null && updatedPropertyName.startsWith(mapping.oldPrefix())) {
-                String finalPropertyName = mapping.newPrefix() + updatedPropertyName.substring(mapping.oldPrefix().length());
+            String normalizedName = normalizePropertyName(name);
+            if (normalizedName.startsWith(mapping.oldPrefix())) {
+                String finalPropertyName = mapping.newPrefix() + normalizedName.substring(mapping.oldPrefix().length());
                 if (mapping.overwrite() || !props.containsKey(finalPropertyName)) {
-                    props.setProperty(finalPropertyName, config.getOptionalValue(name, String.class).orElse(""));
+                    props.setProperty(finalPropertyName, config.getConfigValue(name).getValue());
                 }
                 processed = true;
             }
