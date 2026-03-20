@@ -6,8 +6,10 @@
 package io.debezium.server;
 
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Properties;
@@ -112,7 +114,7 @@ public class DebeziumServer {
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
 
     private record ConfigToPropertiesMapping(String oldPrefix, String newPrefix, Set<String> propertyNames,
-            boolean overwrite, boolean removeProcessedPropertyNames) {
+            Map<String, String> normalizedNames, boolean overwrite, boolean removeProcessedPropertyNames) {
     }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -174,54 +176,56 @@ public class DebeziumServer {
 
         // Get property names as a mutable set to remove properties as they get processed, avoiding duplication
         Set<String> remainingPropertyNames = new HashSet<>();
+        Map<String, String> normalizedNames = new HashMap<>();
         for (String propName : config.getPropertyNames()) {
             remainingPropertyNames.add(propName);
+            normalizedNames.put(propName, normalizePropertyName(propName));
         }
 
-        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SOURCE_PREFIX, "", remainingPropertyNames, true, true));
+        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SOURCE_PREFIX, "", remainingPropertyNames, normalizedNames, true, true));
         // Simple smart prefix handling - works for any prefix
 
         // Handle granular (debezium.format.key|value|header.*) props first and remove from the potential names
         configToProperties(config, props,
-                new ConfigToPropertiesMapping(PROP_KEY_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, true, true));
+                new ConfigToPropertiesMapping(PROP_KEY_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, normalizedNames, true, true));
         configToProperties(config, props,
-                new ConfigToPropertiesMapping(PROP_VALUE_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, true, true));
+                new ConfigToPropertiesMapping(PROP_VALUE_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, normalizedNames, true, true));
         configToProperties(config, props,
-                new ConfigToPropertiesMapping(PROP_HEADER_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, true, true));
+                new ConfigToPropertiesMapping(PROP_HEADER_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, normalizedNames, true, true));
 
         // Remove the format-selector properties (debezium.format.key/value/header = avro|json|...) so that
         // the generic debezium.format.* pass below does not propagate them as nonsensical converter
         // sub-properties (e.g. key.converter.key = avro, header.converter.value = avro).
         // Their values have already been consumed above via getFormat() / getHeaderFormat().
-        removePropertyName(remainingPropertyNames, PROP_KEY_FORMAT);
-        removePropertyName(remainingPropertyNames, PROP_VALUE_FORMAT);
-        removePropertyName(remainingPropertyNames, PROP_HEADER_FORMAT);
+        removePropertyName(remainingPropertyNames, normalizedNames, PROP_KEY_FORMAT);
+        removePropertyName(remainingPropertyNames, normalizedNames, PROP_VALUE_FORMAT);
+        removePropertyName(remainingPropertyNames, normalizedNames, PROP_HEADER_FORMAT);
 
         // Handle the remaining generic (debezium.format.*) props. Don't remove them so that they can apply to key, value and header
         configToProperties(config, props,
-                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, false, false));
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, normalizedNames, false, false));
         configToProperties(config, props,
-                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, false, false));
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, normalizedNames, false, false));
         configToProperties(config, props,
-                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, false, false));
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, normalizedNames, false, false));
 
         configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
-                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", remainingPropertyNames, false, false));
+                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", remainingPropertyNames, normalizedNames, false, false));
         configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
-                PROP_OFFSET_STORAGE_PREFIX + name + ".", remainingPropertyNames, false, true));
+                PROP_OFFSET_STORAGE_PREFIX + name + ".", remainingPropertyNames, normalizedNames, false, true));
 
         final Optional<String> transforms = config.getOptionalValue(PROP_TRANSFORMS, String.class);
         if (transforms.isPresent()) {
             props.setProperty("transforms", transforms.get());
             configToProperties(config, props,
-                    new ConfigToPropertiesMapping(PROP_TRANSFORMS_PREFIX, "transforms.", remainingPropertyNames, true, true));
+                    new ConfigToPropertiesMapping(PROP_TRANSFORMS_PREFIX, "transforms.", remainingPropertyNames, normalizedNames, true, true));
         }
 
         final Optional<String> predicates = config.getOptionalValue(PROP_PREDICATES, String.class);
         if (predicates.isPresent()) {
             props.setProperty("predicates", predicates.get());
             configToProperties(config, props,
-                    new ConfigToPropertiesMapping(PROP_PREDICATES_PREFIX, "predicates.", remainingPropertyNames, true, true));
+                    new ConfigToPropertiesMapping(PROP_PREDICATES_PREFIX, "predicates.", remainingPropertyNames, normalizedNames, true, true));
         }
 
         props.setProperty("name", name);
@@ -235,7 +239,7 @@ public class DebeziumServer {
             String name = iterator.next();
             boolean processed = false;
 
-            String normalizedName = normalizePropertyName(name);
+            String normalizedName = mapping.normalizedNames().get(name);
             if (normalizedName.startsWith(mapping.oldPrefix())) {
                 String finalPropertyName = mapping.newPrefix() + normalizedName.substring(mapping.oldPrefix().length());
                 if (mapping.overwrite() || !props.containsKey(finalPropertyName)) {
@@ -258,13 +262,32 @@ public class DebeziumServer {
         }
     }
 
-    private void removePropertyName(Set<String> propertyNames, String propertyName) {
-        propertyNames.removeIf(name -> propertyName.equals(normalizePropertyName(name)));
+    private void removePropertyName(Set<String> propertyNames, Map<String, String> normalizedNames, String propertyName) {
+        propertyNames.removeIf(name -> propertyName.equals(normalizedNames.get(name)));
     }
 
     private String normalizePropertyName(String name) {
         if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
-            return name.replace("_", ".").toLowerCase(Locale.ROOT);
+            // Handle MicroProfile escaping: __ encodes a literal underscore, _ encodes a dot
+            StringBuilder normalized = new StringBuilder(name.length());
+            int i = 0;
+            while (i < name.length()) {
+                if (i + 1 < name.length() && name.charAt(i) == '_' && name.charAt(i + 1) == '_') {
+                    // Double underscore → literal underscore
+                    normalized.append('_');
+                    i += 2;
+                }
+                else if (name.charAt(i) == '_') {
+                    // Single underscore → dot
+                    normalized.append('.');
+                    i++;
+                }
+                else {
+                    normalized.append(name.charAt(i));
+                    i++;
+                }
+            }
+            return normalized.toString().toLowerCase(Locale.ROOT);
         }
         return name;
     }
