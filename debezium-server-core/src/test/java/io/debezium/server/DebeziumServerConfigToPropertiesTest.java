@@ -14,6 +14,7 @@ import java.util.Properties;
 
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import io.debezium.relational.history.SchemaHistory;
 import io.smallrye.config.PropertiesConfigSource;
@@ -116,6 +117,7 @@ class DebeziumServerConfigToPropertiesTest {
     }
 
     @Test
+    @ResourceLock("java.util.Locale")
     void shellStyleSelectorNormalizationIsLocaleIndependent() {
         Locale original = Locale.getDefault();
         try {
@@ -134,6 +136,22 @@ class DebeziumServerConfigToPropertiesTest {
         finally {
             Locale.setDefault(original);
         }
+    }
+
+    @Test
+    void microprofileDoubleUnderscoreEscapingIsHandledCorrectly() throws Exception {
+        Map<String, String> values = new HashMap<>();
+        values.put("debezium.sink.type", "test");
+        // Test that __ (double underscore) encodes a literal underscore, not two dots
+        values.put("DEBEZIUM_FORMAT_SCHEMA__REGISTRY__URL", "http://registry");
+
+        Properties props = mapProperties(values);
+
+        // DEBEZIUM_FORMAT_SCHEMA__REGISTRY__URL should normalize to debezium.format.schema_registry_url
+        // not debezium.format.schema..registry..url (which would be incorrect)
+        assertThat(props.getProperty("key.converter.schema_registry_url")).isEqualTo("http://registry");
+        assertThat(props.getProperty("value.converter.schema_registry_url")).isEqualTo("http://registry");
+        assertThat(props.getProperty("header.converter.schema_registry_url")).isEqualTo("http://registry");
     }
 
     @Test
