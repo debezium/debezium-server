@@ -7,8 +7,8 @@ package io.debezium.server;
 
 import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -191,10 +191,16 @@ public class DebeziumServer {
         LOGGER.info("Engine executor started");
     }
 
+    /**
+     * Internal helper for mapping configuration to Debezium Engine properties.
+     * <p>
+     * This method is not part of the public API and is intended for internal use
+     * within the io.debezium.server package and for testing only.
+     */
     void populateEngineProperties(Config config, String name, Properties props) {
 
         // Get property names as a mutable set to remove properties as they get processed, avoiding duplication
-        Set<String> remainingPropertyNames = new HashSet<>();
+        Set<String> remainingPropertyNames = new LinkedHashSet<>();
         Map<String, String> normalizedNames = new HashMap<>();
         for (String propName : config.getPropertyNames()) {
             remainingPropertyNames.add(propName);
@@ -262,16 +268,14 @@ public class DebeziumServer {
             if (normalizedName.startsWith(mapping.oldPrefix)) {
                 String finalPropertyName = mapping.newPrefix + normalizedName.substring(mapping.oldPrefix.length());
                 if (mapping.overwrite || !props.containsKey(finalPropertyName)) {
-                    String value = config.getConfigValue(name).getValue();
-                    props.setProperty(finalPropertyName, value == null ? "" : value);
+                    props.setProperty(finalPropertyName, resolvePropertyValue(config, name, normalizedName));
                 }
                 processed = true;
             }
             else if (name.startsWith(mapping.oldPrefix)) {
                 String finalPropertyName = mapping.newPrefix + name.substring(mapping.oldPrefix.length());
                 if (mapping.overwrite || !props.containsKey(finalPropertyName)) {
-                    String value = config.getConfigValue(name).getValue();
-                    props.setProperty(finalPropertyName, value == null ? "" : value);
+                    props.setProperty(finalPropertyName, resolvePropertyValue(config, name, normalizedName));
                 }
                 processed = true;
             }
@@ -285,6 +289,33 @@ public class DebeziumServer {
 
     private void removePropertyName(Set<String> propertyNames, Map<String, String> normalizedNames, String propertyName) {
         propertyNames.removeIf(name -> propertyName.equals(normalizedNames.get(name)));
+    }
+
+    private String resolvePropertyValue(Config config, String originalName, String normalizedName) {
+        // Prefer canonical normalized lookup so source precedence is handled by config resolution.
+        if (normalizedName != null) {
+            Optional<String> normalizedValue = config.getOptionalValue(normalizedName, String.class);
+            if (normalizedValue.isPresent()) {
+                return normalizedValue.get();
+            }
+        }
+
+        Optional<String> originalValue = config.getOptionalValue(originalName, String.class);
+        if (originalValue.isPresent()) {
+            return originalValue.get();
+        }
+
+        // Fall back to ConfigValue-based lookup so missing values fail loudly rather than defaulting to "".
+        if (normalizedName != null) {
+            try {
+                return config.getConfigValue(normalizedName).getValue();
+            }
+            catch (NoSuchElementException e) {
+                // ignore and fall through to originalName lookup
+            }
+        }
+
+        return config.getConfigValue(originalName).getValue();
     }
 
     private String normalizePropertyName(String name) {
