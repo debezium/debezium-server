@@ -138,6 +138,33 @@ public class DebeziumServer {
         final Class<Any> valueFormat = (Class<Any>) getFormat(config, PROP_VALUE_FORMAT);
         final Class<Any> headerFormat = (Class<Any>) getHeaderFormat(config);
 
+        populateEngineProperties(config, name, props);
+
+        LOGGER.debug("Configuration for DebeziumEngine: {}", props);
+
+        final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
+        engine = DebeziumEngine
+                .create(keyFormat, valueFormat, headerFormat,
+                        engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
+                .using(props)
+                .using((DebeziumEngine.ConnectorCallback) health)
+                .using((DebeziumEngine.CompletionCallback) health)
+                .notifying(consumer)
+                .build();
+
+        executor.execute(() -> {
+            try {
+                engine.run();
+            }
+            finally {
+                Quarkus.asyncExit(returnCode);
+            }
+        });
+        LOGGER.info("Engine executor started");
+    }
+
+    void populateEngineProperties(Config config, String name, Properties props) {
+
         // Get property names as a mutable set to remove properties as they get processed, avoiding duplication
         Set<String> remainingPropertyNames = new HashSet<>();
         for (String propName : config.getPropertyNames()) {
@@ -157,9 +184,9 @@ public class DebeziumServer {
         // the generic debezium.format.* pass below does not propagate them as nonsensical converter
         // sub-properties (e.g. key.converter.key = avro, header.converter.value = avro).
         // Their values have already been consumed above via getFormat() / getHeaderFormat().
-        remainingPropertyNames.remove(PROP_KEY_FORMAT);
-        remainingPropertyNames.remove(PROP_VALUE_FORMAT);
-        remainingPropertyNames.remove(PROP_HEADER_FORMAT);
+        removePropertyName(remainingPropertyNames, PROP_KEY_FORMAT);
+        removePropertyName(remainingPropertyNames, PROP_VALUE_FORMAT);
+        removePropertyName(remainingPropertyNames, PROP_HEADER_FORMAT);
 
         // Handle the remaining generic (debezium.format.*) props. Don't remove them so that they can apply to key, value and header
         configToProperties(config, props, PROP_FORMAT_PREFIX, "key.converter.", false, remainingPropertyNames, false);
@@ -184,27 +211,6 @@ public class DebeziumServer {
         }
 
         props.setProperty("name", name);
-        LOGGER.debug("Configuration for DebeziumEngine: {}", props);
-
-        final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
-        engine = DebeziumEngine
-                .create(keyFormat, valueFormat, headerFormat,
-                        engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
-                .using(props)
-                .using((DebeziumEngine.ConnectorCallback) health)
-                .using((DebeziumEngine.CompletionCallback) health)
-                .notifying(consumer)
-                .build();
-
-        executor.execute(() -> {
-            try {
-                engine.run();
-            }
-            finally {
-                Quarkus.asyncExit(returnCode);
-            }
-        });
-        LOGGER.info("Engine executor started");
     }
 
     private void configToProperties(Config config, Properties props, String oldPrefix, String newPrefix,
@@ -240,6 +246,17 @@ public class DebeziumServer {
                 iterator.remove();
             }
         }
+    }
+
+    private void removePropertyName(Set<String> propertyNames, String propertyName) {
+        propertyNames.removeIf(name -> propertyName.equals(normalizePropertyName(name)));
+    }
+
+    private String normalizePropertyName(String name) {
+        if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
+            return name.replace("_", ".").toLowerCase();
+        }
+        return name;
     }
 
     private Class<?> getFormat(Config config, String property) {
