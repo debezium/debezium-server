@@ -35,7 +35,7 @@ class DebeziumServerConfigToPropertiesTest {
     };
 
     @Test
-    void genericAppliesWhileGranularOverridesArePreserved() throws Exception {
+    void genericAppliesWhileGranularOverridesArePreserved() {
         Map<String, String> values = new HashMap<>();
         values.put("debezium.sink.type", "test");
         values.put("debezium.format.schemas.enable", "true");
@@ -50,7 +50,7 @@ class DebeziumServerConfigToPropertiesTest {
     }
 
     @Test
-    void formatSelectorsAreConsumedAndNotWrittenAsConverterProperties() throws Exception {
+    void formatSelectorsAreConsumedAndNotWrittenAsConverterProperties() {
         Map<String, String> values = new HashMap<>();
         values.put("debezium.sink.type", "test");
         values.put("debezium.format.key", "json");
@@ -65,7 +65,7 @@ class DebeziumServerConfigToPropertiesTest {
     }
 
     @Test
-    void granularPrefixPropertiesDoNotCrossContaminateOtherConverters() throws Exception {
+    void granularPrefixPropertiesDoNotCrossContaminateOtherConverters() {
         Map<String, String> values = new HashMap<>();
         values.put("debezium.sink.type", "test");
         values.put("debezium.format.key.apicurio.registry.url", "http://key");
@@ -88,7 +88,7 @@ class DebeziumServerConfigToPropertiesTest {
     }
 
     @Test
-    void selectorValuesDoNotLeakIntoSyntheticConverterKeyOrValueProperties() throws Exception {
+    void selectorValuesDoNotLeakIntoSyntheticConverterKeyOrValueProperties() {
         Map<String, String> values = new HashMap<>();
         values.put("debezium.sink.type", "test");
         values.put("debezium.format.key", "json");
@@ -103,7 +103,7 @@ class DebeziumServerConfigToPropertiesTest {
     }
 
     @Test
-    void shellStyleSelectorValuesDoNotLeakIntoSyntheticConverterKeyOrValueProperties() throws Exception {
+    void shellStyleSelectorValuesDoNotLeakIntoSyntheticConverterKeyOrValueProperties() {
         Map<String, String> values = new HashMap<>();
         values.put("debezium.sink.type", "test");
         values.put("DEBEZIUM_FORMAT_KEY", "json");
@@ -139,7 +139,7 @@ class DebeziumServerConfigToPropertiesTest {
     }
 
     @Test
-    void microprofileDoubleUnderscoreEscapingIsHandledCorrectly() throws Exception {
+    void microprofileDoubleUnderscoreEscapingIsHandledCorrectly() {
         Map<String, String> values = new HashMap<>();
         values.put("debezium.sink.type", "test");
         // Test that __ (double underscore) encodes a literal underscore, not two dots
@@ -155,7 +155,7 @@ class DebeziumServerConfigToPropertiesTest {
     }
 
     @Test
-    void sinkPropertiesRemainAvailableForBothSchemaHistoryAndOffsetStorageMappings() throws Exception {
+    void sinkPropertiesRemainAvailableForBothSchemaHistoryAndOffsetStorageMappings() {
         Map<String, String> values = new HashMap<>();
         values.put("debezium.sink.type", "test");
         values.put("debezium.sink.test.url", "http://sink");
