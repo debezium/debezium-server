@@ -106,7 +106,7 @@ public class ConnectorLifecycle implements HealthCheck, DebeziumEngine.Connector
         else {
             LOGGER.error(logMessage, error);
         }
-        connectorCompletedEvent.fire(new ConnectorCompletedEvent(success, message, error));
+        connectorCompletedEvent.fireAsync(new ConnectorCompletedEvent(success, message, error));
         live = false;
     }
 

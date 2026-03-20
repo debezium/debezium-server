@@ -35,7 +35,7 @@ import io.quarkus.test.junit.TestProfile;
  */
 @QuarkusTest
 @TestProfile(DebeziumServerConnectFormatProfile.class)
-@QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
+@QuarkusTestResource(value = PostgresTestResourceLifecycleManager.class, restrictToAnnotatedClass = true)
 @EnabledIfSystemProperty(named = "test.apicurio", matches = "false", disabledReason = "DebeziumServerConfigProvidersIT doesn't run with apicurio profile.")
 @DisabledIfSystemProperty(named = "debezium.format.key", matches = "protobuf")
 @DisabledIfSystemProperty(named = "debezium.format.value", matches = "protobuf")

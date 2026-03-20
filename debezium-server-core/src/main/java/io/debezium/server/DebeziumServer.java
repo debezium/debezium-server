@@ -62,6 +62,8 @@ public class DebeziumServer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DebeziumServer.class);
 
+    private static final int EXIT_CODE_ERROR = 1;
+
     private static final String PROP_PREFIX = "debezium.";
     static final String PROP_SOURCE_PREFIX = PROP_PREFIX + "source.";
     private static final String PROP_SINK_PREFIX = PROP_PREFIX + "sink.";
@@ -241,6 +243,9 @@ public class DebeziumServer {
     }
 
     public void stop(@Observes ShutdownEvent event) {
+        if (engine == null) {
+            return;
+        }
         try {
             LOGGER.info("Received request to stop the engine");
             final Config config = ConfigProvider.getConfig();
@@ -261,7 +266,7 @@ public class DebeziumServer {
 
     void connectorCompleted(@Observes ConnectorCompletedEvent event) {
         if (!event.isSuccess()) {
-            returnCode = 1;
+            returnCode = EXIT_CODE_ERROR;
         }
     }
 

@@ -25,7 +25,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
-@QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
+@QuarkusTestResource(value = PostgresTestResourceLifecycleManager.class, restrictToAnnotatedClass = true)
 @TestProfile(DebeziumServerSchemaRegistryProfile.class)
 @EnabledIfSystemProperty(named = "debezium.format.key", matches = "protobuf")
 @EnabledIfSystemProperty(named = "debezium.format.value", matches = "protobuf")

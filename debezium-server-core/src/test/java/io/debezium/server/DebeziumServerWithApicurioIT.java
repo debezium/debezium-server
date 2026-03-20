@@ -26,7 +26,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
 @QuarkusTest
-@QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
+@QuarkusTestResource(value = PostgresTestResourceLifecycleManager.class, restrictToAnnotatedClass = true)
 @TestProfile(DebeziumServerApicurioProfile.class)
 @EnabledIfSystemProperty(named = "test.apicurio", matches = "true", disabledReason = "DebeziumServerWithApicurioIT only runs when apicurio profile is enabled.")
 public class DebeziumServerWithApicurioIT {
