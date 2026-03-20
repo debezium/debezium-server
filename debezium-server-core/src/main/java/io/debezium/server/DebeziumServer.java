@@ -113,8 +113,51 @@ public class DebeziumServer {
 
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
 
-    private record ConfigToPropertiesMapping(String oldPrefix, String newPrefix, Set<String> propertyNames,
-            Map<String, String> normalizedNames, boolean overwrite, boolean removeProcessedPropertyNames) {
+    /**
+     * Encapsulates property mapping configuration with mutable state (property names and normalized names cache).
+     * This is not a pure value object since it holds mutable collections that are modified during iteration.
+     */
+    private static final class ConfigToPropertiesMapping {
+        private final String oldPrefix;
+        private final String newPrefix;
+        private final Set<String> propertyNames;
+        private final Map<String, String> normalizedNames;
+        private final boolean overwrite;
+        private final boolean removeProcessedPropertyNames;
+
+        private ConfigToPropertiesMapping(String oldPrefix, String newPrefix, Set<String> propertyNames,
+                                          Map<String, String> normalizedNames, boolean overwrite, boolean removeProcessedPropertyNames) {
+            this.oldPrefix = oldPrefix;
+            this.newPrefix = newPrefix;
+            this.propertyNames = propertyNames;
+            this.normalizedNames = normalizedNames;
+            this.overwrite = overwrite;
+            this.removeProcessedPropertyNames = removeProcessedPropertyNames;
+        }
+
+        String oldPrefix() {
+            return oldPrefix;
+        }
+
+        String newPrefix() {
+            return newPrefix;
+        }
+
+        Set<String> propertyNames() {
+            return propertyNames;
+        }
+
+        Map<String, String> normalizedNames() {
+            return normalizedNames;
+        }
+
+        boolean overwrite() {
+            return overwrite;
+        }
+
+        boolean removeProcessedPropertyNames() {
+            return removeProcessedPropertyNames;
+        }
     }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
