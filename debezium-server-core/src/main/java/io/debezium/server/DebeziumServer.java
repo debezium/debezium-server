@@ -167,7 +167,7 @@ public class DebeziumServer {
         configToProperties(config, props, PROP_FORMAT_PREFIX, "header.converter.", false, remainingPropertyNames, false);
 
         configToProperties(config, props, PROP_SINK_PREFIX + name + ".",
-                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", false, remainingPropertyNames, true);
+                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", false, new HashSet<>(remainingPropertyNames), true);
         configToProperties(config, props, PROP_SINK_PREFIX + name + ".", PROP_OFFSET_STORAGE_PREFIX + name + ".",
                 false, remainingPropertyNames, true);
 

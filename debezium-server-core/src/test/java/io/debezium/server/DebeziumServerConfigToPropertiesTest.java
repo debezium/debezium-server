@@ -23,6 +23,8 @@ import org.eclipse.microprofile.config.spi.Converter;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import io.debezium.relational.history.SchemaHistory;
+
 class DebeziumServerConfigToPropertiesTest {
 
     private static final String PROP_FORMAT_PREFIX = "debezium.format.";
@@ -33,6 +35,8 @@ class DebeziumServerConfigToPropertiesTest {
     private static final String PROP_KEY_FORMAT = PROP_FORMAT_PREFIX + "key";
     private static final String PROP_VALUE_FORMAT = PROP_FORMAT_PREFIX + "value";
     private static final String PROP_HEADER_FORMAT = PROP_FORMAT_PREFIX + "header";
+    private static final String PROP_SINK_PREFIX = "debezium.sink.";
+    private static final String PROP_OFFSET_STORAGE_PREFIX = "offset.storage.";
 
     private static Method configToPropertiesMethod;
 
@@ -123,6 +127,20 @@ class DebeziumServerConfigToPropertiesTest {
                 "header.converter.header");
     }
 
+    @Test
+    void sinkPropertiesRemainAvailableForBothSchemaHistoryAndOffsetStorageMappings() throws Exception {
+        Map<String, String> values = new HashMap<>();
+        values.put("debezium.sink.test.url", "http://sink");
+        values.put("debezium.sink.test.bucket", "bucket-a");
+
+        Properties props = applySinkPropertyMapping(values, "test");
+
+        assertThat(props.getProperty(SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + "test.url")).isEqualTo("http://sink");
+        assertThat(props.getProperty(SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + "test.bucket")).isEqualTo("bucket-a");
+        assertThat(props.getProperty("offset.storage.test.url")).isEqualTo("http://sink");
+        assertThat(props.getProperty("offset.storage.test.bucket")).isEqualTo("bucket-a");
+    }
+
     private static Properties applyFormatPropertyMapping(Map<String, String> values) throws Exception {
         DebeziumServer server = new DebeziumServer();
         Properties props = new Properties();
@@ -142,6 +160,21 @@ class DebeziumServerConfigToPropertiesTest {
         invoke(server, config, props, PROP_FORMAT_PREFIX, "key.converter.", false, remainingPropertyNames, false);
         invoke(server, config, props, PROP_FORMAT_PREFIX, "value.converter.", false, remainingPropertyNames, false);
         invoke(server, config, props, PROP_FORMAT_PREFIX, "header.converter.", false, remainingPropertyNames, false);
+
+        return props;
+    }
+
+    private static Properties applySinkPropertyMapping(Map<String, String> values, String sinkName) throws Exception {
+        DebeziumServer server = new DebeziumServer();
+        Properties props = new Properties();
+        Config config = new MapBackedConfig(values);
+        Set<String> remainingPropertyNames = new HashSet<>(values.keySet());
+
+        invoke(server, config, props, PROP_SINK_PREFIX + sinkName + ".",
+                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sinkName + ".",
+                false, new HashSet<>(remainingPropertyNames), true);
+        invoke(server, config, props, PROP_SINK_PREFIX + sinkName + ".", PROP_OFFSET_STORAGE_PREFIX + sinkName + ".",
+                false, remainingPropertyNames, true);
 
         return props;
     }
