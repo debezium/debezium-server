@@ -8,6 +8,7 @@ package io.debezium.server;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
@@ -19,6 +20,18 @@ import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
 
 class DebeziumServerConfigToPropertiesTest {
+
+    private static final String[] SELECTOR_ARTIFACT_KEYS = {
+            "key.converter.key",
+            "key.converter.value",
+            "key.converter.header",
+            "value.converter.key",
+            "value.converter.value",
+            "value.converter.header",
+            "header.converter.key",
+            "header.converter.value",
+            "header.converter.header"
+    };
 
     @Test
     void genericAppliesWhileGranularOverridesArePreserved() throws Exception {
@@ -47,7 +60,7 @@ class DebeziumServerConfigToPropertiesTest {
         Properties props = mapProperties(values);
 
         assertThat(props).doesNotContainKeys("key.converter", "value.converter", "header.converter");
-        assertThat(props).doesNotContainKeys("key.converter.key", "value.converter.value", "header.converter.header");
+        assertNoSelectorArtifacts(props);
     }
 
     @Test
@@ -85,16 +98,7 @@ class DebeziumServerConfigToPropertiesTest {
 
         // Historical regression guard:
         // old behavior could emit key.converter.key=value selector artifacts.
-        assertThat(props).doesNotContainKeys(
-                "key.converter.key",
-                "key.converter.value",
-                "key.converter.header",
-                "value.converter.key",
-                "value.converter.value",
-                "value.converter.header",
-                "header.converter.key",
-                "header.converter.value",
-                "header.converter.header");
+        assertNoSelectorArtifacts(props);
     }
 
     @Test
@@ -108,16 +112,28 @@ class DebeziumServerConfigToPropertiesTest {
         Properties props = mapProperties(values);
 
         assertThat(props).doesNotContainKeys("key.converter", "value.converter", "header.converter");
-        assertThat(props).doesNotContainKeys(
-                "key.converter.key",
-                "key.converter.value",
-                "key.converter.header",
-                "value.converter.key",
-                "value.converter.value",
-                "value.converter.header",
-                "header.converter.key",
-                "header.converter.value",
-                "header.converter.header");
+        assertNoSelectorArtifacts(props);
+    }
+
+    @Test
+    void shellStyleSelectorNormalizationIsLocaleIndependent() {
+        Locale original = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+
+            Map<String, String> values = new HashMap<>();
+            values.put("debezium.sink.type", "test");
+            values.put("debezium.format.schemas.enable", "true");
+            values.put("DEBEZIUM_FORMAT_VALUE_SCHEMAS_ENABLE", "false");
+
+            Properties props = mapProperties(values);
+
+            assertThat(props.getProperty("key.converter.schemas.enable")).isEqualTo("true");
+            assertThat(props.getProperty("value.converter.schemas.enable")).isEqualTo("false");
+        }
+        finally {
+            Locale.setDefault(original);
+        }
     }
 
     @Test
@@ -143,5 +159,9 @@ class DebeziumServerConfigToPropertiesTest {
                 .build();
         server.populateEngineProperties(config, "test", props);
         return props;
+    }
+
+    private static void assertNoSelectorArtifacts(Properties props) {
+        assertThat(props).doesNotContainKeys((Object[]) SELECTOR_ARTIFACT_KEYS);
     }
 }
