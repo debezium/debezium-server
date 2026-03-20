@@ -7,6 +7,7 @@ package io.debezium.server;
 
 import java.nio.file.Paths;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Properties;
@@ -98,17 +99,21 @@ public class DebeziumServer {
 
     private static final String PROP_ENGINE_FACTORY = PROP_PREFIX + "engine.factory";
 
-    private static final String FORMAT_JSON = Json.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_JSON_BYTE_ARRAY = JsonByteArray.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_CLOUDEVENT = CloudEvents.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_AVRO = Avro.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_PROTOBUF = Protobuf.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_BINARY = Binary.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_STRING = SimpleString.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_CONNECT = Connect.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_CLIENT_PROVIDED = ClientProvided.class.getSimpleName().toLowerCase();
+    private static final String FORMAT_JSON = Json.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_JSON_BYTE_ARRAY = JsonByteArray.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_CLOUDEVENT = CloudEvents.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_AVRO = Avro.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_PROTOBUF = Protobuf.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_BINARY = Binary.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_STRING = SimpleString.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_CONNECT = Connect.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_CLIENT_PROVIDED = ClientProvided.class.getSimpleName().toLowerCase(Locale.ROOT);
 
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
+
+    private record ConfigToPropertiesMapping(String oldPrefix, String newPrefix, Set<String> propertyNames,
+            boolean overwrite, boolean removeProcessedPropertyNames) {
+    }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private int returnCode = 0;
@@ -173,14 +178,16 @@ public class DebeziumServer {
             remainingPropertyNames.add(propName);
         }
 
-        configToProperties(config, props, PROP_SOURCE_PREFIX, "", true, remainingPropertyNames, true);
+        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SOURCE_PREFIX, "", remainingPropertyNames, true, true));
         // Simple smart prefix handling - works for any prefix
 
         // Handle granular (debezium.format.key|value|header.*) props first and remove from the potential names
-        configToProperties(config, props, PROP_KEY_FORMAT_PREFIX, "key.converter.", true, remainingPropertyNames, true);
-        configToProperties(config, props, PROP_VALUE_FORMAT_PREFIX, "value.converter.", true, remainingPropertyNames, true);
-        configToProperties(config, props, PROP_HEADER_FORMAT_PREFIX, "header.converter.", true, remainingPropertyNames,
-                true);
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_KEY_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, true, true));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_VALUE_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, true, true));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_HEADER_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, true, true));
 
         // Remove the format-selector properties (debezium.format.key/value/header = avro|json|...) so that
         // the generic debezium.format.* pass below does not propagate them as nonsensical converter
@@ -191,60 +198,64 @@ public class DebeziumServer {
         removePropertyName(remainingPropertyNames, PROP_HEADER_FORMAT);
 
         // Handle the remaining generic (debezium.format.*) props. Don't remove them so that they can apply to key, value and header
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "key.converter.", false, remainingPropertyNames, false);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "value.converter.", false, remainingPropertyNames, false);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "header.converter.", false, remainingPropertyNames, false);
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, false, false));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, false, false));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, false, false));
 
-        configToProperties(config, props, PROP_SINK_PREFIX + name + ".",
-                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", false, new HashSet<>(remainingPropertyNames), true);
-        configToProperties(config, props, PROP_SINK_PREFIX + name + ".", PROP_OFFSET_STORAGE_PREFIX + name + ".",
-                false, remainingPropertyNames, true);
+        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
+                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", new HashSet<>(remainingPropertyNames), false, true));
+        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
+                PROP_OFFSET_STORAGE_PREFIX + name + ".", remainingPropertyNames, false, true));
 
         final Optional<String> transforms = config.getOptionalValue(PROP_TRANSFORMS, String.class);
         if (transforms.isPresent()) {
             props.setProperty("transforms", transforms.get());
-            configToProperties(config, props, PROP_TRANSFORMS_PREFIX, "transforms.", true, remainingPropertyNames, true);
+            configToProperties(config, props,
+                    new ConfigToPropertiesMapping(PROP_TRANSFORMS_PREFIX, "transforms.", remainingPropertyNames, true, true));
         }
 
         final Optional<String> predicates = config.getOptionalValue(PROP_PREDICATES, String.class);
         if (predicates.isPresent()) {
             props.setProperty("predicates", predicates.get());
-            configToProperties(config, props, PROP_PREDICATES_PREFIX, "predicates.", true, remainingPropertyNames, true);
+            configToProperties(config, props,
+                    new ConfigToPropertiesMapping(PROP_PREDICATES_PREFIX, "predicates.", remainingPropertyNames, true, true));
         }
 
         props.setProperty("name", name);
     }
 
-    private void configToProperties(Config config, Properties props, String oldPrefix, String newPrefix,
-                                    boolean overwrite, Set<String> propertyNames, boolean removeName) {
+    private void configToProperties(Config config, Properties props, ConfigToPropertiesMapping mapping) {
 
         // Use iterator to safely remove items while iterating
-        java.util.Iterator<String> iterator = propertyNames.iterator();
+        java.util.Iterator<String> iterator = mapping.propertyNames().iterator();
         while (iterator.hasNext()) {
             String name = iterator.next();
             boolean processed = false;
 
             String updatedPropertyName = null;
             if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
-                updatedPropertyName = name.replace("_", ".").toLowerCase();
+                updatedPropertyName = normalizePropertyName(name);
             }
-            if (updatedPropertyName != null && updatedPropertyName.startsWith(oldPrefix)) {
-                String finalPropertyName = newPrefix + updatedPropertyName.substring(oldPrefix.length());
-                if (overwrite || !props.containsKey(finalPropertyName)) {
+            if (updatedPropertyName != null && updatedPropertyName.startsWith(mapping.oldPrefix())) {
+                String finalPropertyName = mapping.newPrefix() + updatedPropertyName.substring(mapping.oldPrefix().length());
+                if (mapping.overwrite() || !props.containsKey(finalPropertyName)) {
                     props.setProperty(finalPropertyName, config.getOptionalValue(name, String.class).orElse(""));
                 }
                 processed = true;
             }
-            else if (name.startsWith(oldPrefix)) {
-                String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
-                if (overwrite || !props.containsKey(finalPropertyName)) {
+            else if (name.startsWith(mapping.oldPrefix())) {
+                String finalPropertyName = mapping.newPrefix() + name.substring(mapping.oldPrefix().length());
+                if (mapping.overwrite() || !props.containsKey(finalPropertyName)) {
                     props.setProperty(finalPropertyName, config.getConfigValue(name).getValue());
                 }
                 processed = true;
             }
 
             // Remove processed properties to avoid duplicate processing
-            if (processed && removeName) {
+            if (processed && mapping.removeProcessedPropertyNames()) {
                 iterator.remove();
             }
         }
@@ -256,7 +267,7 @@ public class DebeziumServer {
 
     private String normalizePropertyName(String name) {
         if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
-            return name.replace("_", ".").toLowerCase();
+            return name.replace("_", ".").toLowerCase(Locale.ROOT);
         }
         return name;
     }
