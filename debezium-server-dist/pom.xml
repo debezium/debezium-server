@@ -318,7 +318,7 @@
                         </exclusion>
                         <exclusion>
                             <groupId>io.debezium</groupId>
-                            <artifactId>debezium-core</artifactId>
+                            <artifactId>debezium-connector-common</artifactId>
                         </exclusion>
                         <exclusion>
                             <groupId>org.apache.cassandra</groupId>
@@ -391,7 +391,7 @@
                         </exclusion>
                         <exclusion>
                             <groupId>io.debezium</groupId>
-                            <artifactId>debezium-core</artifactId>
+                            <artifactId>debezium-connector-common</artifactId>
                         </exclusion>
                         <exclusion>
                             <groupId>org.apache.cassandra</groupId>
@@ -464,7 +464,7 @@
                         </exclusion>
                         <exclusion>
                             <groupId>io.debezium</groupId>
-                            <artifactId>debezium-core</artifactId>
+                            <artifactId>debezium-connector-common</artifactId>
                         </exclusion>
                         <exclusion>
                             <groupId>org.apache.cassandra</groupId>
@@ -537,7 +537,7 @@
                         </exclusion>
                         <exclusion>
                             <groupId>io.debezium</groupId>
-                            <artifactId>debezium-core</artifactId>
+                            <artifactId>debezium-connector-common</artifactId>
                         </exclusion>
                         <exclusion>
                             <groupId>org.apache.cassandra</groupId>
