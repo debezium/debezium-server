@@ -5,11 +5,19 @@
  */
 package io.debezium.server.sns;
 
-import io.debezium.server.Images;
-import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+import java.io.IOException;
+import java.net.URI;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.containers.localstack.LocalStackContainer.Service;
 import org.testcontainers.utility.DockerImageName;
+
+import io.debezium.server.Images;
+import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
+
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -22,12 +30,6 @@ import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.CreateQueueResponse;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
-
-import java.io.IOException;
-import java.net.URI;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Manages the lifecycle of SNS + SQS test resources via LocalStack container.
@@ -60,7 +62,8 @@ public class SnsTestResourceLifecycleManager implements QuarkusTestResourceLifec
     public Map<String, String> start() {
         try {
             init();
-        } catch (IOException | InterruptedException e) {
+        }
+        catch (IOException | InterruptedException e) {
             throw new RuntimeException(e);
         }
 
@@ -78,10 +81,10 @@ public class SnsTestResourceLifecycleManager implements QuarkusTestResourceLifec
 
         // Get queue ARN for subscription
         String queueArn = sqsClient.getQueueAttributes(
-                        GetQueueAttributesRequest.builder()
-                                .queueUrl(queueUrl)
-                                .attributeNames(QueueAttributeName.QUEUE_ARN)
-                                .build())
+                GetQueueAttributesRequest.builder()
+                        .queueUrl(queueUrl)
+                        .attributeNames(QueueAttributeName.QUEUE_ARN)
+                        .build())
                 .attributes().get(QueueAttributeName.QUEUE_ARN);
 
         // Subscribe SQS to SNS
@@ -106,7 +109,8 @@ public class SnsTestResourceLifecycleManager implements QuarkusTestResourceLifec
             if (container != null) {
                 container.stop();
             }
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             // ignored
         }
     }
