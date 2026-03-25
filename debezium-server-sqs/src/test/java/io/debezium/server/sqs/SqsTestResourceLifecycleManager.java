@@ -37,7 +37,8 @@ public class SqsTestResourceLifecycleManager implements QuarkusTestResourceLifec
             .asCompatibleSubstituteFor("localstack/localstack");
 
     private static final LocalStackContainer container = new LocalStackContainer(DEFAULT_IMAGE_NAME)
-            .withServices(Service.SQS);
+            .withServices(Service.SQS)
+            .withEnv("LOCALSTACK_AUTH_TOKEN", System.getenv("LOCALSTACK_AUTH_TOKEN"));
 
     private static final AtomicBoolean running = new AtomicBoolean(false);
 
