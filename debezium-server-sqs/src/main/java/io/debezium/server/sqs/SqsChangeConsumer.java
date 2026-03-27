@@ -20,10 +20,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine.ChangeConsumer;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.DebeziumServerSink;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
 
@@ -42,49 +47,51 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest.Builder;
  */
 @Named("sqs")
 @Dependent
-public class SqsChangeConsumer extends BaseChangeConsumer implements ChangeConsumer<ChangeEvent<Object, Object>> {
+public class SqsChangeConsumer extends BaseChangeConsumer implements ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
     protected static final String PROP_PREFIX = "debezium.sink.sqs.";
-    protected static final String PROP_REGION_NAME = PROP_PREFIX + "region";
     private static final Logger LOGGER = LoggerFactory.getLogger(SqsChangeConsumer.class);
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
     private static final int DEFAULT_RETRIES = 5;
-    private static final String PROP_ENDPOINT_NAME = PROP_PREFIX + "endpoint";
-    private static final String PROP_QUEUE_URL = PROP_PREFIX + "queue.url";
-    private static final String PROP_CREDENTIALS_PROFILE = PROP_PREFIX + "credentials.profile";
-    private static final String PROP_QUEUE_FIFO_MESSAGE_GROUP_ID = PROP_PREFIX + "fifo.message.group.id";
 
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
+    private SqsChangeConsumerConfig config;
     private String messageGroupId = null;
-    private String queueUrl;
     private SqsClient client = null;
 
     @PostConstruct
     void connect() {
-        final Config config = ConfigProvider.getConfig();
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new SqsChangeConsumerConfig(configuration);
+
         final SqsClientBuilder builder = SqsClient.builder()
-                .region(Region.of(config.getValue(PROP_REGION_NAME, String.class)));
+                .region(Region.of(config.getRegion()));
 
-        config.getOptionalValue(PROP_ENDPOINT_NAME, String.class).ifPresent(endpoint -> {
-            LOGGER.info("Queue Endpoint {}", endpoint);
-            builder.endpointOverride(URI.create(endpoint));
-        });
+        if (config.getEndpoint() != null) {
+            LOGGER.info("Queue Endpoint {}", config.getEndpoint());
+            builder.endpointOverride(URI.create(config.getEndpoint()));
+        }
 
-        config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class).ifPresent(profile -> {
-            LOGGER.info("Credentials profile {}", profile);
-            builder.credentialsProvider(ProfileCredentialsProvider.create(profile));
-        });
+        if (config.getCredentialsProfile() != null) {
+            LOGGER.info("Credentials profile {}", config.getCredentialsProfile());
+            builder.credentialsProvider(ProfileCredentialsProvider.create(config.getCredentialsProfile()));
+        }
 
         client = builder.build();
 
-        queueUrl = config.getValue(PROP_QUEUE_URL, String.class);
-        LOGGER.info("Queue Url {}", queueUrl);
+        LOGGER.info("Queue Url {}", config.getQueueUrl());
 
-        if (queueUrl.endsWith(".fifo")) {
-            messageGroupId = config.getOptionalValue(PROP_QUEUE_FIFO_MESSAGE_GROUP_ID, String.class).orElse("cdc-group");
+        if (config.getQueueUrl().endsWith(".fifo")) {
+            messageGroupId = config.getFifoMessageGroupId();
         }
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             client.close();
         }
@@ -121,7 +128,7 @@ public class SqsChangeConsumer extends BaseChangeConsumer implements ChangeConsu
         LOGGER.info(event.toString());
 
         final Builder sendMessageRequestBuilder = SendMessageRequest.builder()
-                .queueUrl(queueUrl)
+                .queueUrl(config.getQueueUrl())
                 .messageBody(eventValue.toString());
 
         if (messageGroupId != null) {
@@ -137,5 +144,20 @@ public class SqsChangeConsumer extends BaseChangeConsumer implements ChangeConsu
             LOGGER.error("Failed to send record to {}", event.destination(), exception);
             return false;
         }
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                SqsChangeConsumerConfig.REGION,
+                SqsChangeConsumerConfig.ENDPOINT,
+                SqsChangeConsumerConfig.QUEUE_URL,
+                SqsChangeConsumerConfig.CREDENTIALS_PROFILE,
+                SqsChangeConsumerConfig.FIFO_MESSAGE_GROUP_ID);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

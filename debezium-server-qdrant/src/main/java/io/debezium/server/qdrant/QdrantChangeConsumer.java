@@ -18,21 +18,25 @@ import jakarta.inject.Named;
 
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
 import io.debezium.data.Envelope;
 import io.debezium.data.Envelope.Operation;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.schema.SchemaFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.qdrant.client.QdrantClient;
@@ -49,27 +53,18 @@ import io.qdrant.client.grpc.Points.PointStruct;
 @Named("qdrant")
 @Dependent
 public class QdrantChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(QdrantChangeConsumer.class);
+
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
     private static final String PROP_PREFIX = "debezium.sink.qdrant.";
     private static final String FIELD_INCLUDE_LIST_PROP_PREFIX = PROP_PREFIX + "field.include.list.";
 
+    private QdrantChangeConsumerConfig config;
     private QdrantClient qdrantClient;
     private QdrantMessageFactory messageFactory;
-
-    @ConfigProperty(name = PROP_PREFIX + "host", defaultValue = "localhost")
-    String host;
-
-    @ConfigProperty(name = PROP_PREFIX + "port", defaultValue = "6333")
-    int port;
-
-    @ConfigProperty(name = PROP_PREFIX + "api.key")
-    Optional<String> apiKey;
-
-    @ConfigProperty(name = PROP_PREFIX + "vector.field.names")
-    Optional<String> vectorFieldNames;
 
     @Inject
     @CustomConsumerBuilder
@@ -77,26 +72,35 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
 
     @PostConstruct
     void connect() {
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new QdrantChangeConsumerConfig(configuration);
+
         if (customClient.isResolvable()) {
             qdrantClient = customClient.get();
             LOGGER.info("Obtained custom configured QdrantClient '{}'", qdrantClient);
         }
         else {
-            var qdrantGrpcChannelBuilder = Grpc.newChannelBuilder("%s:%s".formatted(host, port),
+            var qdrantGrpcChannelBuilder = Grpc.newChannelBuilder("%s:%s".formatted(config.getHost(), config.getPort()),
                     InsecureChannelCredentials.create());
             var qdrantClientBuilder = QdrantGrpcClient.newBuilder(qdrantGrpcChannelBuilder.build(), true);
-            if (apiKey.isPresent()) {
-                qdrantClientBuilder = qdrantClientBuilder.withApiKey(apiKey.get());
+            if (config.getApiKey() != null) {
+                qdrantClientBuilder = qdrantClientBuilder.withApiKey(config.getApiKey());
             }
             qdrantClient = new QdrantClient(qdrantClientBuilder.build());
             LOGGER.info("Created standard QdrantClient '{}'", qdrantClient);
         }
 
-        messageFactory = new QdrantMessageFactory(vectorFieldNames, getConfigSubset(ConfigProvider.getConfig(), FIELD_INCLUDE_LIST_PROP_PREFIX));
+        messageFactory = new QdrantMessageFactory(
+                config.getVectorFieldNames() != null ? Optional.of(config.getVectorFieldNames()) : Optional.empty(),
+                getConfigSubset(mpConfig, FIELD_INCLUDE_LIST_PROP_PREFIX));
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             qdrantClient.close();
         }
@@ -203,6 +207,20 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
         }
 
         committer.markProcessed(record);
+    }
+
+    @Override
+    public io.debezium.config.Field.Set getConfigFields() {
+        return io.debezium.config.Field.setOf(
+                QdrantChangeConsumerConfig.HOST,
+                QdrantChangeConsumerConfig.PORT,
+                QdrantChangeConsumerConfig.API_KEY,
+                QdrantChangeConsumerConfig.VECTOR_FIELD_NAMES);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 
 }

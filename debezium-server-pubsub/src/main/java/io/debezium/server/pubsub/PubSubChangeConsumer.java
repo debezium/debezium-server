@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -26,7 +25,6 @@ import jakarta.inject.Named;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threeten.bp.Duration;
@@ -51,11 +49,16 @@ import com.google.pubsub.v1.ProjectTopicName;
 import com.google.pubsub.v1.PubsubMessage;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 import io.debezium.util.Threads;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -67,93 +70,23 @@ import io.grpc.ManagedChannelBuilder;
  */
 @Named("pubsub")
 @Dependent
-public class PubSubChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class PubSubChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PubSubChangeConsumer.class);
 
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
     private static final String PROP_PREFIX = "debezium.sink.pubsub.";
-    private static final String PROP_PROJECT_ID = PROP_PREFIX + "project.id";
-
-    private static final String DEFAULT_CONCURRENCY_THREADS_STRING = "0";
-    private static final int DEFAULT_CONCURRENCY_THREADS = Integer.parseInt(DEFAULT_CONCURRENCY_THREADS_STRING);
-
-    private static final String DEFAULT_COMPRESSION_THRESHOLD_BYTES_STRING = "-1";
-    private static final int DEFAULT_COMPRESSION_THRESHOLD_BYTES = Integer.parseInt(DEFAULT_COMPRESSION_THRESHOLD_BYTES_STRING);
 
     public interface PublisherBuilder {
         Publisher get(ProjectTopicName topicName);
     }
 
+    private PubSubChangeConsumerConfig config;
     private String projectId;
 
     private final Map<String, Publisher> publishers = new HashMap<>();
     private PublisherBuilder publisherBuilder;
-
-    @ConfigProperty(name = PROP_PREFIX + "ordering.enabled", defaultValue = "true")
-    boolean orderingEnabled;
-
-    @ConfigProperty(name = PROP_PREFIX + "ordering.key")
-    Optional<String> orderingKey;
-
-    @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
-    String nullKey;
-
-    @ConfigProperty(name = PROP_PREFIX + "batch.delay.threshold.ms", defaultValue = "100")
-    Integer maxDelayThresholdMs;
-
-    @ConfigProperty(name = PROP_PREFIX + "batch.element.count.threshold", defaultValue = "100")
-    Long maxBufferSize;
-
-    @ConfigProperty(name = PROP_PREFIX + "batch.request.byte.threshold", defaultValue = "9500000")
-    Long maxBufferBytes;
-
-    @ConfigProperty(name = PROP_PREFIX + "flowcontrol.enabled", defaultValue = "false")
-    boolean flowControlEnabled;
-
-    @ConfigProperty(name = PROP_PREFIX + "flowcontrol.max.outstanding.messages", defaultValue = "9223372036854775807")
-    Long maxOutstandingMessages;
-
-    @ConfigProperty(name = PROP_PREFIX + "flowcontrol.max.outstanding.bytes", defaultValue = "9223372036854775807")
-    Long maxOutstandingRequestBytes;
-
-    @ConfigProperty(name = PROP_PREFIX + "retry.total.timeout.ms", defaultValue = "60000")
-    Integer maxTotalTimeoutMs;
-
-    @ConfigProperty(name = PROP_PREFIX + "retry.max.rpc.timeout.ms", defaultValue = "10000")
-    Integer maxRequestTimeoutMs;
-
-    @ConfigProperty(name = PROP_PREFIX + "retry.initial.delay.ms", defaultValue = "5")
-    Integer initialRetryDelay;
-
-    @ConfigProperty(name = PROP_PREFIX + "retry.delay.multiplier", defaultValue = "2.0")
-    Double retryDelayMultiplier;
-
-    @ConfigProperty(name = PROP_PREFIX + "retry.max.delay.ms", defaultValue = "9223372036854775807")
-    Long maxRetryDelay;
-
-    @ConfigProperty(name = PROP_PREFIX + "retry.initial.rpc.timeout.ms", defaultValue = "10000")
-    Integer initialRpcTimeout;
-
-    @ConfigProperty(name = PROP_PREFIX + "retry.rpc.timeout.multiplier", defaultValue = "2.0")
-    Double rpcTimeoutMultiplier;
-
-    @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
-    Integer waitMessageDeliveryTimeout;
-
-    @ConfigProperty(name = PROP_PREFIX + "concurrency.threads", defaultValue = DEFAULT_CONCURRENCY_THREADS_STRING)
-    int concurrencyThreads;
-
-    @ConfigProperty(name = PROP_PREFIX + "compression.threshold.bytes", defaultValue = DEFAULT_COMPRESSION_THRESHOLD_BYTES_STRING)
-    long compressionBytesThreshold;
-
-    @ConfigProperty(name = PROP_PREFIX + "channel.shutdown.timeout.ms", defaultValue = "30000")
-    Integer channelShutdownTimeout;
-
-    @ConfigProperty(name = PROP_PREFIX + "address")
-    Optional<String> address;
-
-    @ConfigProperty(name = PROP_PREFIX + "region")
-    Optional<String> region;
 
     @Inject
     @CustomConsumerBuilder
@@ -165,8 +98,13 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @PostConstruct
     void connect() {
-        final Config config = ConfigProvider.getConfig();
-        projectId = config.getOptionalValue(PROP_PROJECT_ID, String.class).orElse(ServiceOptions.getDefaultProjectId());
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new PubSubChangeConsumerConfig(configuration);
+
+        projectId = (config.getProjectId() != null) ? config.getProjectId() : ServiceOptions.getDefaultProjectId();
 
         if (customPublisherBuilder.isResolvable()) {
             publisherBuilder = customPublisherBuilder.get();
@@ -175,20 +113,20 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         }
 
         BatchingSettings.Builder batchingSettings = BatchingSettings.newBuilder()
-                .setDelayThreshold(Duration.ofMillis(maxDelayThresholdMs))
-                .setElementCountThreshold(maxBufferSize)
-                .setRequestByteThreshold(maxBufferBytes);
+                .setDelayThreshold(Duration.ofMillis(config.getMaxDelayThresholdMs()))
+                .setElementCountThreshold(config.getMaxBufferSize())
+                .setRequestByteThreshold(config.getMaxBufferBytes());
 
-        if (flowControlEnabled) {
+        if (config.isFlowControlEnabled()) {
             batchingSettings.setFlowControlSettings(FlowControlSettings.newBuilder()
-                    .setMaxOutstandingRequestBytes(maxOutstandingRequestBytes)
-                    .setMaxOutstandingElementCount(maxOutstandingMessages)
+                    .setMaxOutstandingRequestBytes(config.getMaxOutstandingRequestBytes())
+                    .setMaxOutstandingElementCount(config.getMaxOutstandingMessages())
                     .setLimitExceededBehavior(FlowController.LimitExceededBehavior.Block)
                     .build());
         }
 
-        if (address.isPresent()) {
-            String hostport = address.get();
+        if (config.getAddress() != null) {
+            String hostport = config.getAddress();
             channel = ManagedChannelBuilder
                     .forTarget(hostport)
                     .usePlaintext()
@@ -200,36 +138,36 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         publisherBuilder = (t) -> {
             try {
                 Builder builder = Publisher.newBuilder(t)
-                        .setEnableMessageOrdering(orderingEnabled)
+                        .setEnableMessageOrdering(config.isOrderingEnabled())
                         .setBatchingSettings(batchingSettings.build())
                         .setRetrySettings(
                                 RetrySettings.newBuilder()
-                                        .setTotalTimeout(Duration.ofMillis(maxTotalTimeoutMs))
-                                        .setMaxRpcTimeout(Duration.ofMillis(maxRequestTimeoutMs))
-                                        .setInitialRetryDelay(Duration.ofMillis(initialRetryDelay))
-                                        .setRetryDelayMultiplier(retryDelayMultiplier)
-                                        .setMaxRetryDelay(Duration.ofMillis(maxRetryDelay))
-                                        .setInitialRpcTimeout(Duration.ofMillis(initialRpcTimeout))
-                                        .setRpcTimeoutMultiplier(rpcTimeoutMultiplier)
+                                        .setTotalTimeout(Duration.ofMillis(config.getMaxTotalTimeoutMs()))
+                                        .setMaxRpcTimeout(Duration.ofMillis(config.getMaxRequestTimeoutMs()))
+                                        .setInitialRetryDelay(Duration.ofMillis(config.getInitialRetryDelay()))
+                                        .setRetryDelayMultiplier(config.getRetryDelayMultiplier())
+                                        .setMaxRetryDelay(Duration.ofMillis(config.getMaxRetryDelay()))
+                                        .setInitialRpcTimeout(Duration.ofMillis(config.getInitialRpcTimeout()))
+                                        .setRpcTimeoutMultiplier(config.getRpcTimeoutMultiplier())
                                         .build());
 
-                if (concurrencyThreads > DEFAULT_CONCURRENCY_THREADS) {
+                if (config.getConcurrencyThreads() > 0) {
                     builder.setExecutorProvider(
                             InstantiatingExecutorProvider.newBuilder()
-                                    .setExecutorThreadCount(concurrencyThreads)
+                                    .setExecutorThreadCount(config.getConcurrencyThreads())
                                     .build());
                 }
 
-                if (compressionBytesThreshold >= DEFAULT_COMPRESSION_THRESHOLD_BYTES) {
+                if (config.getCompressionBytesThreshold() >= 0) {
                     builder.setEnableCompression(true)
-                            .setCompressionBytesThreshold(compressionBytesThreshold);
+                            .setCompressionBytesThreshold(config.getCompressionBytesThreshold());
                 }
 
-                if (address.isPresent()) {
+                if (config.getAddress() != null) {
                     builder.setChannelProvider(channelProvider).setCredentialsProvider(credentialsProvider);
                 }
-                else if (region.isPresent()) {
-                    String endpoint = String.format("%s-pubsub.googleapis.com:443", region.get());
+                else if (config.getRegion() != null) {
+                    String endpoint = String.format("%s-pubsub.googleapis.com:443", config.getRegion());
                     builder.setEndpoint(endpoint);
                 }
 
@@ -244,7 +182,8 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         publishers.values().forEach(publisher -> {
             try {
                 publisher.shutdown();
@@ -264,7 +203,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
             Future<?> future = executor.submit(() -> {
                 channel.shutdown();
                 try {
-                    channel.awaitTermination(channelShutdownTimeout, TimeUnit.MILLISECONDS);
+                    channel.awaitTermination(config.getChannelShutdownTimeout(), TimeUnit.MILLISECONDS);
                 }
                 catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -272,7 +211,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
             });
 
             try {
-                future.get(channelShutdownTimeout, TimeUnit.MILLISECONDS);
+                future.get(config.getChannelShutdownTimeout(), TimeUnit.MILLISECONDS);
             }
             catch (Exception e) {
                 LOGGER.warn("Exception while shutting down the managed channel {}", e.getMessage(), e);
@@ -300,7 +239,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         }
         List<String> messageIds;
         try {
-            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
+            messageIds = ApiFutures.allAsList(deliveries).get(config.getWaitMessageDeliveryTimeout(), TimeUnit.MILLISECONDS);
         }
         catch (ExecutionException | TimeoutException e) {
             throw new DebeziumException(e);
@@ -319,10 +258,10 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
         final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
 
-        if (orderingEnabled) {
-            if (orderingKey.isEmpty()) {
+        if (config.isOrderingEnabled()) {
+            if (config.getOrderingKey() == null) {
                 if (record.key() == null) {
-                    pubsubMessage.setOrderingKey(nullKey);
+                    pubsubMessage.setOrderingKey(config.getNullKey());
                 }
                 else if (record.key() instanceof String) {
                     pubsubMessage.setOrderingKey((String) record.key());
@@ -332,7 +271,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
                 }
             }
             else {
-                pubsubMessage.setOrderingKey(orderingKey.get());
+                pubsubMessage.setOrderingKey(config.getOrderingKey());
             }
         }
 
@@ -351,5 +290,38 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     @Override
     public boolean supportsTombstoneEvents() {
         return false;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                PubSubChangeConsumerConfig.PROJECT_ID,
+                PubSubChangeConsumerConfig.ORDERING_ENABLED,
+                PubSubChangeConsumerConfig.ORDERING_KEY,
+                PubSubChangeConsumerConfig.NULL_KEY,
+                PubSubChangeConsumerConfig.BATCH_DELAY_THRESHOLD_MS,
+                PubSubChangeConsumerConfig.BATCH_ELEMENT_COUNT_THRESHOLD,
+                PubSubChangeConsumerConfig.BATCH_REQUEST_BYTE_THRESHOLD,
+                PubSubChangeConsumerConfig.FLOWCONTROL_ENABLED,
+                PubSubChangeConsumerConfig.FLOWCONTROL_MAX_OUTSTANDING_MESSAGES,
+                PubSubChangeConsumerConfig.FLOWCONTROL_MAX_OUTSTANDING_BYTES,
+                PubSubChangeConsumerConfig.RETRY_TOTAL_TIMEOUT_MS,
+                PubSubChangeConsumerConfig.RETRY_MAX_RPC_TIMEOUT_MS,
+                PubSubChangeConsumerConfig.RETRY_INITIAL_DELAY_MS,
+                PubSubChangeConsumerConfig.RETRY_DELAY_MULTIPLIER,
+                PubSubChangeConsumerConfig.RETRY_MAX_DELAY_MS,
+                PubSubChangeConsumerConfig.RETRY_INITIAL_RPC_TIMEOUT_MS,
+                PubSubChangeConsumerConfig.RETRY_RPC_TIMEOUT_MULTIPLIER,
+                PubSubChangeConsumerConfig.WAIT_MESSAGE_DELIVERY_TIMEOUT_MS,
+                PubSubChangeConsumerConfig.CONCURRENCY_THREADS,
+                PubSubChangeConsumerConfig.COMPRESSION_THRESHOLD_BYTES,
+                PubSubChangeConsumerConfig.CHANNEL_SHUTDOWN_TIMEOUT_MS,
+                PubSubChangeConsumerConfig.ADDRESS,
+                PubSubChangeConsumerConfig.REGION);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

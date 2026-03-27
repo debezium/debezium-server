@@ -27,33 +27,38 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 
 /**
  * An implementation of the {@link DebeziumEngine.ChangeConsumer} interface that publishes change event messages to Kafka.
  */
 @Named("kafka")
 @Dependent
-public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaChangeConsumer.class);
+
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
     private static final String PROP_PREFIX = "debezium.sink.kafka.";
 
     private static final String PROP_PREFIX_PRODUCER = PROP_PREFIX + "producer.";
 
-    @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
-    Integer waitMessageDeliveryTimeout;
+    private KafkaChangeConsumerConfig config;
 
     private KafkaProducer<Object, Object> producer;
 
@@ -69,13 +74,19 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
             return;
         }
 
-        final Config config = ConfigProvider.getConfig();
-        producer = new KafkaProducer<>(getConfigSubset(config, PROP_PREFIX_PRODUCER));
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new KafkaChangeConsumerConfig(configuration);
+
+        producer = new KafkaProducer<>(getConfigSubset(mpConfig, PROP_PREFIX_PRODUCER));
         LOGGER.info("consumer started...");
     }
 
     @PreDestroy
-    void stop() {
+    @Override
+    public void close() {
         LOGGER.info("consumer destroyed...");
         if (producer != null) {
             try {
@@ -122,12 +133,12 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
                 final var recordMetadataFuture = deliveryFutures.get(i);
                 final var record = records.get(i);
 
-                if (waitMessageDeliveryTimeout == 0) {
+                if (config.getWaitMessageDeliveryTimeout() == 0) {
                     recordMetadataFuture.get();
                 }
                 else {
                     try {
-                        recordMetadataFuture.get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
+                        recordMetadataFuture.get(config.getWaitMessageDeliveryTimeout(), TimeUnit.MILLISECONDS);
                     }
                     catch (TimeoutException e) {
                         LOGGER.error("Timed out while waiting to send a record to '{}'", streamNameMapper.map(record.destination()));
@@ -152,5 +163,15 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
             kafkaHeaders.add(header.getKey(), getBytes(header.getValue()));
         }
         return kafkaHeaders;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(KafkaChangeConsumerConfig.WAIT_MESSAGE_DELIVERY_TIMEOUT_MS);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

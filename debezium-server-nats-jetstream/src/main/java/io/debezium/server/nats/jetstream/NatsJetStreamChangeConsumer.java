@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -31,16 +30,20 @@ import javax.net.ssl.TrustManagerFactory;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 import io.debezium.server.util.RetryExecutor;
 import io.nats.client.Connection;
 import io.nats.client.JetStream;
@@ -63,81 +66,19 @@ import io.nats.client.impl.NatsMessage;
 @Named("nats-jetstream")
 @Dependent
 public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NatsJetStreamChangeConsumer.class);
 
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
     private static final String PROP_PREFIX = "debezium.sink.nats-jetstream.";
-    private static final String PROP_URL = PROP_PREFIX + "url";
-    private static final String PROP_STREAM_NAME = PROP_PREFIX + "stream-name";
-    private static final String PROP_CREATE_STREAM = PROP_PREFIX + "create-stream";
-    private static final String PROP_SUBJECTS = PROP_PREFIX + "subjects";
-    private static final String PROP_STORAGE = PROP_PREFIX + "storage";
 
-    private static final String PROP_AUTH_JWT = PROP_PREFIX + "auth.jwt";
-    private static final String PROP_AUTH_SEED = PROP_PREFIX + "auth.seed";
-    private static final String PROP_AUTH_USER = PROP_PREFIX + "auth.user";
-    private static final String PROP_AUTH_PASSWORD = PROP_PREFIX + "auth.password";
-    private static final String PROP_AUTH_TLS_KEYSTORE = PROP_PREFIX + "auth.tls.keystore";
-    private static final String PROP_AUTH_TLS_KEYSTORE_PASSWORD = PROP_PREFIX + "auth.tls.keystore.password";
-    private static final String PROP_AUTH_TLS_PASSWORD = PROP_PREFIX + "auth.tls.password";
-
-    private static final String PROP_SYNC_RETRIES = PROP_PREFIX + "sync.retries";
-    private static final String PROP_SYNC_RETRY_INTERVAL_MS = PROP_PREFIX + "sync.retry.interval.ms";
-    private static final String PROP_SYNC_RETRY_MAX_INTERVAL_MS = PROP_PREFIX + "sync.retry.max.interval.ms";
-    private static final String PROP_SYNC_RETRY_BACKOFF_MULTIPLIER = PROP_PREFIX + "sync.retry.backoff.multiplier";
-
-    private static final String PROP_ASYNC_ENABLED = PROP_PREFIX + "async.enabled";
-    private static final String PROP_ASYNC_TIMEOUT_MS = PROP_PREFIX + "async.timeout.ms";
+    private NatsJetStreamChangeConsumerConfig config;
 
     private Connection nc;
     private JetStream js;
     private RetryExecutor retryExecutor;
-
-    @ConfigProperty(name = PROP_STREAM_NAME, defaultValue = "DebeziumStream")
-    String streamName;
-
-    @ConfigProperty(name = PROP_CREATE_STREAM, defaultValue = "false")
-    boolean createStream;
-
-    @ConfigProperty(name = PROP_AUTH_JWT)
-    Optional<String> jwt;
-
-    @ConfigProperty(name = PROP_AUTH_SEED)
-    Optional<String> seed;
-
-    @ConfigProperty(name = PROP_AUTH_USER)
-    Optional<String> user;
-
-    @ConfigProperty(name = PROP_AUTH_PASSWORD)
-    Optional<String> password;
-
-    @ConfigProperty(name = PROP_AUTH_TLS_KEYSTORE)
-    Optional<String> tlsKeyStore;
-
-    @ConfigProperty(name = PROP_AUTH_TLS_KEYSTORE_PASSWORD)
-    Optional<String> tlsKeyStorePassword;
-
-    @ConfigProperty(name = PROP_AUTH_TLS_PASSWORD)
-    Optional<String> tlsPassword;
-
-    @ConfigProperty(name = PROP_ASYNC_ENABLED, defaultValue = "true")
-    boolean asyncEnabled;
-
-    @ConfigProperty(name = PROP_ASYNC_TIMEOUT_MS, defaultValue = "5000")
-    long asyncTimeoutMs;
-
-    @ConfigProperty(name = PROP_SYNC_RETRIES, defaultValue = "5")
-    int syncMaxRetryAttempts;
-
-    @ConfigProperty(name = PROP_SYNC_RETRY_INTERVAL_MS, defaultValue = "1000")
-    long syncRetryIntervalMs;
-
-    @ConfigProperty(name = PROP_SYNC_RETRY_MAX_INTERVAL_MS, defaultValue = "60000")
-    long syncRetryMaxIntervalMs;
-
-    @ConfigProperty(name = PROP_SYNC_RETRY_BACKOFF_MULTIPLIER, defaultValue = "2.0")
-    double syncRetryBackoffMultiplier;
 
     @Inject
     @CustomConsumerBuilder
@@ -145,9 +86,11 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
     @PostConstruct
     void connect() {
-        // Read config
-        final Config config = ConfigProvider.getConfig();
-        String url = config.getValue(PROP_URL, String.class);
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new NatsJetStreamChangeConsumerConfig(configuration);
 
         if (customStreamingConnection.isResolvable()) {
             js = customStreamingConnection.get();
@@ -158,18 +101,18 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         try {
             // Setup NATS connection
             Options.Builder natsOptionsBuilder = new io.nats.client.Options.Builder()
-                    .servers(url.split(","))
+                    .servers(config.getUrl().split(","))
                     .noReconnect();
 
-            if (jwt.isPresent() && seed.isPresent()) {
+            if (config.getJwt() != null && config.getSeed() != null) {
                 natsOptionsBuilder
-                        .authHandler(Nats.staticCredentials(jwt.get().toCharArray(), seed.get().toCharArray()));
+                        .authHandler(Nats.staticCredentials(config.getJwt().toCharArray(), config.getSeed().toCharArray()));
             }
-            else if (user.isPresent() && password.isPresent()) {
-                natsOptionsBuilder.userInfo(user.get(), password.get());
+            else if (config.getUser() != null && config.getPassword() != null) {
+                natsOptionsBuilder.userInfo(config.getUser(), config.getPassword());
             }
-            else if (tlsKeyStore.isPresent() && tlsKeyStorePassword.isPresent() && tlsPassword.isPresent()) {
-                var ctx = sslAuthContext(tlsKeyStore.get(), tlsKeyStorePassword.get(), tlsPassword.get());
+            else if (config.getTlsKeyStore() != null && config.getTlsKeyStorePassword() != null && config.getTlsPassword() != null) {
+                var ctx = sslAuthContext(config.getTlsKeyStore(), config.getTlsKeyStorePassword(), config.getTlsPassword());
                 natsOptionsBuilder.sslContext(ctx);
             }
 
@@ -177,13 +120,13 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
 
             // Creating a basic stream, mostly for testing. If a user wants to configure their stream, it can be done
             // via the nats cli.
-            if (createStream) {
-                String subjects = config.getOptionalValue(PROP_SUBJECTS, String.class).orElse("*.*.*");
-                String storage = config.getOptionalValue(PROP_STORAGE, String.class).orElse("memory");
+            if (config.isCreateStream()) {
+                String subjects = (config.getSubjects() != null) ? config.getSubjects() : "*.*.*";
+                String storage = (config.getStorage() != null) ? config.getStorage() : "memory";
                 StorageType storageType = storage.equals("file") ? StorageType.File : StorageType.Memory;
 
                 StreamConfiguration streamConfig = StreamConfiguration.builder()
-                        .name(streamName)
+                        .name(config.getStreamName())
                         .description("The debezium stream, contains messages which are coming from debezium")
                         .subjects(subjects.split(","))
                         .storageType(storageType)
@@ -201,22 +144,23 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             throw new DebeziumException(e);
         }
 
-        if (asyncEnabled) {
-            LOGGER.info("Async publishing enabled with timeout: {}ms", asyncTimeoutMs);
+        if (config.isAsyncEnabled()) {
+            LOGGER.info("Async publishing enabled with timeout: {}ms", config.getAsyncTimeoutMs());
         }
         else {
             LOGGER.info("Synchronous publishing mode enabled");
         }
 
         this.retryExecutor = new RetryExecutor(
-                syncMaxRetryAttempts,
-                syncRetryIntervalMs,
-                syncRetryMaxIntervalMs,
-                syncRetryBackoffMultiplier);
+                config.getSyncMaxRetryAttempts(),
+                config.getSyncRetryIntervalMs(),
+                config.getSyncRetryMaxIntervalMs(),
+                config.getSyncRetryBackoffMultiplier());
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             if (nc != null) {
                 nc.close();
@@ -232,7 +176,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     public void handleBatch(List<ChangeEvent<Object, Object>> records,
                             RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
-        if (!asyncEnabled || records.isEmpty()) {
+        if (!config.isAsyncEnabled() || records.isEmpty()) {
             handleBatchSync(records, committer);
             return;
         }
@@ -298,7 +242,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                         LOGGER.trace("Sending async message to subject: {} (data length: {} bytes)", subject, recordBytes.length);
                     }
 
-                    CompletableFuture<PublishAck> future = js.publishAsync(msg).orTimeout(asyncTimeoutMs, TimeUnit.MILLISECONDS);
+                    CompletableFuture<PublishAck> future = js.publishAsync(msg).orTimeout(config.getAsyncTimeoutMs(), TimeUnit.MILLISECONDS);
 
                     if (LOGGER.isTraceEnabled()) {
                         future.thenAccept(ack -> {
@@ -318,7 +262,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         }
         try {
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]))
-                    .get(asyncTimeoutMs, TimeUnit.MILLISECONDS);
+                    .get(config.getAsyncTimeoutMs(), TimeUnit.MILLISECONDS);
 
             for (ChangeEvent<Object, Object> rec : records) {
                 committer.markProcessed(rec);
@@ -327,7 +271,7 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             LOGGER.debug("Successfully published batch of {} messages", records.size());
         }
         catch (TimeoutException e) {
-            LOGGER.error("Timeout waiting for publish acknowledgments after {} ms", asyncTimeoutMs);
+            LOGGER.error("Timeout waiting for publish acknowledgments after {} ms", config.getAsyncTimeoutMs());
             throw new DebeziumException("Timeout waiting for publish acknowledgments", e);
         }
         catch (ExecutionException e) {
@@ -435,5 +379,33 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), new SecureRandom());
 
         return ctx;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                NatsJetStreamChangeConsumerConfig.URL,
+                NatsJetStreamChangeConsumerConfig.STREAM_NAME,
+                NatsJetStreamChangeConsumerConfig.CREATE_STREAM,
+                NatsJetStreamChangeConsumerConfig.SUBJECTS,
+                NatsJetStreamChangeConsumerConfig.STORAGE,
+                NatsJetStreamChangeConsumerConfig.AUTH_JWT,
+                NatsJetStreamChangeConsumerConfig.AUTH_SEED,
+                NatsJetStreamChangeConsumerConfig.AUTH_USER,
+                NatsJetStreamChangeConsumerConfig.AUTH_PASSWORD,
+                NatsJetStreamChangeConsumerConfig.AUTH_TLS_KEYSTORE,
+                NatsJetStreamChangeConsumerConfig.AUTH_TLS_KEYSTORE_PASSWORD,
+                NatsJetStreamChangeConsumerConfig.AUTH_TLS_PASSWORD,
+                NatsJetStreamChangeConsumerConfig.ASYNC_ENABLED,
+                NatsJetStreamChangeConsumerConfig.ASYNC_TIMEOUT_MS,
+                NatsJetStreamChangeConsumerConfig.SYNC_RETRIES,
+                NatsJetStreamChangeConsumerConfig.SYNC_RETRY_INTERVAL_MS,
+                NatsJetStreamChangeConsumerConfig.SYNC_RETRY_MAX_INTERVAL_MS,
+                NatsJetStreamChangeConsumerConfig.SYNC_RETRY_BACKOFF_MULTIPLIER);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

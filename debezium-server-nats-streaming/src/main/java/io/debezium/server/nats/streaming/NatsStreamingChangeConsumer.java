@@ -20,11 +20,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 import io.nats.streaming.NatsStreaming;
@@ -38,18 +43,15 @@ import io.nats.streaming.StreamingConnection;
 @Named("nats-streaming")
 @Dependent
 public class NatsStreamingChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NatsStreamingChangeConsumer.class);
 
-    private static final String PROP_PREFIX = "debezium.sink.nats-streaming.";
-    private static final String PROP_URL = PROP_PREFIX + "url";
-    private static final String PROP_CLUSTER_ID = PROP_PREFIX + "cluster.id";
-    private static final String PROP_CLIENT_ID = PROP_PREFIX + "client.id";
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
-    private String url;
-    private String clusterId;
-    private String clientId;
+    private static final String PROP_PREFIX = "debezium.sink.nats-streaming.";
+
+    private NatsStreamingChangeConsumerConfig config;
 
     private Connection nc;
     private StreamingConnection sc;
@@ -66,16 +68,16 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
             return;
         }
 
-        // Read config
-        final Config config = ConfigProvider.getConfig();
-        url = config.getValue(PROP_URL, String.class);
-        clusterId = config.getValue(PROP_CLUSTER_ID, String.class);
-        clientId = config.getValue(PROP_CLIENT_ID, String.class);
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new NatsStreamingChangeConsumerConfig(configuration);
 
         try {
             // Setup NATS connection
             io.nats.client.Options natsOptions = new io.nats.client.Options.Builder()
-                    .server(url)
+                    .server(config.getUrl())
                     .noReconnect()
                     .build();
             nc = Nats.connect(natsOptions);
@@ -84,7 +86,7 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
             io.nats.streaming.Options stanOptions = new io.nats.streaming.Options.Builder()
                     .natsConn(nc)
                     .build();
-            sc = NatsStreaming.connect(clusterId, clientId, stanOptions);
+            sc = NatsStreaming.connect(config.getClusterId(), config.getClientId(), stanOptions);
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -94,7 +96,8 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             if (sc != null) {
                 sc.close();
@@ -132,5 +135,18 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
             committer.markProcessed(record);
         }
         committer.markBatchFinished();
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                NatsStreamingChangeConsumerConfig.URL,
+                NatsStreamingChangeConsumerConfig.CLUSTER_ID,
+                NatsStreamingChangeConsumerConfig.CLIENT_ID);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }
