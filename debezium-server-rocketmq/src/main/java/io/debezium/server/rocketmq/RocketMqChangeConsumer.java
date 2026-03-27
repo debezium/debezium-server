@@ -7,7 +7,6 @@ package io.debezium.server.rocketmq;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
@@ -34,33 +33,31 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 
 /**
  * rocketmq change consumer
  */
 @Named("rocketmq")
 @Dependent
-public class RocketMqChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class RocketMqChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RocketMqChangeConsumer.class);
 
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
     private static final String PROP_PREFIX = "debezium.sink.rocketmq.";
 
-    private static final String PROP_PRODUCER_PREFIX = PROP_PREFIX + "producer.";
+    private RocketMqChangeConsumerConfig config;
 
-    // acl config
-    private static final String PROP_PRODUCER_ACL_ENABLE = PROP_PRODUCER_PREFIX + "acl.enabled";
-    private static final String PROP_PRODUCER_ACCESS_KEY = PROP_PRODUCER_PREFIX + "access.key";
-    private static final String PROP_PRODUCER_SECRET_KEY = PROP_PRODUCER_PREFIX + "secret.key";
-    // common config
-    private static final String PROP_PRODUCER_NAME_SRV_ADDR = PROP_PRODUCER_PREFIX + "name.srv.addr";
-    private static final String PROP_PRODUCER_GROUP = PROP_PRODUCER_PREFIX + "group";
-    private static final String PROP_PRODUCER_MAX_MESSAGE_SIZE = PROP_PRODUCER_PREFIX + "max.message.size";
-    private static final String PROP_PRODUCER_SEND_MSG_TIMEOUT = PROP_PRODUCER_PREFIX + "send.msg.timeout";
     @Inject
     @CustomConsumerBuilder
     Instance<DefaultMQProducer> customRocketMqProducer;
@@ -74,31 +71,34 @@ public class RocketMqChangeConsumer extends BaseChangeConsumer implements Debezi
             LOGGER.info("Obtained custom configured RocketMqProducer '{}'", mqProducer);
             return;
         }
-        final Config config = ConfigProvider.getConfig();
+
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new RocketMqChangeConsumerConfig(configuration);
+
         // init rocketmq producer
         RPCHook rpcHook = null;
-        Optional<Boolean> aclEnable = config.getOptionalValue(PROP_PRODUCER_ACL_ENABLE, Boolean.class);
-        if (aclEnable.isPresent() && aclEnable.get()) {
-            if (config.getOptionalValue(PROP_PRODUCER_ACCESS_KEY, String.class).isEmpty()
-                    || config.getOptionalValue(PROP_PRODUCER_SECRET_KEY, String.class).isEmpty()) {
+        if (config.isAclEnabled()) {
+            if (config.getAccessKey() == null || config.getAccessKey().isEmpty()
+                    || config.getSecretKey() == null || config.getSecretKey().isEmpty()) {
                 throw new DebeziumException("When acl.enabled is true, access key and secret key cannot be empty");
             }
             rpcHook = new AclClientRPCHook(
-                    new SessionCredentials(
-                            config.getValue(PROP_PRODUCER_ACCESS_KEY, String.class),
-                            config.getValue(PROP_PRODUCER_SECRET_KEY, String.class)));
+                    new SessionCredentials(config.getAccessKey(), config.getSecretKey()));
         }
         this.mqProducer = new DefaultMQProducer(rpcHook);
-        this.mqProducer.setNamesrvAddr(config.getValue(PROP_PRODUCER_NAME_SRV_ADDR, String.class));
-        this.mqProducer.setInstanceName(createUniqInstance(config.getValue(PROP_PRODUCER_NAME_SRV_ADDR, String.class)));
-        this.mqProducer.setProducerGroup(config.getValue(PROP_PRODUCER_GROUP, String.class));
+        this.mqProducer.setNamesrvAddr(config.getNameSrvAddr());
+        this.mqProducer.setInstanceName(createUniqInstance(config.getNameSrvAddr()));
+        this.mqProducer.setProducerGroup(config.getProducerGroup());
 
-        if (config.getOptionalValue(PROP_PRODUCER_SEND_MSG_TIMEOUT, Integer.class).isPresent()) {
-            this.mqProducer.setSendMsgTimeout(config.getValue(PROP_PRODUCER_SEND_MSG_TIMEOUT, Integer.class));
+        if (config.getSendMsgTimeout() != null) {
+            this.mqProducer.setSendMsgTimeout(config.getSendMsgTimeout());
         }
 
-        if (config.getOptionalValue(PROP_PRODUCER_MAX_MESSAGE_SIZE, Integer.class).isPresent()) {
-            this.mqProducer.setMaxMessageSize(config.getValue(PROP_PRODUCER_MAX_MESSAGE_SIZE, Integer.class));
+        if (config.getMaxMessageSize() != null) {
+            this.mqProducer.setMaxMessageSize(config.getMaxMessageSize());
         }
 
         this.mqProducer.setLanguage(LanguageCode.JAVA);
@@ -120,12 +120,30 @@ public class RocketMqChangeConsumer extends BaseChangeConsumer implements Debezi
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         // Closed rocketmq producer
         LOGGER.info("Consumer destroy...");
         if (mqProducer != null) {
             mqProducer.shutdown();
         }
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                RocketMqChangeConsumerConfig.PRODUCER_ACL_ENABLED,
+                RocketMqChangeConsumerConfig.PRODUCER_ACCESS_KEY,
+                RocketMqChangeConsumerConfig.PRODUCER_SECRET_KEY,
+                RocketMqChangeConsumerConfig.PRODUCER_NAME_SRV_ADDR,
+                RocketMqChangeConsumerConfig.PRODUCER_GROUP,
+                RocketMqChangeConsumerConfig.PRODUCER_MAX_MESSAGE_SIZE,
+                RocketMqChangeConsumerConfig.PRODUCER_SEND_MSG_TIMEOUT);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 
     @Override
