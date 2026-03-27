@@ -10,7 +10,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
@@ -22,16 +21,20 @@ import jakarta.inject.Named;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
 
@@ -54,30 +57,16 @@ import software.amazon.awssdk.services.kinesis.model.PutRecordsResultEntry;
  */
 @Named("kinesis")
 @Dependent
-public class KinesisChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class KinesisChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KinesisChangeConsumer.class);
 
-    private static final String PROP_PREFIX = "debezium.sink.kinesis.";
-    private static final String PROP_REGION_NAME = PROP_PREFIX + "region";
-    private static final String PROP_ENDPOINT_NAME = PROP_PREFIX + "endpoint";
-    private static final String PROP_CREDENTIALS_PROFILE = PROP_PREFIX + "credentials.profile";
-    private static final String PROP_BATCH_SIZE = PROP_PREFIX + "batch.size";
-    private static final String PROP_RETRIES = PROP_PREFIX + "default.retries";
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
-    private static final int DEFAULT_RETRY_COUNT = 5;
-    private static final int MAX_BATCH_SIZE = 500;
+    private static final String PROP_PREFIX = "debezium.sink.kinesis.";
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
 
-    private String region;
-    private Optional<String> endpointOverride;
-    private Optional<String> credentialsProfile;
-    private Integer batchSize;
-    private Integer maxRetries;
-
-    @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
-    String nullKey;
-
+    private KinesisChangeConsumerConfig config;
     private KinesisClient client = null;
 
     @Inject
@@ -86,14 +75,16 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
     @PostConstruct
     void connect() {
-        final Config config = ConfigProvider.getConfig();
-        batchSize = config.getOptionalValue(PROP_BATCH_SIZE, Integer.class).orElse(MAX_BATCH_SIZE);
-        maxRetries = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(DEFAULT_RETRY_COUNT);
+        final Config mpConfig = ConfigProvider.getConfig();
 
-        if (batchSize <= 0) {
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new KinesisChangeConsumerConfig(configuration);
+
+        if (config.getBatchSize() <= 0) {
             throw new DebeziumException("Batch size must be greater than 0");
         }
-        else if (batchSize > MAX_BATCH_SIZE) {
+        else if (config.getBatchSize() > KinesisChangeConsumerConfig.MAX_BATCH_SIZE) {
             throw new DebeziumException("Batch size must be less than or equal to MAX_BATCH_SIZE");
         }
 
@@ -103,20 +94,24 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
             return;
         }
 
-        region = config.getValue(PROP_REGION_NAME, String.class);
-        endpointOverride = config.getOptionalValue(PROP_ENDPOINT_NAME, String.class);
-        credentialsProfile = config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class);
         final KinesisClientBuilder builder = KinesisClient.builder()
-                .region(Region.of(region));
-        endpointOverride.ifPresent(endpoint -> builder.endpointOverride(URI.create(endpoint)));
-        credentialsProfile.ifPresent(profile -> builder.credentialsProvider(ProfileCredentialsProvider.create(profile)));
+                .region(Region.of(config.getRegion()));
+
+        if (config.getEndpoint() != null) {
+            builder.endpointOverride(URI.create(config.getEndpoint()));
+        }
+
+        if (config.getCredentialsProfile() != null) {
+            builder.credentialsProvider(ProfileCredentialsProvider.create(config.getCredentialsProfile()));
+        }
 
         client = builder.build();
         LOGGER.info("Using default KinesisClient '{}'", client);
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             client.close();
         }
@@ -145,10 +140,10 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         for (List<ChangeEvent<Object, Object>> segmentedBatch : segmentedBatches.values()) {
             // Iterate over the batch
 
-            for (int i = 0; i < segmentedBatch.size(); i += batchSize) {
+            for (int i = 0; i < segmentedBatch.size(); i += config.getBatchSize()) {
 
                 // Create a sublist of the batch given the batchSize
-                batch = segmentedBatch.subList(i, Math.min(i + batchSize, segmentedBatch.size()));
+                batch = segmentedBatch.subList(i, Math.min(i + config.getBatchSize(), segmentedBatch.size()));
                 List<PutRecordsRequestEntry> putRecordsRequestEntryList = new ArrayList<>();
                 streamName = batch.get(0).destination();
 
@@ -159,7 +154,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
                         rv = "";
                     }
                     PutRecordsRequestEntry putRecordsRequestEntry = PutRecordsRequestEntry.builder()
-                            .partitionKey((record.key() != null) ? getString(record.key()) : nullKey)
+                            .partitionKey((record.key() != null) ? getString(record.key()) : config.getNullKey())
                             .data(SdkBytes.fromByteArray(getBytes(rv))).build();
                     putRecordsRequestEntryList.add(putRecordsRequestEntry);
                 }
@@ -171,7 +166,7 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
                 while (notSuccesful) {
 
-                    if (attempts >= maxRetries) {
+                    if (attempts >= config.getMaxRetries()) {
                         throw new DebeziumException("Exceeded maximum number of attempts to publish event");
                     }
 
@@ -226,5 +221,21 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
         PutRecordsResponse putRecordsResponse = client.putRecords(putRecordsRequest);
         LOGGER.trace("Response Receieved: " + putRecordsResponse);
         return putRecordsResponse;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                KinesisChangeConsumerConfig.REGION,
+                KinesisChangeConsumerConfig.ENDPOINT,
+                KinesisChangeConsumerConfig.CREDENTIALS_PROFILE,
+                KinesisChangeConsumerConfig.BATCH_SIZE,
+                KinesisChangeConsumerConfig.DEFAULT_RETRIES,
+                KinesisChangeConsumerConfig.NULL_KEY);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

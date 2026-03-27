@@ -5,7 +5,6 @@
  */
 package io.debezium.server.pravega;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,15 +14,20 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
+import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine.ChangeConsumer;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.DebeziumServerSink;
 import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.stream.EventStreamWriter;
@@ -35,22 +39,15 @@ import io.pravega.client.stream.impl.ByteArraySerializer;
 
 @Named("pravega")
 @Dependent
-public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeConsumer<ChangeEvent<Object, Object>> {
+public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PravegaChangeConsumer.class);
 
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
     private static final String PROP_PREFIX = "debezium.sink.pravega.";
-    private static final String PROP_CONTROLLER = PROP_PREFIX + "controller.uri";
-    private static final String PROP_SCOPE = PROP_PREFIX + "scope";
-    private static final String PROP_TXN = PROP_PREFIX + "transaction";
 
-    @ConfigProperty(name = PROP_CONTROLLER, defaultValue = "tcp://localhost:9090")
-    URI controllerUri;
-
-    private String scope;
-
-    @ConfigProperty(name = PROP_TXN, defaultValue = "false")
-    boolean txn;
+    private PravegaChangeConsumerConfig config;
 
     private ClientConfig clientConfig;
     private EventStreamClientFactory factory;
@@ -58,24 +55,30 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
 
     @PostConstruct
     void constructor() {
-        scope = ConfigProvider.getConfig().getValue(PROP_SCOPE, String.class);
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new PravegaChangeConsumerConfig(configuration);
+
         clientConfig = ClientConfig.builder()
-                .controllerURI(controllerUri)
+                .controllerURI(config.getControllerUri())
                 .build();
-        LOGGER.debug("Creating client factory for scope {} with controller {}", scope, controllerUri);
-        factory = EventStreamClientFactory.withScope(scope, clientConfig);
+        LOGGER.debug("Creating client factory for scope {} with controller {}", config.getScope(), config.getControllerUri());
+        factory = EventStreamClientFactory.withScope(config.getScope(), clientConfig);
         writerConfig = EventWriterConfig.builder().build();
     }
 
     @PreDestroy
-    void destructor() {
+    @Override
+    public void close() {
         LOGGER.debug("Closing client factory");
         factory.close();
     }
 
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
-        try (PravegaSink impl = (txn) ? new PravegaTxnSinkImpl() : new PravegaSinkImpl()) {
+        try (PravegaSink impl = (config.isTransaction()) ? new PravegaTxnSinkImpl() : new PravegaSinkImpl()) {
             impl.handleBatch(records, committer);
         }
         catch (Exception e) {
@@ -164,6 +167,19 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
             LOGGER.debug("Closing {} writer(s)", writers.size());
             writers.values().forEach(TransactionalEventStreamWriter::close);
         }
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                PravegaChangeConsumerConfig.CONTROLLER_URI,
+                PravegaChangeConsumerConfig.SCOPE,
+                PravegaChangeConsumerConfig.TRANSACTION);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 
 }
