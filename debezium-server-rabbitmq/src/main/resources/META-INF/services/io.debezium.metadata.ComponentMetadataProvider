@@ -1,0 +1,2 @@
+io.debezium.server.rabbitmq.RabbitMqStreamChangeConsumer
+io.debezium.server.rabbitmq.RabbitMqStreamNativeChangeConsumer

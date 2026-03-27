@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -20,7 +19,6 @@ import jakarta.inject.Named;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,12 +29,17 @@ import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.ConnectionFactoryConfigurator;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
 import io.debezium.annotation.VisibleForTesting;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.DebeziumServerSink;
 import io.debezium.server.StreamNameMapper;
 
 /**
@@ -47,9 +50,11 @@ import io.debezium.server.StreamNameMapper;
  */
 @Named("rabbitmq")
 @Dependent
-public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamChangeConsumer.class);
+
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
     private static final String PROP_PREFIX = "debezium.sink.rabbitmq.";
     private static final String PROP_CONNECTION_PREFIX = PROP_PREFIX + "connection.";
@@ -71,39 +76,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
 
     private static final String EMPTY_ROUTING_KEY = "";
 
-    @ConfigProperty(name = PROP_PREFIX + "exchange", defaultValue = "")
-    Optional<String> exchange;
-
-    @ConfigProperty(name = PROP_PREFIX + "routingKey", defaultValue = "")
-    Optional<String> routingKey;
-
-    @ConfigProperty(name = PROP_PREFIX + "autoCreateRoutingKey", defaultValue = "false")
-    Boolean autoCreateRoutingKey;
-
-    @ConfigProperty(name = PROP_PREFIX + "routingKeyDurable", defaultValue = "true")
-    Boolean routingKeyDurable;
-
-    @ConfigProperty(name = PROP_PREFIX + "routingKey.source", defaultValue = STATIC_ROUTING_KEY_SOURCE)
-    String routingKeySource;
-
-    /**
-     * When true, the routing key is calculated from topic name using stream name mapper.
-     * When false the routingKey value or empty string is used.
-     *
-     * @deprecated Use `routingKeySource` with value `topic` instead
-     */
-    @Deprecated
-    @ConfigProperty(name = PROP_PREFIX + "routingKeyFromTopicName", defaultValue = "false")
-    Boolean routingKeyFromTopicName;
-
-    @ConfigProperty(name = PROP_PREFIX + "deliveryMode", defaultValue = "2")
-    int deliveryMode;
-
-    @ConfigProperty(name = PROP_PREFIX + "ackTimeout", defaultValue = "30000")
-    int ackTimeout;
-
-    @ConfigProperty(name = PROP_PREFIX + "null.value", defaultValue = "default")
-    String nullValue;
+    RabbitMqStreamChangeConsumerConfig config; // package-private for testing
 
     Connection connection;
 
@@ -111,18 +84,21 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
 
     @PostConstruct
     void connect() {
-        final Config config = ConfigProvider.getConfig();
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new RabbitMqStreamChangeConsumerConfig(configuration);
 
         ConnectionFactory factory = new ConnectionFactory();
-        Map<String, String> configProperties = getConfigSubset(config, PROP_CONNECTION_PREFIX).entrySet().stream()
+        Map<String, String> configProperties = getConfigSubset(mpConfig, PROP_CONNECTION_PREFIX).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey,
                         entry -> (entry.getValue() == null) ? null : entry.getValue().toString()));
         ConnectionFactoryConfigurator.load(factory, configProperties, "");
 
         LOGGER.info("Using connection to {}:{}", factory.getHost(), factory.getPort());
 
-        if (Boolean.TRUE.equals(routingKeyFromTopicName)) {
-            routingKeySource = TOPIC_ROUTING_KEY_SOURCE;
+        if (config.isRoutingKeyFromTopicName()) {
             LOGGER.warn("Using deprecated `{}` config value. Please, use `{}` with value `topic` instead", PROP_PREFIX + "routingKeyFromTopicName",
                     PROP_PREFIX + "routingKey.source");
         }
@@ -132,10 +108,10 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             channel = connection.createChannel();
             channel.confirmSelect();
 
-            if (!isTopicRoutingKeySource() && autoCreateRoutingKey) {
-                final var routingKeyName = routingKey.orElse("");
+            if (!isTopicRoutingKeySource() && config.isAutoCreateRoutingKey()) {
+                final var routingKeyName = config.getRoutingKey();
                 LOGGER.info("Creating queue for routing key named '{}'", routingKeyName);
-                channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
+                channel.queueDeclare(routingKeyName, config.isRoutingKeyDurable(), false, false, null);
             }
         }
         catch (IOException | TimeoutException e) {
@@ -144,7 +120,8 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
 
         try {
             if (channel != null) {
@@ -166,19 +143,21 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
 
-            final String exchangeName = exchange.orElse(streamNameMapper.map(record.destination()));
-            final String routingKeyName = getRoutingKey(record).orElse(EMPTY_ROUTING_KEY);
+            final String exchangeName = (config.getExchange() != null && !config.getExchange().isEmpty())
+                    ? config.getExchange()
+                    : streamNameMapper.map(record.destination());
+            final String routingKeyName = getRoutingKey(record);
 
             try {
-                if (isTopicRoutingKeySource() && autoCreateRoutingKey) {
+                if (isTopicRoutingKeySource() && config.isAutoCreateRoutingKey()) {
                     LOGGER.trace("Creating queue for routing key named '{}'", routingKeyName);
-                    channel.queueDeclare(routingKeyName, routingKeyDurable, false, false, null);
+                    channel.queueDeclare(routingKeyName, config.isRoutingKeyDurable(), false, false, null);
                 }
 
-                final Object value = (record.value() != null) ? record.value() : nullValue;
+                final Object value = (record.value() != null) ? record.value() : config.getNullValue();
                 channel.basicPublish(exchangeName, routingKeyName,
                         new AMQP.BasicProperties.Builder()
-                                .deliveryMode(deliveryMode)
+                                .deliveryMode(config.getDeliveryMode())
                                 .headers(convertRabbitMqHeaders(record))
                                 .build(),
                         getBytes(value));
@@ -189,7 +168,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         }
 
         try {
-            channel.waitForConfirmsOrDie(ackTimeout);
+            channel.waitForConfirmsOrDie(config.getAckTimeout());
         }
         catch (IOException | TimeoutException e) {
             throw new DebeziumException(e);
@@ -204,29 +183,29 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         LOGGER.trace("Batch marked finished");
     }
 
-    private Optional<String> getRoutingKey(ChangeEvent<Object, Object> eventRecord) {
+    private String getRoutingKey(ChangeEvent<Object, Object> eventRecord) {
         if (isStaticRoutingKeySource()) {
-            return routingKey;
+            return config.getRoutingKey();
         }
         else if (isTopicRoutingKeySource()) {
-            return Optional.of(streamNameMapper.map(eventRecord.destination()));
+            return streamNameMapper.map(eventRecord.destination());
         }
         else if (isKeyRoutingKeySource()) {
-            return Optional.ofNullable(eventRecord.key()).map(this::getString);
+            return eventRecord.key() != null ? getString(eventRecord.key()) : EMPTY_ROUTING_KEY;
         }
-        return Optional.empty();
+        return EMPTY_ROUTING_KEY;
     }
 
     private boolean isStaticRoutingKeySource() {
-        return STATIC_ROUTING_KEY_SOURCE.equals(routingKeySource);
+        return STATIC_ROUTING_KEY_SOURCE.equals(config.getRoutingKeySource());
     }
 
     private boolean isTopicRoutingKeySource() {
-        return TOPIC_ROUTING_KEY_SOURCE.equals(routingKeySource);
+        return TOPIC_ROUTING_KEY_SOURCE.equals(config.getRoutingKeySource());
     }
 
     private boolean isKeyRoutingKeySource() {
-        return KEY_ROUTING_KEY_SOURCE.equals(routingKeySource);
+        return KEY_ROUTING_KEY_SOURCE.equals(config.getRoutingKeySource());
     }
 
     private static Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
@@ -241,5 +220,24 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     @VisibleForTesting
     void setStreamNameMapper(StreamNameMapper streamNameMapper) {
         this.streamNameMapper = streamNameMapper;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                RabbitMqStreamChangeConsumerConfig.EXCHANGE,
+                RabbitMqStreamChangeConsumerConfig.ROUTING_KEY,
+                RabbitMqStreamChangeConsumerConfig.AUTO_CREATE_ROUTING_KEY,
+                RabbitMqStreamChangeConsumerConfig.ROUTING_KEY_DURABLE,
+                RabbitMqStreamChangeConsumerConfig.ROUTING_KEY_SOURCE,
+                RabbitMqStreamChangeConsumerConfig.ROUTING_KEY_FROM_TOPIC_NAME,
+                RabbitMqStreamChangeConsumerConfig.DELIVERY_MODE,
+                RabbitMqStreamChangeConsumerConfig.ACK_TIMEOUT,
+                RabbitMqStreamChangeConsumerConfig.NULL_VALUE);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

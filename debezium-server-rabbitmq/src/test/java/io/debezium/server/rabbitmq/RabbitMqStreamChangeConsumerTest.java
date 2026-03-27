@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
@@ -67,8 +66,25 @@ class RabbitMqStreamChangeConsumerTest {
         rabbitMqStreamChangeConsumer = new RabbitMqStreamChangeConsumer();
         rabbitMqStreamChangeConsumer.channel = channelMock;
         rabbitMqStreamChangeConsumer.setStreamNameMapper(streamNameMapperMock);
-        rabbitMqStreamChangeConsumer.deliveryMode = DELIVERY_MODE;
-        rabbitMqStreamChangeConsumer.ackTimeout = ACK_TIMEOUT;
+
+        // Create a config object with test values
+        rabbitMqStreamChangeConsumer.config = createConfig(DELIVERY_MODE, ACK_TIMEOUT, "", "static", "", false, true);
+    }
+
+    private RabbitMqStreamChangeConsumerConfig createConfig(int deliveryMode, int ackTimeout, String exchange,
+                                                            String routingKeySource, String routingKey,
+                                                            boolean autoCreateRoutingKey, boolean routingKeyDurable) {
+        io.debezium.config.Configuration.Builder builder = io.debezium.config.Configuration.create();
+        builder.with(RabbitMqStreamChangeConsumerConfig.DELIVERY_MODE, deliveryMode);
+        builder.with(RabbitMqStreamChangeConsumerConfig.ACK_TIMEOUT, ackTimeout);
+        builder.with(RabbitMqStreamChangeConsumerConfig.EXCHANGE, exchange);
+        builder.with(RabbitMqStreamChangeConsumerConfig.ROUTING_KEY_SOURCE, routingKeySource);
+        builder.with(RabbitMqStreamChangeConsumerConfig.ROUTING_KEY, routingKey);
+        builder.with(RabbitMqStreamChangeConsumerConfig.AUTO_CREATE_ROUTING_KEY, autoCreateRoutingKey);
+        builder.with(RabbitMqStreamChangeConsumerConfig.ROUTING_KEY_DURABLE, routingKeyDurable);
+        builder.with(RabbitMqStreamChangeConsumerConfig.ROUTING_KEY_FROM_TOPIC_NAME, false);
+        builder.with(RabbitMqStreamChangeConsumerConfig.NULL_VALUE, "default");
+        return new RabbitMqStreamChangeConsumerConfig(builder.build());
     }
 
     @Test
@@ -83,11 +99,7 @@ class RabbitMqStreamChangeConsumerTest {
         when(eventMock.headers()).thenReturn(List.of());
         when(streamNameMapperMock.map(topicName)).thenReturn(topicName);
 
-        rabbitMqStreamChangeConsumer.exchange = Optional.of(topicName);
-        rabbitMqStreamChangeConsumer.routingKeySource = "topic";
-        rabbitMqStreamChangeConsumer.autoCreateRoutingKey = true;
-        rabbitMqStreamChangeConsumer.routingKeyDurable = true;
-        rabbitMqStreamChangeConsumer.routingKey = Optional.of("ignored");
+        rabbitMqStreamChangeConsumer.config = createConfig(DELIVERY_MODE, ACK_TIMEOUT, topicName, "topic", "ignored", true, true);
 
         // when
         rabbitMqStreamChangeConsumer.handleBatch(records, committerMock);
@@ -117,9 +129,8 @@ class RabbitMqStreamChangeConsumerTest {
         when(eventMock.headers()).thenReturn(List.of());
         when(streamNameMapperMock.map(topicName)).thenReturn(topicName);
 
-        rabbitMqStreamChangeConsumer.exchange = Optional.of(topicName);
-        rabbitMqStreamChangeConsumer.routingKeySource = "static";
-        rabbitMqStreamChangeConsumer.routingKey = Optional.ofNullable(staticRoutingKey);
+        rabbitMqStreamChangeConsumer.config = createConfig(DELIVERY_MODE, ACK_TIMEOUT, topicName, "static",
+                staticRoutingKey != null ? staticRoutingKey : "", false, true);
 
         // when
         rabbitMqStreamChangeConsumer.handleBatch(records, committerMock);
@@ -151,9 +162,7 @@ class RabbitMqStreamChangeConsumerTest {
         when(streamNameMapperMock.map(topicName)).thenReturn(topicName);
         when(streamNameMapperMock.map(routingKey)).thenReturn(routingKey);
 
-        rabbitMqStreamChangeConsumer.exchange = Optional.of(topicName);
-        rabbitMqStreamChangeConsumer.routingKeySource = "key";
-        rabbitMqStreamChangeConsumer.routingKey = Optional.of("ignored");
+        rabbitMqStreamChangeConsumer.config = createConfig(DELIVERY_MODE, ACK_TIMEOUT, topicName, "key", "ignored", false, true);
 
         // when
         rabbitMqStreamChangeConsumer.handleBatch(records, committerMock);

@@ -14,10 +14,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 
-import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +25,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
 import io.debezium.data.Envelope;
 import io.debezium.data.Envelope.Operation;
 import io.debezium.data.Json;
@@ -32,9 +33,12 @@ import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.schema.SchemaFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.DeleteReq;
@@ -48,24 +52,18 @@ import io.milvus.v2.service.vector.request.UpsertReq;
  */
 @Named("milvus")
 @Dependent
-public class MilvusChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class MilvusChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MilvusChangeConsumer.class);
 
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
     private static final String PROP_PREFIX = "debezium.sink.milvus.";
 
+    private MilvusChangeConsumerConfig config;
     private MilvusClientV2 milvusClient;
     private MilvusSchema schema;
     private final Gson gson = new Gson();
-
-    @ConfigProperty(name = PROP_PREFIX + "uri", defaultValue = "http://localhost:19530")
-    String uri;
-
-    @ConfigProperty(name = PROP_PREFIX + "database", defaultValue = "default")
-    String databaseName;
-
-    @ConfigProperty(name = PROP_PREFIX + "unwind.json", defaultValue = "false")
-    boolean unwindJson;
 
     @Inject
     @CustomConsumerBuilder
@@ -73,26 +71,33 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @PostConstruct
     void connect() {
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new MilvusChangeConsumerConfig(configuration);
+
         if (customClient.isResolvable()) {
             milvusClient = customClient.get();
             LOGGER.info("Obtained custom configured MilvusClientV2 '{}'", milvusClient);
         }
         else {
-            final var config = ConnectConfig.builder()
-                    .uri(uri)
+            final var connectConfig = ConnectConfig.builder()
+                    .uri(config.getUri())
                     .build();
-            milvusClient = new MilvusClientV2(config);
+            milvusClient = new MilvusClientV2(connectConfig);
             schema = new MilvusSchema(milvusClient);
         }
 
         final var databases = milvusClient.listDatabases().getDatabaseNames();
-        if (!databases.contains(databaseName)) {
-            throw new DebeziumException(String.format("Database '%s' does not exist", databaseName));
+        if (!databases.contains(config.getDatabaseName())) {
+            throw new DebeziumException(String.format("Database '%s' does not exist", config.getDatabaseName()));
         }
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             milvusClient.close();
         }
@@ -205,8 +210,8 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
             valueSchema = valueSchema.field(Envelope.FieldName.AFTER).schema();
         }
 
-        if (unwindJson) {
-            for (Field field : valueSchema.fields()) {
+        if (config.isUnwindJson()) {
+            for (org.apache.kafka.connect.data.Field field : valueSchema.fields()) {
                 if (Json.LOGICAL_NAME.equals(field.schema().name()) && json.has(field.name())) {
                     final var stringValue = json.get(field.name()).getAsString();
                     final var jsonValue = gson.fromJson(stringValue, JsonObject.class);
@@ -220,5 +225,18 @@ public class MilvusChangeConsumer extends BaseChangeConsumer implements Debezium
     private boolean isSchemaChange(final SourceRecord record) {
         return record.valueSchema() != null && record.valueSchema().name() != null
                 && SchemaFactory.get().isSchemaChangeSchema(record.valueSchema());
+    }
+
+    @Override
+    public io.debezium.config.Field.Set getConfigFields() {
+        return io.debezium.config.Field.setOf(
+                MilvusChangeConsumerConfig.URI,
+                MilvusChangeConsumerConfig.DATABASE,
+                MilvusChangeConsumerConfig.UNWIND_JSON);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

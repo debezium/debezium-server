@@ -1,0 +1,2 @@
+io.debezium.server.pubsub.PubSubChangeConsumer
+io.debezium.server.pubsub.PubSubLiteChangeConsumer

@@ -22,7 +22,6 @@ import jakarta.inject.Named;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,40 +38,37 @@ import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.PubsubMessage;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 
 /**
  * Implementation of the consumer that delivers the messages into Google Pub/Sub Lite destination.
  */
 @Named("pubsublite")
 @Dependent
-public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PubSubLiteChangeConsumer.class);
 
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
     private static final String PROP_PREFIX = "debezium.sink.pubsublite.";
-    private static final String PROP_PROJECT_ID = PROP_PREFIX + "project.id";
-    private static final String PROP_REGION = PROP_PREFIX + "region";
 
     public interface PublisherBuilder {
         Publisher get(String topicName);
     }
 
+    private PubSubLiteChangeConsumerConfig config;
     private PublisherBuilder publisherBuilder;
     private final Map<String, Publisher> publishers = new HashMap<>();
-
-    @ConfigProperty(name = PROP_PREFIX + "ordering.enabled", defaultValue = "true")
-    boolean orderingEnabled;
-
-    @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
-    String nullKey;
-
-    @ConfigProperty(name = PROP_PREFIX + "wait.message.delivery.timeout.ms", defaultValue = "30000")
-    Integer waitMessageDeliveryTimeout;
 
     @Inject
     @CustomConsumerBuilder
@@ -80,9 +76,14 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
 
     @PostConstruct
     void connect() {
-        final Config config = ConfigProvider.getConfig();
-        String projectId = config.getOptionalValue(PROP_PROJECT_ID, String.class).orElse(ServiceOptions.getDefaultProjectId());
-        String region = config.getValue(PROP_REGION, String.class);
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new PubSubLiteChangeConsumerConfig(configuration);
+
+        String projectId = (config.getProjectId() != null) ? config.getProjectId() : ServiceOptions.getDefaultProjectId();
+        String region = config.getRegion();
 
         if (customPublisherBuilder.isResolvable()) {
             publisherBuilder = customPublisherBuilder.get();
@@ -109,7 +110,8 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         publishers.values().forEach(publisher -> {
             try {
                 publisher.stopAsync().awaitTerminated();
@@ -135,7 +137,7 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
         }
         List<String> messageIds;
         try {
-            messageIds = ApiFutures.allAsList(deliveries).get(waitMessageDeliveryTimeout, TimeUnit.MILLISECONDS);
+            messageIds = ApiFutures.allAsList(deliveries).get(config.getWaitMessageDeliveryTimeout(), TimeUnit.MILLISECONDS);
         }
         catch (ExecutionException | TimeoutException e) {
             throw new DebeziumException(e);
@@ -154,9 +156,9 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
 
         final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
 
-        if (orderingEnabled) {
+        if (config.isOrderingEnabled()) {
             if (record.key() == null) {
-                pubsubMessage.setOrderingKey(nullKey);
+                pubsubMessage.setOrderingKey(config.getNullKey());
             }
             else if (record.key() instanceof String) {
                 pubsubMessage.setOrderingKey((String) record.key());
@@ -181,5 +183,20 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
     @Override
     public boolean supportsTombstoneEvents() {
         return false;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                PubSubLiteChangeConsumerConfig.PROJECT_ID,
+                PubSubLiteChangeConsumerConfig.REGION,
+                PubSubLiteChangeConsumerConfig.ORDERING_ENABLED,
+                PubSubLiteChangeConsumerConfig.NULL_KEY,
+                PubSubLiteChangeConsumerConfig.WAIT_MESSAGE_DELIVERY_TIMEOUT_MS);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }
