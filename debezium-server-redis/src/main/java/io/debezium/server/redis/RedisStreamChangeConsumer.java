@@ -31,11 +31,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
 import io.debezium.config.Configuration;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.DebeziumServerSink;
 import io.debezium.storage.redis.RedisClient;
 import io.debezium.storage.redis.RedisClientConnectionException;
 import io.debezium.storage.redis.RedisConnection;
@@ -51,9 +56,11 @@ import io.debezium.util.DelayStrategy;
 @Named("redis")
 @Dependent
 public class RedisStreamChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisStreamChangeConsumer.class);
+
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
     private static final String DEBEZIUM_REDIS_SINK_CLIENT_NAME = "debezium:redis:sink";
 
@@ -118,7 +125,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             if (client != null) {
                 client.close();
@@ -272,5 +280,18 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
         }
         LOGGER.debug("Estimated record size is {}", approximateSize);
         return approximateSize;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        // Create a temporary config instance to get all fields including parent class fields
+        Configuration tempConfig = Configuration.empty();
+        RedisStreamChangeConsumerConfig tempConfigInstance = new RedisStreamChangeConsumerConfig(tempConfig);
+        return Field.setOf(tempConfigInstance.getAllConfigurationFields().toArray(new Field[0]));
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }
