@@ -84,8 +84,11 @@ public class RocketMqChangeConsumerConfig {
         secretKey = config.getString(PRODUCER_SECRET_KEY);
         nameSrvAddr = config.getString(PRODUCER_NAME_SRV_ADDR);
         producerGroup = config.getString(PRODUCER_GROUP);
-        maxMessageSize = config.getInteger(PRODUCER_MAX_MESSAGE_SIZE);
-        sendMsgTimeout = config.getInteger(PRODUCER_SEND_MSG_TIMEOUT);
+        // Optional fields - handle null case
+        String maxMessageSizeStr = config.getString(PRODUCER_MAX_MESSAGE_SIZE);
+        maxMessageSize = (maxMessageSizeStr != null) ? Integer.valueOf(maxMessageSizeStr) : null;
+        String sendMsgTimeoutStr = config.getString(PRODUCER_SEND_MSG_TIMEOUT);
+        sendMsgTimeout = (sendMsgTimeoutStr != null) ? Integer.valueOf(sendMsgTimeoutStr) : null;
     }
 
     public boolean isAclEnabled() {

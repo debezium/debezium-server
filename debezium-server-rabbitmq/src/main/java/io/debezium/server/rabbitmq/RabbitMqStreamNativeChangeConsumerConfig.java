@@ -312,7 +312,9 @@ public class RabbitMqStreamNativeChangeConsumerConfig {
 
     protected void init(Configuration config) {
         connectionHost = config.getString(CONNECTION_HOST);
-        connectionPort = config.getInteger(CONNECTION_PORT);
+        // CONNECTION_PORT is deprecated and optional - handle null case
+        String connectionPortStr = config.getString(CONNECTION_PORT);
+        connectionPort = (connectionPortStr != null) ? Integer.valueOf(connectionPortStr) : null;
         host = config.getString(HOST);
         port = config.getInteger(PORT, 5552);
         username = config.getString(USERNAME);
