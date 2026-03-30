@@ -23,7 +23,9 @@ public class Images {
     public static final String MILVUS_IMAGE = "mirror.gcr.io/milvusdb/milvus:" + MILVUS_VERSION;
     public static final String QDRANT_IMAGE = "qdrant/qdrant:" + QDRANT_VERSION;
     public static final String INFINISPAN_IMAGE = "quay.io/infinispan/server:" + System.getProperty("tag.infinispan", "latest");
-    public static final String LOCALSTACK_IMAGE = "mirror.gcr.io/localstack/localstack";
+    // Please keep the following version pinned due to
+    // https://blog.localstack.cloud/the-road-ahead-for-localstack/#future-journey-localstack-for-aws-remains-free-for-students-hobbyists-and-open-source-projects
+    public static final String LOCALSTACK_IMAGE = "mirror.gcr.io/localstack/localstack:4.13.1";
     public static final String RABBITMQ_IMAGE = "mirror.gcr.io/library/rabbitmq:4.2.0-management";
     public static final String ROCKETMQ_IMAGE = "mirror.gcr.io/apache/rocketmq";
     public static final String WIREMOCK_IMAGE = "mirror.gcr.io/wiremock/wiremock:3.2.0";
