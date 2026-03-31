@@ -14,6 +14,25 @@
     <properties>
         <assembly.descriptor>server-distribution</assembly.descriptor>
         <quarkus.package.type>legacy-jar</quarkus.package.type>
+
+        <!-- Sink dependency scopes - default to compile, custom-distribution overrides to test -->
+        <sink.kinesis.scope>compile</sink.kinesis.scope>
+        <sink.sqs.scope>compile</sink.sqs.scope>
+        <sink.http.scope>compile</sink.http.scope>
+        <sink.pubsub.scope>compile</sink.pubsub.scope>
+        <sink.pulsar.scope>compile</sink.pulsar.scope>
+        <sink.eventhubs.scope>compile</sink.eventhubs.scope>
+        <sink.redis.scope>compile</sink.redis.scope>
+        <sink.kafka.scope>compile</sink.kafka.scope>
+        <sink.pravega.scope>compile</sink.pravega.scope>
+        <sink.nats-streaming.scope>compile</sink.nats-streaming.scope>
+        <sink.nats-jetstream.scope>compile</sink.nats-jetstream.scope>
+        <sink.infinispan.scope>compile</sink.infinispan.scope>
+        <sink.rabbitmq.scope>compile</sink.rabbitmq.scope>
+        <sink.rocketmq.scope>compile</sink.rocketmq.scope>
+        <sink.milvus.scope>compile</sink.milvus.scope>
+        <sink.qdrant.scope>compile</sink.qdrant.scope>
+        <sink.instructlab.scope>compile</sink.instructlab.scope>
     </properties>
 
     <dependencies>
@@ -21,6 +40,93 @@
             <groupId>io.debezium</groupId>
             <artifactId>debezium-server-core</artifactId>
             <scope>test</scope>
+        </dependency>
+
+        <!-- Sink dependencies with property-controlled scopes -->
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-kinesis</artifactId>
+            <scope>${sink.kinesis.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-sqs</artifactId>
+            <scope>${sink.sqs.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-http</artifactId>
+            <scope>${sink.http.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-pubsub</artifactId>
+            <scope>${sink.pubsub.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-pulsar</artifactId>
+            <scope>${sink.pulsar.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-eventhubs</artifactId>
+            <scope>${sink.eventhubs.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-redis</artifactId>
+            <scope>${sink.redis.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-kafka</artifactId>
+            <scope>${sink.kafka.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-pravega</artifactId>
+            <scope>${sink.pravega.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-nats-streaming</artifactId>
+            <scope>${sink.nats-streaming.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-nats-jetstream</artifactId>
+            <scope>${sink.nats-jetstream.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-infinispan</artifactId>
+            <scope>${sink.infinispan.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-rabbitmq</artifactId>
+            <scope>${sink.rabbitmq.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-rocketmq</artifactId>
+            <scope>${sink.rocketmq.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-milvus</artifactId>
+            <scope>${sink.milvus.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-qdrant</artifactId>
+            <scope>${sink.qdrant.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-instructlab</artifactId>
+            <scope>${sink.instructlab.scope}</scope>
         </dependency>
     </dependencies>
     <build>
@@ -48,6 +154,150 @@
     </build>
 
     <profiles>
+        <!-- Custom disribution profile, all sinks disabled -->
+        <profile>
+            <id>custom-distribution</id>
+            <properties>
+                <sink.kinesis.scope>test</sink.kinesis.scope>
+                <sink.sqs.scope>test</sink.sqs.scope>
+                <sink.http.scope>test</sink.http.scope>
+                <sink.pubsub.scope>test</sink.pubsub.scope>
+                <sink.pulsar.scope>test</sink.pulsar.scope>
+                <sink.eventhubs.scope>test</sink.eventhubs.scope>
+                <sink.redis.scope>test</sink.redis.scope>
+                <sink.kafka.scope>test</sink.kafka.scope>
+                <sink.pravega.scope>test</sink.pravega.scope>
+                <sink.nats-streaming.scope>test</sink.nats-streaming.scope>
+                <sink.nats-jetstream.scope>test</sink.nats-jetstream.scope>
+                <sink.infinispan.scope>test</sink.infinispan.scope>
+                <sink.rabbitmq.scope>test</sink.rabbitmq.scope>
+                <sink.rocketmq.scope>test</sink.rocketmq.scope>
+                <sink.milvus.scope>test</sink.milvus.scope>
+                <sink.qdrant.scope>test</sink.qdrant.scope>
+                <sink.instructlab.scope>test</sink.instructlab.scope>
+            </properties>
+        </profile>
+
+        <!-- Individual sink profiles - override scope to compile -->
+        <profile>
+            <id>sink-kinesis</id>
+            <properties>
+                <sink.kinesis.scope>compile</sink.kinesis.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-sqs</id>
+            <properties>
+                <sink.sqs.scope>compile</sink.sqs.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-http</id>
+            <properties>
+                <sink.http.scope>compile</sink.http.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-pubsub</id>
+            <properties>
+                <sink.pubsub.scope>compile</sink.pubsub.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-pulsar</id>
+            <properties>
+                <sink.pulsar.scope>compile</sink.pulsar.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-eventhubs</id>
+            <properties>
+                <sink.eventhubs.scope>compile</sink.eventhubs.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-redis</id>
+            <properties>
+                <sink.redis.scope>compile</sink.redis.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-kafka</id>
+            <properties>
+                <sink.kafka.scope>compile</sink.kafka.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-pravega</id>
+            <properties>
+                <sink.pravega.scope>compile</sink.pravega.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-nats-streaming</id>
+            <properties>
+                <sink.nats-streaming.scope>compile</sink.nats-streaming.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-nats-jetstream</id>
+            <properties>
+                <sink.nats-jetstream.scope>compile</sink.nats-jetstream.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-infinispan</id>
+            <properties>
+                <sink.infinispan.scope>compile</sink.infinispan.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-rabbitmq</id>
+            <properties>
+                <sink.rabbitmq.scope>compile</sink.rabbitmq.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-rocketmq</id>
+            <properties>
+                <sink.rocketmq.scope>compile</sink.rocketmq.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-milvus</id>
+            <properties>
+                <sink.milvus.scope>compile</sink.milvus.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-qdrant</id>
+            <properties>
+                <sink.qdrant.scope>compile</sink.qdrant.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-instructlab</id>
+            <properties>
+                <sink.instructlab.scope>compile</sink.instructlab.scope>
+            </properties>
+        </profile>
+
         <profile>
             <id>assembly</id>
             <activation>
@@ -94,74 +344,6 @@
                 <dependency>
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-server-core</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-kinesis</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-sqs</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-http</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-pubsub</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-pulsar</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-eventhubs</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-redis</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-kafka</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-pravega</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-nats-streaming</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-nats-jetstream</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-infinispan</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-rabbitmq</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-rocketmq</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-milvus</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-qdrant</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-instructlab</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>io.quarkus</groupId>
@@ -248,22 +430,6 @@
                 <dependency>
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-server-core</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-http</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-redis</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-kafka</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>io.debezium</groupId>
-                    <artifactId>debezium-server-infinispan</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>io.quarkus</groupId>
