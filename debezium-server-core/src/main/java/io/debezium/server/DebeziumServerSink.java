@@ -7,6 +7,7 @@ package io.debezium.server;
 
 import java.util.Map;
 
+import io.debezium.common.annotation.Incubating;
 import io.debezium.metadata.ComponentMetadataProvider;
 import io.debezium.metadata.ConfigDescriptor;
 
@@ -24,8 +25,8 @@ import io.debezium.metadata.ConfigDescriptor;
  *   <li>{@link #close()} - Cleans up resources on shutdown</li>
  * </ol>
  *
- * @author Debezium Authors
  */
+@Incubating
 public interface DebeziumServerSink extends ConfigDescriptor, ComponentMetadataProvider {
 
     /**
