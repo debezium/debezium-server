@@ -134,9 +134,20 @@
                     <runOrder>${runOrder}</runOrder>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>io.debezium</groupId>
+                <artifactId>debezium-schema-generator</artifactId>
+            </plugin>
         </plugins>
         <resources>
-            <!-- Apply the properties set in the POM to the resource files -->
+            <!-- Copy META-INF/services without filtering -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>META-INF/services/**</include>
+                </includes>
+            </resource>
+            <!-- Apply filtering only to build.properties -->
             <resource>
                 <filtering>true</filtering>
                 <directory>src/main/resources</directory>

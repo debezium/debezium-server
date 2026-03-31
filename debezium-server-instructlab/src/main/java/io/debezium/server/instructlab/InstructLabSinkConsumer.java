@@ -31,14 +31,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
 import io.debezium.annotation.Immutable;
 import io.debezium.annotation.VisibleForTesting;
+import io.debezium.config.Field;
 import io.debezium.data.Envelope;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine.ChangeConsumer;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.DebeziumServerSink;
 import io.debezium.util.Strings;
 
 /**
@@ -50,36 +55,41 @@ import io.debezium.util.Strings;
 @Named("instructlab")
 @Dependent
 public class InstructLabSinkConsumer extends BaseChangeConsumer
-        implements ChangeConsumer<ChangeEvent<Object, Object>> {
+        implements ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InstructLabSinkConsumer.class);
 
-    private static final String CONF_PREFIX = "debezium.sink.instructlab.";
-    private static final String TAXONOMY_PREFIX = CONF_PREFIX + "taxonomy.";
-    private static final String TAXONOMY_BASE_PATH = CONF_PREFIX + "taxonomy.base.path";
-    private static final String TAXONOMIES = CONF_PREFIX + "taxonomies";
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
+
+    private static final String PROP_PREFIX = "debezium.sink.instructlab.";
+    private static final String TAXONOMY_PREFIX = PROP_PREFIX + "taxonomy.";
 
     private final List<TaxonomyMapping> mappings = new ArrayList<>();
+    private InstructLabSinkConsumerConfig config;
 
     @PostConstruct
     void configure() {
-        final Config config = ConfigProvider.getConfig();
-        final String taxonomyBasePath = config.getValue(TAXONOMY_BASE_PATH, String.class);
+        final Config mpConfig = ConfigProvider.getConfig();
 
-        final String[] taxonomyNames = config.getValue(TAXONOMIES, String.class).split(",");
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new InstructLabSinkConsumerConfig(configuration);
+
+        final String taxonomyBasePath = config.getTaxonomyBasePath();
+        final String[] taxonomyNames = config.getTaxonomies().split(",");
         for (String taxonomyName : taxonomyNames) {
             // Read mapping question, answer, and optional context configs
-            final MappingValue question = MappingValue.from(config.getValue(TAXONOMY_PREFIX + taxonomyName + ".question", String.class));
-            final MappingValue answer = MappingValue.from(config.getValue(TAXONOMY_PREFIX + taxonomyName + ".answer", String.class));
-            final MappingValue context = config.getOptionalValue(TAXONOMY_PREFIX + taxonomyName + ".context", String.class)
+            final MappingValue question = MappingValue.from(mpConfig.getValue(TAXONOMY_PREFIX + taxonomyName + ".question", String.class));
+            final MappingValue answer = MappingValue.from(mpConfig.getValue(TAXONOMY_PREFIX + taxonomyName + ".answer", String.class));
+            final MappingValue context = mpConfig.getOptionalValue(TAXONOMY_PREFIX + taxonomyName + ".context", String.class)
                     .map(MappingValue::from)
                     .orElse(null);
 
-            final String topicRegEx = config.getOptionalValue(TAXONOMY_PREFIX + taxonomyName + ".topic", String.class).orElse(".*");
+            final String topicRegEx = mpConfig.getOptionalValue(TAXONOMY_PREFIX + taxonomyName + ".topic", String.class).orElse(".*");
 
             // Compute mapping qna.yml filename from taxonomy domain and base paths
             final String fileName = createTaxonomyQnAPath(taxonomyBasePath,
-                    config.getValue(TAXONOMY_PREFIX + taxonomyName + ".domain", String.class));
+                    mpConfig.getValue(TAXONOMY_PREFIX + taxonomyName + ".domain", String.class));
 
             LOGGER.info("Configured taxonomy mapping '{}' to taxonomy {}", taxonomyName, fileName);
             mappings.add(new TaxonomyMapping(taxonomyName, question, answer, context, Pattern.compile(topicRegEx), fileName));
@@ -91,7 +101,8 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
     }
 
     @Override
@@ -246,5 +257,22 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
             }
             return new MappingValue(false, false, true, mapping);
         }
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                InstructLabSinkConsumerConfig.TAXONOMY_BASE_PATH,
+                InstructLabSinkConsumerConfig.TAXONOMIES,
+                InstructLabSinkConsumerConfig.TAXONOMY_QUESTION,
+                InstructLabSinkConsumerConfig.TAXONOMY_ANSWER,
+                InstructLabSinkConsumerConfig.TAXONOMY_CONTEXT,
+                InstructLabSinkConsumerConfig.TAXONOMY_TOPIC,
+                InstructLabSinkConsumerConfig.TAXONOMY_DOMAIN);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }
