@@ -285,8 +285,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
     @Override
     public Field.Set getConfigFields() {
         // Create a temporary config instance to get all fields including parent class fields
-        Configuration tempConfig = Configuration.empty();
-        RedisStreamChangeConsumerConfig tempConfigInstance = new RedisStreamChangeConsumerConfig(tempConfig);
+        RedisStreamChangeConsumerConfig tempConfigInstance = new RedisStreamChangeConsumerConfig();
         return Field.setOf(tempConfigInstance.getAllConfigurationFields().toArray(new Field[0]));
     }
 
