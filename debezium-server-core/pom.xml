@@ -67,6 +67,11 @@
 
         <dependency>
             <groupId>io.debezium</groupId>
+            <artifactId>debezium-config</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.debezium</groupId>
             <artifactId>debezium-util</artifactId>
         </dependency>
 
