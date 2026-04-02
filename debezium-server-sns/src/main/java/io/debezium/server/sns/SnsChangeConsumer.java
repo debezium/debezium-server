@@ -236,9 +236,12 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
         }
 
         if (isFifo) {
-            // MessageGroupId: use header value if present, fallback to event key, then default
-            String groupId = headers.getOrDefault(messageGroupIdHeader,
-                    event.key() != null ? getString(event.key()) : fifoDefaultGroupId);
+            // MessageGroupId: use header value if present, fallback to raw event key, then default
+            String groupId = headers.getOrDefault(messageGroupIdHeader, null);
+            if (groupId == null) {
+                Object rawKey = toSourceRecord(event).key();
+                groupId = rawKey != null ? asString(rawKey) : fifoDefaultGroupId;
+            }
             builder.messageGroupId(groupId);
 
             // MessageDeduplicationId: use header if configured and present

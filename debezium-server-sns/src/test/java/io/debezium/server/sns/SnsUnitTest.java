@@ -142,6 +142,32 @@ public class SnsUnitTest {
         return events;
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private static List<ChangeEvent<Object, Object>> createFifoChangeEvents(int size, Object rawKey, Object serializedKey,
+                                                                            String destination, Map<String, String> headerMap) {
+        List<ChangeEvent<Object, Object>> events = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            SourceRecord sourceRecord = mock(SourceRecord.class);
+            when(sourceRecord.key()).thenReturn(rawKey);
+            when(sourceRecord.value()).thenReturn("value-" + i);
+            when(sourceRecord.topic()).thenReturn(destination);
+
+            ConnectHeaders connectHeaders = new ConnectHeaders();
+            headerMap.forEach(connectHeaders::addString);
+            when(sourceRecord.headers()).thenReturn(connectHeaders);
+
+            EmbeddedEngineChangeEvent event = mock(EmbeddedEngineChangeEvent.class);
+            when(event.key()).thenReturn(serializedKey);
+            when(event.value()).thenReturn("value-" + i);
+            when(event.destination()).thenReturn(destination);
+            when(event.sourceRecord()).thenReturn(sourceRecord);
+            when(event.headers()).thenReturn(List.of());
+
+            events.add(event);
+        }
+        return events;
+    }
+
     @SuppressWarnings({ "unchecked" })
     private static RecordCommitter<ChangeEvent<Object, Object>> RecordCommitter() {
         RecordCommitter<ChangeEvent<Object, Object>> result = mock(RecordCommitter.class);
@@ -559,7 +585,114 @@ public class SnsUnitTest {
         assertTrue(threwException.get());
     }
 
-    // 10. Test that topic ARN prefix is correctly composed with destination name
+    // 10. Test that FIFO MessageGroupId uses raw SourceRecord key when header is absent
+    @Test
+    public void testFifoMessageGroupIdUsesRawKey() throws Exception {
+        // Arrange
+        String fifoArn = "arn:aws:sns:us-east-1:000000000000:test-topic.fifo";
+        List<ChangeEvent<Object, Object>> events = createFifoChangeEvents(1, "debezium-sns",
+                "{\"schema\":{\"type\":\"struct\"},\"payload\":{\"serverName\":\"debezium-sns\"}}", fifoArn, Map.of());
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            counter.incrementAndGet();
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act
+        System.setProperty("debezium.sink.sns.topic.arn", fifoArn);
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.handleBatch(events, committer);
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+        finally {
+            System.clearProperty("debezium.sink.sns.topic.arn");
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertEquals("debezium-sns", capturedEntries.get(0).messageGroupId());
+    }
+
+    // 11. Test that FIFO MessageGroupId falls back to default when key is null
+    @Test
+    public void testFifoMessageGroupIdFallsBackToDefault() throws Exception {
+        // Arrange
+        String fifoArn = "arn:aws:sns:us-east-1:000000000000:test-topic.fifo";
+        List<ChangeEvent<Object, Object>> events = createFifoChangeEvents(1, null, null, fifoArn, Map.of());
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            counter.incrementAndGet();
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act
+        System.setProperty("debezium.sink.sns.topic.arn", fifoArn);
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.handleBatch(events, committer);
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+        finally {
+            System.clearProperty("debezium.sink.sns.topic.arn");
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertEquals("default", capturedEntries.get(0).messageGroupId());
+    }
+
+    // 12. Test that FIFO MessageGroupId uses header value when present
+    @Test
+    public void testFifoMessageGroupIdUsesHeader() throws Exception {
+        // Arrange
+        String fifoArn = "arn:aws:sns:us-east-1:000000000000:test-topic.fifo";
+        List<ChangeEvent<Object, Object>> events = createFifoChangeEvents(1, "some-key", "some-key", fifoArn,
+                Map.of("aggregateId", "order-42"));
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            counter.incrementAndGet();
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act
+        System.setProperty("debezium.sink.sns.topic.arn", fifoArn);
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.handleBatch(events, committer);
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+        finally {
+            System.clearProperty("debezium.sink.sns.topic.arn");
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertEquals("order-42", capturedEntries.get(0).messageGroupId());
+    }
+
+    // 13. Test that topic ARN prefix is correctly composed with destination name
     @Test
     public void testTopicArnPrefixRouting() throws Exception {
         // Arrange
