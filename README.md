@@ -43,6 +43,48 @@ Debezium Server is normally run by downloading the distribution tar.gz or zip fi
 
 The archives can be found under `debezium-server-dist/target`.
 
+#### Customizing Sink Modules in Distribution
+
+By default, the distribution includes all available sink modules. You can customize which sinks are included using Maven profiles:
+
+**Include all sinks (default):**
+```bash
+mvn clean package -DskipITs -DskipTests -Passembly
+```
+
+**Create a custom distribution with specific sinks only:**
+
+First, use the `custom-distribution` profile to disable all sinks, then enable only the ones you need:
+
+```bash
+# Include only Kafka sink
+mvn clean package -DskipITs -DskipTests -Passembly -Pcustom-distribution,sink-kafka
+
+# Include multiple specific sinks (e.g., Kafka, Redis, and HTTP)
+mvn clean package -DskipITs -DskipTests -Passembly -Pcustom-distribution,sink-kafka,sink-redis,sink-http
+```
+
+**Available sink profiles:**
+- `sink-kinesis` - Amazon Kinesis
+- `sink-sqs` - Amazon SQS
+- `sink-http` - HTTP
+- `sink-pubsub` - Google Cloud Pub/Sub
+- `sink-pulsar` - Apache Pulsar
+- `sink-eventhubs` - Azure Event Hubs
+- `sink-redis` - Redis
+- `sink-kafka` - Apache Kafka
+- `sink-pravega` - Pravega
+- `sink-nats-streaming` - NATS Streaming
+- `sink-nats-jetstream` - NATS JetStream
+- `sink-infinispan` - Infinispan
+- `sink-rabbitmq` - RabbitMQ
+- `sink-rocketmq` - Apache RocketMQ
+- `sink-milvus` - Milvus
+- `sink-qdrant` - Qdrant
+- `sink-instructlab` - InstructLab
+
+This approach allows you to create smaller, more focused distributions that only include the sink modules you actually need.
+
 ### Building just the artifacts, without running tests, CheckStyle, etc.
 
 You can skip all non-essential plug-ins (tests, integration tests, CheckStyle, formatter, API compatibility check, etc.) using the "quick" build profile:
