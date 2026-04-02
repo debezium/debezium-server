@@ -26,11 +26,16 @@ import com.azure.messaging.eventhubs.EventHubClientBuilder;
 import com.azure.messaging.eventhubs.EventHubProducerClient;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 
 /**
  * This sink adapter delivers change event messages to Azure Event Hubs
@@ -40,28 +45,20 @@ import io.debezium.server.CustomConsumerBuilder;
 @Named("eventhubs")
 @Dependent
 public class EventHubsChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EventHubsChangeConsumer.class);
 
-    private static final String PROP_PREFIX = "debezium.sink.eventhubs.";
-    private static final String PROP_CONNECTION_STRING_NAME = PROP_PREFIX + "connectionstring";
-    private static final String PROP_EVENTHUB_NAME = PROP_PREFIX + "hubname";
-    private static final String PROP_PARTITION_ID = PROP_PREFIX + "partitionid";
-    private static final String PROP_PARTITION_KEY = PROP_PREFIX + "partitionkey";
-    private static final String PROP_DYNAMIC_PARTITION_ROUTING_KEY = PROP_PREFIX + "dynamicpartitionrouting";
-    // maximum size for the batch of events (bytes)
-    private static final String PROP_MAX_BATCH_SIZE = PROP_PREFIX + "maxbatchsize";
-    private static final String PROP_HASH_MESSAGE_KEY_FUNCTION = PROP_PREFIX + "hashmessagekeyfunction";
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
-    private String connectionString;
-    private String eventHubName;
-    private String configuredPartitionId;
-    private String configuredPartitionKey;
+    private static final String PROP_PREFIX = "debezium.sink.eventhubs.";
+
+    private EventHubsChangeConsumerConfig config;
     private DynamicPartitionRoutingStrategy dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.DEFAULT;
-    private Integer maxBatchSize;
     private Integer partitionCount;
     private Optional<HashFunction> hashMessageFunction;
+    private String configuredPartitionId;
+    private String configuredPartitionKey;
 
     // connection string format -
     // Endpoint=sb://<NAMESPACE>/;SharedAccessKeyName=<KEY_NAME>;SharedAccessKey=<ACCESS_KEY>;EntityPath=<HUB_NAME>
@@ -83,26 +80,25 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             return;
         }
 
-        final Config config = ConfigProvider.getConfig();
-        connectionString = config.getValue(PROP_CONNECTION_STRING_NAME, String.class);
-        eventHubName = config.getValue(PROP_EVENTHUB_NAME, String.class);
+        final Config mpConfig = ConfigProvider.getConfig();
 
-        // optional config
-        maxBatchSize = config.getOptionalValue(PROP_MAX_BATCH_SIZE, Integer.class).orElse(0);
-        configuredPartitionId = config.getOptionalValue(PROP_PARTITION_ID, String.class).orElse("");
-        configuredPartitionKey = config.getOptionalValue(PROP_PARTITION_KEY, String.class).orElse("");
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new EventHubsChangeConsumerConfig(configuration);
+
+        configuredPartitionId = (config.getConfiguredPartitionId() != null) ? config.getConfiguredPartitionId() : "";
+        configuredPartitionKey = (config.getConfiguredPartitionKey() != null) ? config.getConfiguredPartitionKey() : "";
         if (configuredPartitionId.isEmpty() && configuredPartitionKey.isEmpty()) {
-            final var routingValue = config.getOptionalValue(PROP_DYNAMIC_PARTITION_ROUTING_KEY, String.class).orElse(DynamicPartitionRoutingStrategy.DEFAULT.name());
+            final var routingValue = (config.getDynamicPartitionRouting() != null) ? config.getDynamicPartitionRouting() : DynamicPartitionRoutingStrategy.DEFAULT.name();
             dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.fromString(routingValue);
         }
-        hashMessageFunction = config.getOptionalValue(PROP_HASH_MESSAGE_KEY_FUNCTION, String.class)
-                .map(HashFunction::fromString);
+        hashMessageFunction = Optional.ofNullable(config.getHashMessageKeyFunction()).map(HashFunction::fromString);
 
-        String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, connectionString, eventHubName);
+        String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(), config.getEventHubName());
 
         try {
             producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
-            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, maxBatchSize);
+            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, config.getMaxBatchSize());
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -116,12 +112,13 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
         if (!configuredPartitionId.isEmpty() && Integer.parseInt(configuredPartitionId) > partitionCount - 1) {
             throw new IndexOutOfBoundsException(
-                    String.format("Target partition id %s does not exist in target EventHub %s", configuredPartitionId, eventHubName));
+                    String.format("Target partition id %s does not exist in target EventHub %s", configuredPartitionId, config.getEventHubName()));
         }
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             producer.close();
             LOGGER.info("Closed Event Hubs producer client");
@@ -222,7 +219,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                         // Check that the target partition exists.
                         if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID || targetPartitionId > partitionCount - 1) {
                             throw new IndexOutOfBoundsException(
-                                    String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, eventHubName));
+                                    String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, config.getEventHubName()));
                         }
 
                         batchManager.sendEventToPartitionId(eventData, recordIndex, targetPartitionId);
@@ -251,5 +248,22 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
         committer.markBatchFinished();
         LOGGER.trace("Batch marked finished");
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                EventHubsChangeConsumerConfig.CONNECTION_STRING,
+                EventHubsChangeConsumerConfig.HUB_NAME,
+                EventHubsChangeConsumerConfig.PARTITION_ID,
+                EventHubsChangeConsumerConfig.PARTITION_KEY,
+                EventHubsChangeConsumerConfig.DYNAMIC_PARTITION_ROUTING,
+                EventHubsChangeConsumerConfig.MAX_BATCH_SIZE,
+                EventHubsChangeConsumerConfig.HASH_MESSAGE_KEY_FUNCTION);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

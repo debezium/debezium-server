@@ -8,7 +8,6 @@ package io.debezium.server.infinispan;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -27,10 +26,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.DebeziumServerSink;
 
 /**
  * An implementation of the {@link DebeziumEngine.ChangeConsumer} interface that publishes change event messages to predefined Infinispan cache.
@@ -39,17 +43,15 @@ import io.debezium.server.CustomConsumerBuilder;
  */
 @Named("infinispan")
 @Dependent
-public class InfinispanSinkConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class InfinispanSinkConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InfinispanSinkConsumer.class);
 
-    private static final String CONF_PREFIX = "debezium.sink.infinispan.";
-    private static final String SERVER_HOST = CONF_PREFIX + "server.host";
-    private static final String SERVER_PORT = CONF_PREFIX + "server.port";
-    private static final String CACHE_NAME = CONF_PREFIX + "cache";
-    private static final String USER_NAME = CONF_PREFIX + "user";
-    private static final String PASSWORD = CONF_PREFIX + "password";
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
+    private static final String CONF_PREFIX = "debezium.sink.infinispan.";
+
+    private InfinispanSinkConsumerConfig config;
     private RemoteCacheManager remoteCacheManager;
     private RemoteCache cache;
 
@@ -65,17 +67,20 @@ public class InfinispanSinkConsumer extends BaseChangeConsumer implements Debezi
             return;
         }
 
-        final Config config = ConfigProvider.getConfig();
-        final String serverHost = config.getValue(SERVER_HOST, String.class);
-        final String cacheName = config.getValue(CACHE_NAME, String.class);
-        final Integer serverPort = config.getOptionalValue(SERVER_PORT, Integer.class).orElse(ConfigurationProperties.DEFAULT_HOTROD_PORT);
-        final Optional<String> user = config.getOptionalValue(USER_NAME, String.class);
-        final Optional<String> password = config.getOptionalValue(PASSWORD, String.class);
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, CONF_PREFIX));
+        this.config = new InfinispanSinkConsumerConfig(configuration);
+
+        final String serverHost = config.getServerHost();
+        final String cacheName = config.getCacheName();
+        final Integer serverPort = config.getServerPort() != null ? config.getServerPort() : ConfigurationProperties.DEFAULT_HOTROD_PORT;
 
         ConfigurationBuilder builder = new ConfigurationBuilder();
         String uri;
-        if (user.isPresent() && password.isPresent()) {
-            uri = String.format("hotrod://%s:%s@%s:%d", user.get(), password.get(), serverHost, serverPort);
+        if (config.getUser() != null && config.getPassword() != null) {
+            uri = String.format("hotrod://%s:%s@%s:%d", config.getUser(), config.getPassword(), serverHost, serverPort);
         }
         else {
             uri = String.format("hotrod://%s:%d", serverHost, serverPort);
@@ -89,7 +94,8 @@ public class InfinispanSinkConsumer extends BaseChangeConsumer implements Debezi
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             if (remoteCacheManager != null) {
                 remoteCacheManager.close();
@@ -124,5 +130,20 @@ public class InfinispanSinkConsumer extends BaseChangeConsumer implements Debezi
         }
 
         committer.markBatchFinished();
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                InfinispanSinkConsumerConfig.SERVER_HOST,
+                InfinispanSinkConsumerConfig.SERVER_PORT,
+                InfinispanSinkConsumerConfig.CACHE,
+                InfinispanSinkConsumerConfig.USER,
+                InfinispanSinkConsumerConfig.PASSWORD);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

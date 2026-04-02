@@ -29,15 +29,19 @@ import org.apache.pulsar.client.api.Schema;
 import org.apache.pulsar.client.api.TypedMessageBuilder;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.DebeziumServerSink;
 
 /**
  * Implementation of the consumer that delivers the messages into a Pulsar destination.
@@ -48,9 +52,11 @@ import io.debezium.server.BaseChangeConsumer;
  */
 @Named("pulsar")
 @Dependent
-public class PulsarChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class PulsarChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PulsarChangeConsumer.class);
+
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
     private static final String PROP_PREFIX = "debezium.sink.pulsar.";
     private static final String PROP_CLIENT_PREFIX = PROP_PREFIX + "client.";
@@ -62,45 +68,37 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
         Producer<Object> get(String topicName, Object value);
     }
 
+    private PulsarChangeConsumerConfig config;
     private final Map<String, Producer<?>> producers = new HashMap<>();
     private PulsarClient pulsarClient;
     private Map<String, Object> producerConfig;
 
-    @ConfigProperty(name = PROP_PREFIX + "null.key", defaultValue = "default")
-    String nullKey;
-
-    @ConfigProperty(name = PROP_PREFIX + "tenant", defaultValue = "public")
-    String pulsarTenant;
-
-    @ConfigProperty(name = PROP_PREFIX + "namespace", defaultValue = "default")
-    String pulsarNamespace;
-
-    @ConfigProperty(name = PROP_PREFIX + "timeout", defaultValue = "0")
-    Integer timeout;
-
-    @ConfigProperty(name = PROP_PRODUCER_PREFIX + "batcherBuilder", defaultValue = "DEFAULT")
-    String batcherBuilderConfig;
-
     @PostConstruct
     void connect() {
-        final Config config = ConfigProvider.getConfig();
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new PulsarChangeConsumerConfig(configuration);
+
         try {
             pulsarClient = PulsarClient.builder()
-                    .loadConf(getConfigSubset(config, PROP_CLIENT_PREFIX))
+                    .loadConf(getConfigSubset(mpConfig, PROP_CLIENT_PREFIX))
                     .build();
         }
         catch (PulsarClientException e) {
             throw new DebeziumException(e);
         }
-        producerConfig = getConfigSubset(config, PROP_PRODUCER_PREFIX);
+        producerConfig = getConfigSubset(mpConfig, PROP_PRODUCER_PREFIX);
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         final List<CompletableFuture<Void>> closeFutures = new ArrayList<>(producers.size());
         producers.values().forEach(producer -> {
             // Avoid potentially infinitely long blocking call if things go wrong.
-            closeFutures.add(producer.closeAsync().orTimeout(timeout, TimeUnit.MILLISECONDS));
+            closeFutures.add(producer.closeAsync().orTimeout(config.getTimeout(), TimeUnit.MILLISECONDS));
         });
         for (CompletableFuture<Void> cf : closeFutures) {
             try {
@@ -127,20 +125,20 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     }
 
     private Producer<?> createProducer(String topicName, Object value) {
-        final String topicFullName = pulsarTenant + "/" + pulsarNamespace + "/" + topicName;
+        final String topicFullName = config.getPulsarTenant() + "/" + config.getPulsarNamespace() + "/" + topicName;
         try {
             if (value instanceof String) {
                 return pulsarClient.newProducer(Schema.STRING)
                         .loadConf(producerConfig)
                         .topic(topicFullName)
-                        .batcherBuilder(getBatcherBuilder(batcherBuilderConfig))
+                        .batcherBuilder(getBatcherBuilder(config.getBatcherBuilder()))
                         .create();
             }
             else {
                 return pulsarClient.newProducer()
                         .loadConf(producerConfig)
                         .topic(topicFullName)
-                        .batcherBuilder(getBatcherBuilder(batcherBuilderConfig))
+                        .batcherBuilder(getBatcherBuilder(config.getBatcherBuilder()))
                         .create();
             }
         }
@@ -172,7 +170,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
             final Producer<?> producer = producers.computeIfAbsent(topicName, (topic) -> createProducer(topic, record.value()));
             batchProducers.put(topicName, producer);
 
-            final String key = (record.key()) == null ? nullKey : getString(record.key());
+            final String key = (record.key()) == null ? config.getNullKey() : getString(record.key());
             @SuppressWarnings("rawtypes")
             final TypedMessageBuilder message;
             if (record.value() instanceof String) {
@@ -215,8 +213,8 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
         try {
             // Wait for all producers to complete the flush with timeout
-            if (timeout > 0) {
-                allProducersCompleted.get(timeout, TimeUnit.MILLISECONDS);
+            if (config.getTimeout() > 0) {
+                allProducersCompleted.get(config.getTimeout(), TimeUnit.MILLISECONDS);
             }
             else {
                 allProducersCompleted.join();
@@ -229,5 +227,20 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
         }
 
         committer.markBatchFinished();
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                PulsarChangeConsumerConfig.NULL_KEY,
+                PulsarChangeConsumerConfig.TENANT,
+                PulsarChangeConsumerConfig.NAMESPACE,
+                PulsarChangeConsumerConfig.TIMEOUT,
+                PulsarChangeConsumerConfig.PRODUCER_BATCHER_BUILDER);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }

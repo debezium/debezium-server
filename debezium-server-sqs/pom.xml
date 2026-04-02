@@ -119,6 +119,10 @@
                     <runOrder>${runOrder}</runOrder>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>io.debezium</groupId>
+                <artifactId>debezium-schema-generator</artifactId>
+            </plugin>
         </plugins>
     </build>
     <profiles>

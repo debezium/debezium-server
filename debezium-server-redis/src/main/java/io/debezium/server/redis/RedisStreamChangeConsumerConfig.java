@@ -59,6 +59,10 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private int bufferFillRate;
     private boolean skipHeartbeatMessages;
 
+    public RedisStreamChangeConsumerConfig() {
+        super();
+    }
+
     public RedisStreamChangeConsumerConfig(Configuration config) {
         super(config, PROP_PREFIX);
     }
