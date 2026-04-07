@@ -215,7 +215,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
             // Values are assumed to be pre-serialized JSON from the Debezium format serializer
             String batchPayload = "[" + String.join(",", values) + "]";
 
-            Map<String, String> chunkHeaders = convertHeaders(chunk.get(0));
+            Map<String, String> chunkHeaders = convertHeaders(chunk.getFirst());
             UUID messageId = UUID.randomUUID();
             int attempts = 0;
             while (!batchSent(batchPayload, messageId, chunkHeaders)) {
@@ -281,8 +281,8 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                     .setHttpClient(client)
                     .build();
             case STANDARD_WEBHOOKS_AUTHENTICATION ->
-                    StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
-                            .build();
+                StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
+                        .build();
             default -> throw new DebeziumException(
                     "Unknown value '" + s + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
         }).orElse(null);
