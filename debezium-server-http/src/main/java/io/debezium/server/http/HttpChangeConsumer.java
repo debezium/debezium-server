@@ -5,6 +5,24 @@
  */
 package io.debezium.server.http;
 
+import io.debezium.DebeziumException;
+import io.debezium.annotation.VisibleForTesting;
+import io.debezium.engine.ChangeEvent;
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
+import io.debezium.server.http.oauth2.OAuth2AuthenticatorBuilder;
+import io.debezium.server.http.webhooks.StandardWebhooksAuthenticatorBuilder;
+import io.debezium.util.Clock;
+import io.debezium.util.Metronome;
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Named;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -13,31 +31,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.Dependent;
-import jakarta.inject.Named;
-
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import io.debezium.DebeziumException;
-import io.debezium.annotation.VisibleForTesting;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.server.BaseChangeConsumer;
-import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
-import io.debezium.server.http.webhooks.StandardWebhooksAuthenticatorBuilder;
-import io.debezium.util.Clock;
-import io.debezium.util.Metronome;
 
 /**
  * Implementation of the consumer that delivers the messages to an HTTP Webhook destination.
@@ -59,19 +59,26 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
     public static final String PROP_AUTHENTICATION_PREFIX = PROP_PREFIX + "authentication.";
     public static final String PROP_AUTHENTICATION_TYPE = "type";
+    public static final String PROP_BATCH_ENABLED = "batch.enabled";
+    public static final String PROP_BATCH_MAX_SIZE = "batch.max-size";
+
     public static final String JWT_AUTHENTICATION = "jwt";
     public static final String STANDARD_WEBHOOKS_AUTHENTICATION = "standard-webhooks";
+    public static final String OAUTH2_AUTHENTICATION = "oauth2";
 
     private static final long HTTP_TIMEOUT = 60_000L; // Default to 60s
     private static final int DEFAULT_RETRIES = 5;
     private static final long RETRY_INTERVAL = 1_000L; // Default to 1s
     private static final String DEFAULT_HEADERS_PREFIX = "X-DEBEZIUM-";
+    private static final int DEFAULT_BATCH_MAX_SIZE = 200;
 
     private static Duration timeoutDuration;
     private static int retries;
     private static Duration retryInterval;
     private boolean base64EncodeHeaders = true;
     private String headersPrefix = DEFAULT_HEADERS_PREFIX;
+    private boolean batchEnabled = false;
+    private int batchMaxSize = DEFAULT_BATCH_MAX_SIZE;
 
     private HttpClient client;
     private HttpRequest.Builder baseRequestBuilder;
@@ -120,6 +127,12 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         config.getOptionalValue(PROP_PREFIX + PROP_HEADERS_ENCODE_BASE64, Boolean.class)
                 .ifPresent(b -> base64EncodeHeaders = b);
 
+        config.getOptionalValue(PROP_PREFIX + PROP_BATCH_ENABLED, Boolean.class)
+                .ifPresent(b -> batchEnabled = b);
+
+        config.getOptionalValue(PROP_PREFIX + PROP_BATCH_MAX_SIZE, Integer.class)
+                .ifPresent(n -> batchMaxSize = n);
+
         contentType = switch (config.getValue("debezium.format.value", String.class).toLowerCase()) {
             case "avro" -> "avro/bytes";
             case "cloudevents" -> "application/cloudevents+json";
@@ -132,6 +145,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
         LOGGER.info("Using http content-type type {}", contentType);
         LOGGER.info("Using sink URL: {}", sinkUrl);
+        LOGGER.info("Batch mode: {}", batchEnabled ? "enabled (max-size=" + batchMaxSize + ")" : "disabled");
         baseRequestBuilder = HttpRequest
                 .newBuilder(new URI(sinkUrl))
                 .timeout(timeoutDuration)
@@ -140,6 +154,16 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
 
     @Override
     public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+        if (batchEnabled) {
+            handleBatchAggregated(records, committer);
+        }
+        else {
+            handleBatchIndividual(records, committer);
+        }
+    }
+
+    private void handleBatchIndividual(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
             throws InterruptedException {
         for (ChangeEvent<Object, Object> record : records) {
             LOGGER.trace("Received event '{}'", record);
@@ -163,22 +187,106 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         committer.markBatchFinished();
     }
 
+    private void handleBatchAggregated(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
+            throws InterruptedException {
+        // Collect records with non-null values, preserving the record references for markProcessed
+        List<ChangeEvent<Object, Object>> nonNullRecords = new ArrayList<>();
+        for (ChangeEvent<Object, Object> record : records) {
+            if (record.value() != null) {
+                nonNullRecords.add(record);
+            }
+        }
+
+        if (nonNullRecords.isEmpty()) {
+            committer.markBatchFinished();
+            return;
+        }
+
+        // Chunk records into sub-batches of at most batchMaxSize
+        for (int from = 0; from < nonNullRecords.size(); from += batchMaxSize) {
+            int to = Math.min(from + batchMaxSize, nonNullRecords.size());
+            List<ChangeEvent<Object, Object>> chunk = nonNullRecords.subList(from, to);
+
+            List<String> values = new ArrayList<>(chunk.size());
+            for (ChangeEvent<Object, Object> record : chunk) {
+                values.add((String) record.value());
+            }
+
+            // Values are assumed to be pre-serialized JSON from the Debezium format serializer
+            String batchPayload = "[" + String.join(",", values) + "]";
+
+            Map<String, String> chunkHeaders = convertHeaders(chunk.get(0));
+            UUID messageId = UUID.randomUUID();
+            int attempts = 0;
+            while (!batchSent(batchPayload, messageId, chunkHeaders)) {
+                attempts++;
+                if (attempts >= retries) {
+                    throw new DebeziumException("Exceeded maximum number of attempts to publish batch of " + chunk.size() + " events");
+                }
+                Metronome.sleeper(retryInterval, Clock.SYSTEM).pause();
+            }
+
+            // Mark records processed immediately after their chunk is successfully sent
+            for (ChangeEvent<Object, Object> record : chunk) {
+                committer.markProcessed(record);
+            }
+        }
+
+        committer.markBatchFinished();
+    }
+
+    private boolean batchSent(String batchPayload, UUID messageId, Map<String, String> headers) throws InterruptedException {
+        HttpRequest.Builder requestBuilder = baseRequestBuilder.copy()
+                .POST(HttpRequest.BodyPublishers.ofString(batchPayload));
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String headerValue = entry.getValue();
+            if (base64EncodeHeaders) {
+                headerValue = Base64.getEncoder().encodeToString(headerValue.getBytes(StandardCharsets.UTF_8));
+            }
+            requestBuilder.header(headersPrefix + entry.getKey().toUpperCase(Locale.ROOT), headerValue);
+        }
+
+        if (authenticator != null) {
+            authenticator.authenticate();
+            authenticator.setAuthorizationHeader(requestBuilder, batchPayload, messageId);
+        }
+
+        HttpResponse<String> r;
+        try {
+            r = client.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
+        }
+        catch (IOException ioe) {
+            LOGGER.info("Failed to send batch: {}", ioe.getMessage());
+            return false;
+        }
+
+        if (HttpUtil.isSuccessStatusCode(r.statusCode())) {
+            return true;
+        }
+        else {
+            LOGGER.info("Failed to publish batch: {}", r.body());
+            return false;
+        }
+    }
+
     private Authenticator buildAuthenticator(Config config) {
         Optional<String> authenticationType = config.getOptionalValue(PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE, String.class);
 
-        if (authenticationType.isEmpty()) {
-            return null;
-        }
-
-        return switch (authenticationType.get().toLowerCase()) {
+        return authenticationType.map(s -> switch (s.toLowerCase()) {
             case JWT_AUTHENTICATION -> JWTAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
                     .setHttpClient(client)
                     .build();
-            case STANDARD_WEBHOOKS_AUTHENTICATION -> StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
+            case OAUTH2_AUTHENTICATION -> OAuth2AuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
+                    .setHttpClient(client)
                     .build();
+            case STANDARD_WEBHOOKS_AUTHENTICATION ->
+                    StandardWebhooksAuthenticatorBuilder.fromConfig(config, PROP_AUTHENTICATION_PREFIX)
+                            .build();
             default -> throw new DebeziumException(
-                    "Unknown value '" + authenticationType.get() + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
-        };
+                    "Unknown value '" + s + "' encountered for property " + PROP_AUTHENTICATION_PREFIX + PROP_AUTHENTICATION_TYPE);
+        }).orElse(null);
+
     }
 
     private boolean recordSent(ChangeEvent<Object, Object> record, UUID messageId) throws InterruptedException {
