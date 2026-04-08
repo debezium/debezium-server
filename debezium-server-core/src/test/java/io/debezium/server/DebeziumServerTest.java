@@ -13,15 +13,17 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Properties;
 
+import io.debezium.relational.RelationalDatabaseConnectorConfig;
+import io.debezium.runtime.DebeziumConnectorRegistry;
+import io.debezium.runtime.EngineManifest;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import io.debezium.DebeziumException;
-import io.debezium.relational.RelationalDatabaseConnectorConfig;
-import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.ConnectorStartedEvent;
 import io.debezium.util.Collect;
 import io.debezium.util.Testing;
 import io.quarkus.test.junit.QuarkusTest;
@@ -49,11 +51,15 @@ public class DebeziumServerTest {
     }
 
     @Inject
-    DebeziumServer server;
+    TestConsumer testConsumer;
+
+    @Inject
+    DebeziumConnectorRegistry registry;
 
     @Test
     public void testProps() {
-        Properties properties = server.getProps();
+        Properties properties = new Properties();
+        properties.putAll(registry.get(EngineManifest.DEFAULT).configuration());
         assertThat(properties.getProperty(RelationalDatabaseConnectorConfig.TABLE_INCLUDE_LIST.name())).isNotNull();
         assertThat(properties.getProperty(RelationalDatabaseConnectorConfig.TABLE_INCLUDE_LIST.name())).isEqualTo("public.table_name");
 
@@ -81,7 +87,6 @@ public class DebeziumServerTest {
 
     @Test
     public void testJson() throws Exception {
-        final TestConsumer testConsumer = (TestConsumer) server.getConsumer();
         Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds())).until(() -> (testConsumer.getValues().size() >= MESSAGE_COUNT));
         assertThat(testConsumer.getValues().size()).isEqualTo(MESSAGE_COUNT);
         assertThat(testConsumer.getValues().get(MESSAGE_COUNT - 1)).isEqualTo("{\"line\":\"" + MESSAGE_COUNT + "\"}");
