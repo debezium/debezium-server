@@ -12,11 +12,6 @@
     <packaging>jar</packaging>
 
     <dependencies>
-        <!-- Quarkus extensions -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-core</artifactId>
-        </dependency>
 
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -34,21 +29,13 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-config-yaml</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-engine</artifactId>
+            <version>3.6.0-SNAPSHOT</version>
+        </dependency>
 
-        <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-embedded</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-log4j12</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+
         <dependency>
             <groupId>io.debezium</groupId>
             <artifactId>debezium-storage-configmap</artifactId>
@@ -143,9 +130,10 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-postgres</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
             <scope>test</scope>
+            <version>3.6.0-SNAPSHOT</version>
         </dependency>
         <!-- Vitess/grpc dependency conflicts with version required by schema registry.
              We thus change the version just for the sake of compatibility testing.
