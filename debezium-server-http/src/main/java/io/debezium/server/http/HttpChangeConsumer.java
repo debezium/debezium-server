@@ -5,24 +5,6 @@
  */
 package io.debezium.server.http;
 
-import io.debezium.DebeziumException;
-import io.debezium.annotation.VisibleForTesting;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.server.BaseChangeConsumer;
-import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
-import io.debezium.server.http.oauth2.OAuth2AuthenticatorBuilder;
-import io.debezium.server.http.webhooks.StandardWebhooksAuthenticatorBuilder;
-import io.debezium.util.Clock;
-import io.debezium.util.Metronome;
-import jakarta.annotation.PostConstruct;
-import jakarta.enterprise.context.Dependent;
-import jakarta.inject.Named;
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -38,6 +20,26 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Named;
+
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.debezium.DebeziumException;
+import io.debezium.annotation.VisibleForTesting;
+import io.debezium.engine.ChangeEvent;
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
+import io.debezium.server.http.oauth2.OAuth2AuthenticatorBuilder;
+import io.debezium.server.http.webhooks.StandardWebhooksAuthenticatorBuilder;
+import io.debezium.util.Clock;
+import io.debezium.util.Metronome;
 
 /**
  * Implementation of the consumer that delivers the messages to an HTTP Webhook destination.
