@@ -133,7 +133,7 @@
             <groupId>io.debezium.quarkus</groupId>
             <artifactId>debezium-quarkus-postgres</artifactId>
             <scope>test</scope>
-            <version>3.6.0-SNAPSHOT</version>
+            <version>${project.version}</version>
         </dependency>
         <!-- Vitess/grpc dependency conflicts with version required by schema registry.
              We thus change the version just for the sake of compatibility testing.
