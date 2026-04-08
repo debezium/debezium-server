@@ -20,10 +20,11 @@ import java.net.http.HttpRequest;
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Test;
 
-import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.Header;
 import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
@@ -97,9 +98,29 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event = createChangeEvent();
+        var event = createChangeEvent();
 
-        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handle(new CapturingEvents<>() {
+            @Override
+            public List<BatchEvent> records() {
+                return List.of(event);
+            }
+
+            @Override
+            public String destination() {
+                return "*";
+            }
+
+            @Override
+            public String source() {
+                return "";
+            }
+
+            @Override
+            public String engine() {
+                return "default";
+            }
+        }));
         verify(mockHttpClient, times(3)).send(any(), any());
     }
 
@@ -116,21 +137,41 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event = createChangeEvent();
+        var event = createChangeEvent();
 
         // Should retry when GOAWAY is received and eventually throw DebeziumException
-        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handle(new CapturingEvents<>() {
+            @Override
+            public List<BatchEvent> records() {
+                return List.of(event);
+            }
+
+            @Override
+            public String destination() {
+                return "*";
+            }
+
+            @Override
+            public String source() {
+                return "";
+            }
+
+            @Override
+            public String engine() {
+                return "default";
+            }
+        }));
         verify(mockHttpClient, times(2)).send(any(), any());
     }
 
     // Test subclass that allows injecting a mock HttpClient
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    private static ChangeEvent<Object, Object> createChangeEvent() {
+    private static BatchEvent createChangeEvent() {
 
-        ChangeEvent<Object, Object> result = mock(ChangeEvent.class);
+        BatchEvent result = mock(BatchEvent.class);
         when(result.key()).thenReturn("key");
         when(result.value()).thenReturn("value");
-        when(result.destination()).thenReturn("dest");
+        //when(result.destination()).thenReturn("dest");
         Header header = mock(Header.class);
         when(header.getKey()).thenReturn("h1Key");
         when(header.getValue()).thenReturn("h1Value");

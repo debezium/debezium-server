@@ -17,6 +17,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -51,9 +54,6 @@ import com.google.pubsub.v1.ProjectTopicName;
 import com.google.pubsub.v1.PubsubMessage;
 
 import io.debezium.DebeziumException;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
 import io.debezium.util.Threads;
@@ -67,7 +67,7 @@ import io.grpc.ManagedChannelBuilder;
  */
 @Named("pubsub")
 @Dependent
-public class PubSubChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class PubSubChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PubSubChangeConsumer.class);
 
@@ -284,14 +284,13 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    public void handle(CapturingEvents<BatchEvent> events) {
 
         final List<ApiFuture<String>> deliveries = new ArrayList<>();
 
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
-            final String topicName = streamNameMapper.map(record.destination());
+            final String topicName = streamNameMapper.map(events.destination());
             Publisher publisher = publishers.computeIfAbsent(topicName, (x) -> publisherBuilder.get(ProjectTopicName.of(projectId, x)));
 
             PubsubMessage message = buildPubSubMessage(record);
@@ -305,17 +304,19 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         catch (ExecutionException | TimeoutException e) {
             throw new DebeziumException(e);
         }
+        catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         LOGGER.trace("Sent messages with ids: {}", messageIds);
 
         // Once publishing is confirmed, mark all records as processed
-        for (ChangeEvent<Object, Object> record : records) {
-            committer.markProcessed(record);
+        for (BatchEvent record : events.records()) {
+            record.commit();
         }
-
-        committer.markBatchFinished();
+        
     }
 
-    private PubsubMessage buildPubSubMessage(ChangeEvent<Object, Object> record) {
+    private PubsubMessage buildPubSubMessage(BatchEvent record) {
 
         final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
 
@@ -349,7 +350,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
     }
 
     @Override
-    public boolean supportsTombstoneEvents() {
-        return false;
+    public Optional<Boolean> tombstoneSupport() {
+        return Optional.of(false);
     }
 }

@@ -14,12 +14,14 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
@@ -31,8 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
 import io.debezium.annotation.VisibleForTesting;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.http.jwt.JWTAuthenticatorBuilder;
 import io.debezium.server.http.webhooks.StandardWebhooksAuthenticatorBuilder;
@@ -46,7 +46,7 @@ import io.debezium.util.Metronome;
  */
 @Named("http")
 @Dependent
-public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>> {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpChangeConsumer.class);
 
     public static final String PROP_PREFIX = "debezium.sink.http.";
@@ -139,9 +139,8 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
-        for (ChangeEvent<Object, Object> record : records) {
+    public void handle(CapturingEvents<BatchEvent> events) throws InterruptedException {
+        for (BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
 
             UUID messageId = UUID.randomUUID();
@@ -156,11 +155,9 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                     }
                     Metronome.sleeper(retryInterval, Clock.SYSTEM).pause();
                 }
-                committer.markProcessed(record);
+                record.commit();
             }
         }
-
-        committer.markBatchFinished();
     }
 
     private Authenticator buildAuthenticator(Config config) {
@@ -181,7 +178,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
         };
     }
 
-    private boolean recordSent(ChangeEvent<Object, Object> record, UUID messageId) throws InterruptedException {
+    private boolean recordSent(BatchEvent record, UUID messageId) throws InterruptedException {
         HttpResponse<String> r;
 
         HttpRequest.Builder requestBuilder = generateRequest(record);
@@ -209,7 +206,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @VisibleForTesting
-    HttpRequest.Builder generateRequest(ChangeEvent<Object, Object> record) {
+    HttpRequest.Builder generateRequest(BatchEvent record) {
         String value = (String) record.value();
         HttpRequest.Builder builder = baseRequestBuilder.copy()
                 .POST(HttpRequest.BodyPublishers.ofString(value));
