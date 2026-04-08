@@ -19,8 +19,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
-import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.Header;
+import io.debezium.runtime.BatchEvent;
 
 /**
  * Basic services provided to all change consumers.
@@ -98,7 +98,7 @@ public class BaseChangeConsumer {
         return "Unexpected data type '" + type + "'";
     }
 
-    protected Map<String, String> convertHeaders(ChangeEvent<Object, Object> record) {
+    protected Map<String, String> convertHeaders(BatchEvent record) {
         List<Header<Object>> headers = record.headers();
         Map<String, String> result = new HashMap<>();
         for (Header<Object> header : headers) {
