@@ -7,7 +7,7 @@ package io.debezium.server.producers;
 
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_TYPE;
 
-import io.debezium.server.api.ChangeConsumerFactory;
+import io.debezium.server.api.ChangeConsumerHandler;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.Startup;
@@ -16,7 +16,6 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 
 import org.eclipse.microprofile.config.Config;
 import org.slf4j.Logger;
@@ -29,17 +28,17 @@ import io.debezium.runtime.CapturingEvents;
 import java.util.Optional;
 
 /**
- * CDI producer that creates and validates the {@link ChangeConsumerFactory} based on configuration.
+ * CDI producer that creates and validates the {@link ChangeConsumerHandler} based on configuration.
  * <p>
  * This producer is responsible for discovering and instantiating the appropriate sink consumer
  * implementation at application startup. It reads the {@code debezium.sink.type} configuration
  * property and uses CDI bean discovery to locate a matching {@link DebeziumServerConsumer}
  * annotated with {@code @Named} using that sink type identifier.
  * <p>
- * The produced {@link ChangeConsumerFactory} provides access to the selected consumer instance
+ * The produced {@link ChangeConsumerHandler} provides access to the selected consumer instance
  * and its capabilities (e.g., tombstone support) to other components in the application.
  *
- * @see ChangeConsumerFactory
+ * @see ChangeConsumerHandler
  * @see DebeziumServerConsumer
  */
 @ApplicationScoped
@@ -60,7 +59,7 @@ public class ChangeConsumerProducer {
     @Produces
     @Unremovable
     @ApplicationScoped
-    public ChangeConsumerFactory produces() {
+    public ChangeConsumerHandler produces() {
         final String name = config.getValue(PROP_SINK_TYPE, String.class);
 
         if (instance.select(NamedLiteral.of(name)).isUnsatisfied()) {
@@ -76,7 +75,7 @@ public class ChangeConsumerProducer {
         DebeziumServerConsumer<CapturingEvents<BatchEvent>> consumer = instance.select(NamedLiteral.of(name)).get();
         LOGGER.info("Consumer '{}' instantiated", consumer.getClass().getName());
 
-        return new ChangeConsumerFactory() {
+        return new ChangeConsumerHandler() {
             @Override
             public DebeziumServerConsumer<CapturingEvents<BatchEvent>> get() {
                 return consumer;
