@@ -10,7 +10,7 @@ import java.util.Optional;
  * Implementations of this interface are responsible for delivering captured database change events
  * to a specific destination (sink) such as Kafka, Kinesis, HTTP endpoints, or other messaging platforms.
  * Each consumer implementation must be annotated with {@code @Named} using the sink type identifier
- * (e.g., "kinesis", "kafka", "http") to enable CDI-based discovery via {@link ChangeConsumerFactory}.
+ * (e.g., "kinesis", "kafka", "http") to enable CDI-based discovery via {@link ChangeConsumerHandler}.
  * <p>
  * Typical implementations extend {@link BaseChangeConsumer} to leverage common utilities for
  * stream name mapping, header conversion, and configuration extraction.
@@ -18,7 +18,7 @@ import java.util.Optional;
  * @param <T> the type of events to handle, typically {@code CapturingEvents<BatchEvent>}
  *            containing batches of change events with their metadata
  *
- * @see ChangeConsumerFactory
+ * @see ChangeConsumerHandler
  * @see BaseChangeConsumer
  */
 public interface DebeziumServerConsumer<T> {
