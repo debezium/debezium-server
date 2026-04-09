@@ -15,7 +15,7 @@ import java.util.Optional;
  * The factory also exposes whether the selected consumer supports tombstone events, allowing
  * other components to adapt behavior accordingly.
  */
-public interface ChangeConsumerFactory {
+public interface ChangeConsumerHandler {
     DebeziumServerConsumer<CapturingEvents<BatchEvent>> get();
 
     Optional<Boolean> tombstoneSupport();
