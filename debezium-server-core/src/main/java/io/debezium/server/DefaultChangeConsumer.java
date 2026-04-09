@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-import io.debezium.server.api.ChangeConsumerFactory;
+import io.debezium.server.api.ChangeConsumerHandler;
 import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -41,14 +41,14 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultChangeConsumer.class);
 
-    private final ChangeConsumerFactory delegateConsumer;
+    private final ChangeConsumerHandler delegateConsumer;
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
     private final boolean isOpenLineageEnabled;
 
 
     @Inject
-    public DefaultChangeConsumer(ChangeConsumerFactory delegateConsumer, Config config) {
+    public DefaultChangeConsumer(ChangeConsumerHandler delegateConsumer, Config config) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();
