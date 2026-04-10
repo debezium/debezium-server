@@ -67,6 +67,7 @@ mvn clean package -DskipITs -DskipTests -Passembly -Pcustom-distribution,sink-ka
 **Available sink profiles:**
 - `sink-kinesis` - Amazon Kinesis
 - `sink-sqs` - Amazon SQS
+- `sink-sns` - Amazon SNS
 - `sink-http` - HTTP
 - `sink-pubsub` - Google Cloud Pub/Sub
 - `sink-pulsar` - Apache Pulsar
