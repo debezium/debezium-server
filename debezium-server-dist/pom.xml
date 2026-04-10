@@ -18,6 +18,7 @@
         <!-- Sink dependency scopes - default to compile, custom-distribution overrides to test -->
         <sink.kinesis.scope>compile</sink.kinesis.scope>
         <sink.sqs.scope>compile</sink.sqs.scope>
+        <sink.sns.scope>compile</sink.sns.scope>
         <sink.http.scope>compile</sink.http.scope>
         <sink.pubsub.scope>compile</sink.pubsub.scope>
         <sink.pulsar.scope>compile</sink.pulsar.scope>
@@ -52,6 +53,11 @@
             <groupId>io.debezium</groupId>
             <artifactId>debezium-server-sqs</artifactId>
             <scope>${sink.sqs.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-sns</artifactId>
+            <scope>${sink.sns.scope}</scope>
         </dependency>
         <dependency>
             <groupId>io.debezium</groupId>
@@ -160,6 +166,7 @@
             <properties>
                 <sink.kinesis.scope>test</sink.kinesis.scope>
                 <sink.sqs.scope>test</sink.sqs.scope>
+                <sink.sns.scope>test</sink.sns.scope>
                 <sink.http.scope>test</sink.http.scope>
                 <sink.pubsub.scope>test</sink.pubsub.scope>
                 <sink.pulsar.scope>test</sink.pulsar.scope>
@@ -190,6 +197,13 @@
             <id>sink-sqs</id>
             <properties>
                 <sink.sqs.scope>compile</sink.sqs.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-sns</id>
+            <properties>
+                <sink.sns.scope>compile</sink.sns.scope>
             </properties>
         </profile>
 
