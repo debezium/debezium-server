@@ -137,8 +137,8 @@ public class HttpChangeConsumerTest {
 
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_BATCH_ENABLED, "true",
+                        "debezium.sink.http.url", "http://url",
+                        "debezium.sink.http.batch.enabled", "true",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
@@ -172,9 +172,9 @@ public class HttpChangeConsumerTest {
 
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_BATCH_ENABLED, "true",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_BATCH_MAX_SIZE, "2",
+                        "debezium.sink.http.url", "http://url",
+                        "debezium.sink.http.batch.enabled", "true",
+                        "debezium.sink.http.batch.max-size", "2",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
@@ -206,7 +206,7 @@ public class HttpChangeConsumerTest {
 
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
+                        "debezium.sink.http.url", "http://url",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
@@ -241,13 +241,13 @@ public class HttpChangeConsumerTest {
         // Configure batch mode with OAuth2 authentication
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(
                 Map.of(
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_WEBHOOK_URL, "http://url",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_BATCH_ENABLED, "true",
-                        HttpChangeConsumer.PROP_PREFIX + HttpChangeConsumer.PROP_BATCH_MAX_SIZE, "2",
-                        HttpChangeConsumer.PROP_AUTHENTICATION_PREFIX + HttpChangeConsumer.PROP_AUTHENTICATION_TYPE, "oauth2",
-                        HttpChangeConsumer.PROP_AUTHENTICATION_PREFIX + "oauth2.client_id", "test-client",
-                        HttpChangeConsumer.PROP_AUTHENTICATION_PREFIX + "oauth2.client_secret", "test-secret",
-                        HttpChangeConsumer.PROP_AUTHENTICATION_PREFIX + "oauth2.token_url", "http://auth.example.com/token",
+                        "debezium.sink.http.url", "http://url",
+                        "debezium.sink.http.batch.enabled", "true",
+                        "debezium.sink.http.batch.max-size", "2",
+                        "debezium.sink.http.authentication.type", "oauth2",
+                        "debezium.sink.http.authentication.oauth2.client-id", "test-client",
+                        "debezium.sink.http.authentication.oauth2.client-secret", "test-secret",
+                        "debezium.sink.http.authentication.oauth2.token-url", "http://auth.example.com/token",
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
