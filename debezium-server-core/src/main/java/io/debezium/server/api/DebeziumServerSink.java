@@ -3,13 +3,15 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.server;
+package io.debezium.server.api;
 
 import java.util.Map;
 
 import io.debezium.common.annotation.Incubating;
 import io.debezium.metadata.ComponentMetadataProvider;
 import io.debezium.metadata.ConfigDescriptor;
+import io.debezium.server.ConnectionValidationResult;
+import io.debezium.server.DefaultChangeConsumer;
 
 /**
  * Common interface for all Debezium Server sink implementations.

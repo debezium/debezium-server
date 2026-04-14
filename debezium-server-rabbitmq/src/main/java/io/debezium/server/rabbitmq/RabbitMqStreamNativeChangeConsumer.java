@@ -50,7 +50,7 @@ import io.debezium.engine.Header;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
-import io.debezium.server.DebeziumServerSink;
+import io.debezium.server.api.DebeziumServerSink;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;

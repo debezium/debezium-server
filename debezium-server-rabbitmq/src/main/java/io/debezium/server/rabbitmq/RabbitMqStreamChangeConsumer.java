@@ -39,8 +39,8 @@ import io.debezium.engine.Header;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
-import io.debezium.server.DebeziumServerSink;
 import io.debezium.server.StreamNameMapper;
+import io.debezium.server.api.DebeziumServerSink;
 
 /**
  * Implementation of the consumer that delivers the messages into RabbitMQ Stream destination.

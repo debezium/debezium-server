@@ -38,7 +38,7 @@ import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.schema.SchemaFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
-import io.debezium.server.DebeziumServerSink;
+import io.debezium.server.api.DebeziumServerSink;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.DeleteReq;

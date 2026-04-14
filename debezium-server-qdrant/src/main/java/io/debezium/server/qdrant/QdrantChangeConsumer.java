@@ -36,7 +36,7 @@ import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.schema.SchemaFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
-import io.debezium.server.DebeziumServerSink;
+import io.debezium.server.api.DebeziumServerSink;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.qdrant.client.QdrantClient;

@@ -41,7 +41,7 @@ import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
-import io.debezium.server.DebeziumServerSink;
+import io.debezium.server.api.DebeziumServerSink;
 
 /**
  * Implementation of the consumer that delivers the messages into a Pulsar destination.
