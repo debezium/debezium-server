@@ -5,14 +5,25 @@
  */
 package io.debezium.server.redis;
 
+import java.lang.reflect.Field;
 import java.util.AbstractMap.SimpleEntry;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.config.Configuration;
+import io.debezium.engine.ChangeEvent;
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.engine.Header;
 import io.debezium.storage.redis.RedisClient;
 import io.debezium.util.Collect;
 
@@ -23,6 +34,57 @@ public class RedisMemoryThresholdTest {
     private static final long RECORD_SIZE = 2048L;
     private static final int BUFFER_SIZE = 500;
     private static final int RATE_PER_SECOND = 1000;
+
+    private static final String HEARTBEAT_PREFIX = "__debezium-heartbeat";
+
+    @Test
+    public void testHeartbeatOnlyBatchCompletesWithoutInfiniteLoop() throws Exception {
+        RedisStreamChangeConsumer consumer = new RedisStreamChangeConsumer();
+
+        Configuration config = Configuration.from(Collect.hashMapOf(
+                "debezium.sink.redis.address", "localhost:6379",
+                "debezium.sink.redis.skip.heartbeat.messages", "true",
+                "debezium.sink.redis.message.format", "compact"));
+        RedisStreamChangeConsumerConfig consumerConfig = new RedisStreamChangeConsumerConfig(config);
+
+        setField(consumer, RedisStreamChangeConsumer.class, "config", consumerConfig);
+        setField(consumer, RedisStreamChangeConsumer.class, "heartbeatPrefix", HEARTBEAT_PREFIX);
+        setField(consumer, RedisStreamChangeConsumer.class, "client", new RedisClientImpl(_10MB, _20MB));
+        setField(consumer, RedisStreamChangeConsumer.class, "redisMemoryThreshold",
+                new RedisMemoryThreshold(new RedisClientImpl(_10MB, _20MB), consumerConfig));
+
+        List<ChangeEvent<Object, Object>> batch = List.of(new HeartbeatChangeEvent(HEARTBEAT_PREFIX + ".testc"));
+        RecordCommitter<ChangeEvent<Object, Object>> committer = new NoOpRecordCommitter();
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<?> future = executor.submit(() -> {
+            try {
+                consumer.handleBatch(batch, committer);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+
+        try {
+            future.get(3, TimeUnit.SECONDS);
+        }
+        catch (TimeoutException e) {
+            future.cancel(true);
+            Assertions.fail("handleBatch() did not complete within 3 seconds for a heartbeat-only batch " +
+                    "— infinite loop detected (DBZ-9353)");
+        }
+        finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private static void setField(Object target, Class<?> declaringClass, String fieldName, Object value)
+            throws Exception {
+        Field field = declaringClass.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
 
     @Test
     public void testMemoryLimits() {
@@ -98,6 +160,63 @@ public class RedisMemoryThresholdTest {
         @Override
         public String clientList() {
             return null;
+        }
+    }
+
+    private static class HeartbeatChangeEvent implements ChangeEvent<Object, Object> {
+        private final String destination;
+
+        HeartbeatChangeEvent(String destination) {
+            this.destination = destination;
+        }
+
+        @Override
+        public Object key() {
+            return null;
+        }
+
+        @Override
+        public Object value() {
+            return null;
+        }
+
+        @Override
+        public String destination() {
+            return destination;
+        }
+
+        @Override
+        public Integer partition() {
+            return null;
+        }
+
+        @Override
+        public List<Header<Object>> headers() {
+            return Collections.emptyList();
+        }
+    }
+
+    private static class NoOpRecordCommitter implements RecordCommitter<ChangeEvent<Object, Object>> {
+        @Override
+        public void markProcessed(ChangeEvent<Object, Object> record) throws InterruptedException {
+        }
+
+        @Override
+        public void markProcessed(ChangeEvent<Object, Object> record, DebeziumEngine.Offsets offsets)
+                throws InterruptedException {
+        }
+
+        @Override
+        public void markBatchFinished() throws InterruptedException {
+        }
+
+        @Override
+        public DebeziumEngine.Offsets buildOffsets() {
+            return new DebeziumEngine.Offsets() {
+                @Override
+                public void set(String key, Object value) {
+                }
+            };
         }
     }
 }

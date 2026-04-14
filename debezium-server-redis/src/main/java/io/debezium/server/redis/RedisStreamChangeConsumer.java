@@ -184,18 +184,28 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         LOGGER.debug("Preparing a Redis Pipeline of {} records", clonedBatch.size());
 
                         List<SimpleEntry<String, Map<String, String>>> recordsMap = new ArrayList<>(clonedBatch.size());
+                        List<ChangeEvent<Object, Object>> processedRecords = new ArrayList<ChangeEvent<Object, Object>>();
                         for (ChangeEvent<Object, Object> record : clonedBatch) {
                             String destination = streamNameMapper.map(record.destination());
 
                             // Check if this is a heartbeat message that should be skipped
                             if (config.isSkipHeartbeatMessages() && destination.startsWith(heartbeatPrefix)) {
-                                // Mark as processed but don't add to Redis
+                                // Mark as processed and track for removal from clonedBatch
                                 committer.markProcessed(record);
+                                processedRecords.add(record);
                                 continue;
                             }
 
                             Map<String, String> recordMap = recordMapFunction.apply(record);
                             recordsMap.add(new SimpleEntry<>(destination, recordMap));
+                        }
+
+                        clonedBatch.removeAll(processedRecords);
+                        processedRecords.clear();
+
+                        if (clonedBatch.size() == 0) {
+                            completedSuccessfully = true;
+                            continue;
                         }
 
                         if (recordsMap.size() == 0) {
@@ -209,7 +219,6 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                             continue;
                         }
                         List<String> responses = client.xadd(recordsMap);
-                        List<ChangeEvent<Object, Object>> processedRecords = new ArrayList<ChangeEvent<Object, Object>>();
                         int index = 0;
                         int totalOOMResponses = 0;
 
