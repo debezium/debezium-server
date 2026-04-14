@@ -29,7 +29,7 @@ import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
-import io.debezium.server.DebeziumServerSink;
+import io.debezium.server.api.DebeziumServerSink;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 import io.nats.streaming.NatsStreaming;
