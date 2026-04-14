@@ -21,7 +21,6 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.infinispan.client.hotrod.RemoteCache;
 import org.infinispan.client.hotrod.RemoteCacheManager;
 import org.infinispan.client.hotrod.configuration.ConfigurationBuilder;
-import org.infinispan.client.hotrod.impl.ConfigurationProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +74,7 @@ public class InfinispanSinkConsumer extends BaseChangeConsumer implements Debezi
 
         final String serverHost = config.getServerHost();
         final String cacheName = config.getCacheName();
-        final Integer serverPort = config.getServerPort() != null ? config.getServerPort() : ConfigurationProperties.DEFAULT_HOTROD_PORT;
+        final Integer serverPort = config.getServerPort();
 
         ConfigurationBuilder builder = new ConfigurationBuilder();
         String uri;

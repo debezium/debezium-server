@@ -6,6 +6,7 @@
 package io.debezium.server.infinispan;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.infinispan.client.hotrod.impl.ConfigurationProperties;
 
 import io.debezium.config.Configuration;
 import io.debezium.config.Field;
@@ -25,6 +26,7 @@ public class InfinispanSinkConsumerConfig {
     public static final Field SERVER_PORT = Field.create("server.port")
             .withDisplayName("Server Port")
             .withType(ConfigDef.Type.INT)
+            .withDefault(ConfigurationProperties.DEFAULT_HOTROD_PORT)
             .withWidth(ConfigDef.Width.SHORT)
             .withImportance(ConfigDef.Importance.HIGH)
             .withDescription("Infinispan server port.");

@@ -32,6 +32,7 @@ public class EventHubsChangeConsumerConfig {
     public static final Field PARTITION_ID = Field.create("partitionid")
             .withDisplayName("Partition ID")
             .withType(ConfigDef.Type.STRING)
+            .withDefault("")
             .withWidth(ConfigDef.Width.SHORT)
             .withImportance(ConfigDef.Importance.MEDIUM)
             .withDescription("Specific partition ID to send all events to. Leave empty for dynamic routing.");
@@ -39,6 +40,7 @@ public class EventHubsChangeConsumerConfig {
     public static final Field PARTITION_KEY = Field.create("partitionkey")
             .withDisplayName("Partition Key")
             .withType(ConfigDef.Type.STRING)
+            .withDefault("")
             .withWidth(ConfigDef.Width.MEDIUM)
             .withImportance(ConfigDef.Importance.MEDIUM)
             .withDescription("Partition key to use for all events. Leave empty for dynamic routing.");
