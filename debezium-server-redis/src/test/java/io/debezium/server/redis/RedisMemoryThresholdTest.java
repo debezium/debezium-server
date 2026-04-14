@@ -14,8 +14,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +28,8 @@ import io.debezium.storage.redis.RedisClient;
 import io.debezium.util.Collect;
 
 public class RedisMemoryThresholdTest {
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
     private static final String _5MB = String.valueOf(5 * 1024 * 1024);
     private static final String _10MB = String.valueOf(10 * 1024 * 1024);
     private static final String _20MB = String.valueOf(20 * 1024 * 1024);
@@ -56,27 +58,22 @@ public class RedisMemoryThresholdTest {
         List<ChangeEvent<Object, Object>> batch = List.of(new HeartbeatChangeEvent(HEARTBEAT_PREFIX + ".testc"));
         RecordCommitter<ChangeEvent<Object, Object>> committer = new NoOpRecordCommitter();
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Future<?> future = executor.submit(() -> {
+        Awaitility.await()
+                .atMost(3, TimeUnit.SECONDS)
+                .until(consume(consumer, batch, committer)::isDone);
+    }
+
+    private Future<?> consume(RedisStreamChangeConsumer consumer,
+                              List<ChangeEvent<Object, Object>> changeEvents,
+                              RecordCommitter<ChangeEvent<Object, Object>> committer) {
+        return executor.submit(() -> {
             try {
-                consumer.handleBatch(batch, committer);
+                consumer.handleBatch(changeEvents, committer);
             }
             catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
             }
         });
-
-        try {
-            future.get(3, TimeUnit.SECONDS);
-        }
-        catch (TimeoutException e) {
-            future.cancel(true);
-            Assertions.fail("handleBatch() did not complete within 3 seconds for a heartbeat-only batch " +
-                    "— infinite loop detected (DBZ-9353)");
-        }
-        finally {
-            executor.shutdownNow();
-        }
     }
 
     private static void setField(Object target, Class<?> declaringClass, String fieldName, Object value)
