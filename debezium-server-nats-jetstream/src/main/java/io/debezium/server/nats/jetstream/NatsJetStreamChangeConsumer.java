@@ -121,8 +121,8 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
             // Creating a basic stream, mostly for testing. If a user wants to configure their stream, it can be done
             // via the nats cli.
             if (config.isCreateStream()) {
-                String subjects = (config.getSubjects() != null) ? config.getSubjects() : "*.*.*";
-                String storage = (config.getStorage() != null) ? config.getStorage() : "memory";
+                String subjects = config.getSubjects();
+                String storage = config.getStorage();
                 StorageType storageType = storage.equals("file") ? StorageType.File : StorageType.Memory;
 
                 StreamConfiguration streamConfig = StreamConfiguration.builder()

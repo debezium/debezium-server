@@ -35,7 +35,7 @@ import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
-import io.debezium.server.DebeziumServerSink;
+import io.debezium.server.api.DebeziumServerSink;
 
 /**
  * This sink adapter delivers change event messages to Azure Event Hubs
@@ -86,11 +86,10 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new EventHubsChangeConsumerConfig(configuration);
 
-        configuredPartitionId = (config.getConfiguredPartitionId() != null) ? config.getConfiguredPartitionId() : "";
-        configuredPartitionKey = (config.getConfiguredPartitionKey() != null) ? config.getConfiguredPartitionKey() : "";
+        configuredPartitionId = config.getConfiguredPartitionId();
+        configuredPartitionKey = config.getConfiguredPartitionKey();
         if (configuredPartitionId.isEmpty() && configuredPartitionKey.isEmpty()) {
-            final var routingValue = (config.getDynamicPartitionRouting() != null) ? config.getDynamicPartitionRouting() : DynamicPartitionRoutingStrategy.DEFAULT.name();
-            dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.fromString(routingValue);
+            dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.fromString(config.getDynamicPartitionRouting());
         }
         hashMessageFunction = Optional.ofNullable(config.getHashMessageKeyFunction()).map(HashFunction::fromString);
 
