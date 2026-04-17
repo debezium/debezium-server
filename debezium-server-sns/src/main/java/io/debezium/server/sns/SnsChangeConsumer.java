@@ -29,12 +29,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.Module;
+import io.debezium.config.Field;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.metadata.ComponentMetadata;
+import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.api.DebeziumServerSink;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
 
@@ -56,33 +61,16 @@ import software.amazon.awssdk.services.sns.model.SnsException;
  */
 @Named("sns")
 @Dependent
-public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SnsChangeConsumer.class);
 
-    static final String PROP_PREFIX = "debezium.sink.sns.";
-    private static final String PROP_REGION_NAME = PROP_PREFIX + "region";
-    private static final String PROP_ENDPOINT_NAME = PROP_PREFIX + "endpoint";
-    private static final String PROP_CREDENTIALS_PROFILE = PROP_PREFIX + "credentials.profile";
-    private static final String PROP_TOPIC_ARN = PROP_PREFIX + "topic.arn";
-    private static final String PROP_TOPIC_ARN_PREFIX = PROP_PREFIX + "topic.arn.prefix";
-    private static final String PROP_RETRIES = PROP_PREFIX + "default.retries";
-    private static final String PROP_MESSAGE_GROUP_ID_HEADER = PROP_PREFIX + "fifo.message.group.id.header";
-    private static final String PROP_MESSAGE_DEDUP_ID_HEADER = PROP_PREFIX + "fifo.message.dedup.id.header";
-    private static final String PROP_FIFO_DEFAULT_GROUP_ID = PROP_PREFIX + "fifo.default.group.id";
-
-    static final int MAX_BATCH_SIZE = 10;
-    static final int DEFAULT_RETRY_COUNT = 5;
-    static final int MAX_SNS_MESSAGE_BYTES = 256 * 1024;
+    private static final String PROP_PREFIX = "debezium.sink.sns.";
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
 
-    private String defaultTopicArn;
-    private String topicArnPrefix;
-    private int maxRetries;
-    private String messageGroupIdHeader;
-    private String messageDeduplicationIdHeader;
-    private String fifoDefaultGroupId;
+    private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
+    SnsChangeConsumerConfig config;
     private SnsClient client = null;
 
     @Inject
@@ -91,8 +79,11 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
 
     @PostConstruct
     void connect() {
-        final Config config = ConfigProvider.getConfig();
-        maxRetries = config.getOptionalValue(PROP_RETRIES, Integer.class).orElse(DEFAULT_RETRY_COUNT);
+        final Config mpConfig = ConfigProvider.getConfig();
+
+        // Load configuration
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
+        this.config = new SnsChangeConsumerConfig(configuration);
 
         if (customClient.isResolvable()) {
             client = customClient.get();
@@ -100,32 +91,27 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
         }
         else {
             final SnsClientBuilder builder = SnsClient.builder()
-                    .region(Region.of(config.getValue(PROP_REGION_NAME, String.class)));
+                    .region(Region.of(config.getRegion()));
 
-            config.getOptionalValue(PROP_ENDPOINT_NAME, String.class).ifPresent(endpoint -> {
-                LOGGER.info("SNS Endpoint override: {}", endpoint);
-                builder.endpointOverride(URI.create(endpoint));
-            });
+            if (config.getEndpoint() != null) {
+                LOGGER.info("SNS Endpoint override: {}", config.getEndpoint());
+                builder.endpointOverride(URI.create(config.getEndpoint()));
+            }
 
-            config.getOptionalValue(PROP_CREDENTIALS_PROFILE, String.class).ifPresent(profile -> {
-                LOGGER.info("Using credentials profile: {}", profile);
-                builder.credentialsProvider(ProfileCredentialsProvider.create(profile));
-            });
+            if (config.getCredentialsProfile() != null) {
+                LOGGER.info("Using credentials profile: {}", config.getCredentialsProfile());
+                builder.credentialsProvider(ProfileCredentialsProvider.create(config.getCredentialsProfile()));
+            }
 
             client = builder.build();
         }
 
-        topicArnPrefix = config.getOptionalValue(PROP_TOPIC_ARN_PREFIX, String.class).orElse(null);
-        defaultTopicArn = config.getOptionalValue(PROP_TOPIC_ARN, String.class).orElse(null);
-        messageGroupIdHeader = config.getOptionalValue(PROP_MESSAGE_GROUP_ID_HEADER, String.class).orElse("aggregateId");
-        messageDeduplicationIdHeader = config.getOptionalValue(PROP_MESSAGE_DEDUP_ID_HEADER, String.class).orElse(null);
-        fifoDefaultGroupId = config.getOptionalValue(PROP_FIFO_DEFAULT_GROUP_ID, String.class).orElse("default");
-
-        LOGGER.info("Using topic ARN prefix: '{}', default topic ARN: '{}'", topicArnPrefix, defaultTopicArn);
+        LOGGER.info("Using topic ARN prefix: '{}', default topic ARN: '{}'", config.getTopicArnPrefix(), config.getTopicArn());
     }
 
     @PreDestroy
-    void close() {
+    @Override
+    public void close() {
         try {
             if (client != null) {
                 client.close();
@@ -150,8 +136,8 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
                 .collect(Collectors.groupingBy(record -> resolveTopicArn(record.destination())));
 
         for (List<ChangeEvent<Object, Object>> destinationBatch : groupedByDestination.values()) {
-            for (int i = 0; i < destinationBatch.size(); i += MAX_BATCH_SIZE) {
-                List<ChangeEvent<Object, Object>> batch = destinationBatch.subList(i, Math.min(i + MAX_BATCH_SIZE, destinationBatch.size()));
+            for (int i = 0; i < destinationBatch.size(); i += SnsChangeConsumerConfig.MAX_BATCH_SIZE) {
+                List<ChangeEvent<Object, Object>> batch = destinationBatch.subList(i, Math.min(i + SnsChangeConsumerConfig.MAX_BATCH_SIZE, destinationBatch.size()));
                 String topicArn = resolveTopicArn(batch.getFirst().destination());
                 boolean isFifo = topicArn.endsWith(".fifo");
 
@@ -176,8 +162,8 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
         List<PublishBatchRequestEntry> pending = entries;
 
         while (!pending.isEmpty()) {
-            if (attempts >= maxRetries) {
-                throw new DebeziumException("Exceeded maximum number of attempts (" + maxRetries + ") to publish batch to " + topicArn);
+            if (attempts >= config.getMaxRetries()) {
+                throw new DebeziumException("Exceeded maximum number of attempts (" + config.getMaxRetries() + ") to publish batch to " + topicArn);
             }
 
             try {
@@ -206,8 +192,8 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
             catch (SnsException exception) {
                 LOGGER.warn("SNS exception while publishing to {}", topicArn, exception);
                 attempts++;
-                if (attempts >= maxRetries) {
-                    throw new DebeziumException("Exceeded maximum number of attempts (" + maxRetries + ") to publish batch to " + topicArn, exception);
+                if (attempts >= config.getMaxRetries()) {
+                    throw new DebeziumException("Exceeded maximum number of attempts (" + config.getMaxRetries() + ") to publish batch to " + topicArn, exception);
                 }
                 Metronome.sleeper(RETRY_INTERVAL, Clock.SYSTEM).pause();
             }
@@ -237,16 +223,16 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
 
         if (isFifo) {
             // MessageGroupId: use header value if present, fallback to raw event key, then default
-            String groupId = headers.getOrDefault(messageGroupIdHeader, null);
+            String groupId = headers.getOrDefault(config.getMessageGroupIdHeader(), null);
             if (groupId == null) {
                 Object rawKey = toSourceRecord(event).key();
-                groupId = rawKey != null ? asString(rawKey) : fifoDefaultGroupId;
+                groupId = rawKey != null ? asString(rawKey) : config.getFifoDefaultGroupId();
             }
             builder.messageGroupId(groupId);
 
             // MessageDeduplicationId: use header if configured and present
-            if (messageDeduplicationIdHeader != null) {
-                String dedupId = headers.get(messageDeduplicationIdHeader);
+            if (config.getMessageDeduplicationIdHeader() != null) {
+                String dedupId = headers.get(config.getMessageDeduplicationIdHeader());
                 if (dedupId != null) {
                     builder.messageDeduplicationId(dedupId);
                 }
@@ -311,9 +297,9 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
 
     private void validatePayloadSize(String messageBody, String destination) {
         int size = messageBody.getBytes(StandardCharsets.UTF_8).length;
-        if (size > MAX_SNS_MESSAGE_BYTES) {
+        if (size > SnsChangeConsumerConfig.MAX_SNS_MESSAGE_BYTES) {
             throw new DebeziumException(
-                    "Message payload size (" + size + " bytes) exceeds SNS limit of " + MAX_SNS_MESSAGE_BYTES
+                    "Message payload size (" + size + " bytes) exceeds SNS limit of " + SnsChangeConsumerConfig.MAX_SNS_MESSAGE_BYTES
                             + " bytes for destination " + destination);
         }
     }
@@ -325,14 +311,33 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
             return mapped;
         }
         // If a prefix is configured, compose the ARN from prefix + destination
-        if (topicArnPrefix != null) {
-            return topicArnPrefix + mapped;
+        if (config.getTopicArnPrefix() != null) {
+            return config.getTopicArnPrefix() + mapped;
         }
         // Otherwise, use default topic ARN if configured
-        if (defaultTopicArn != null) {
-            return defaultTopicArn;
+        if (config.getTopicArn() != null) {
+            return config.getTopicArn();
         }
         // If no default and not a full ARN, treat mapped value as the ARN
         return mapped;
+    }
+
+    @Override
+    public Field.Set getConfigFields() {
+        return Field.setOf(
+                SnsChangeConsumerConfig.REGION,
+                SnsChangeConsumerConfig.ENDPOINT,
+                SnsChangeConsumerConfig.CREDENTIALS_PROFILE,
+                SnsChangeConsumerConfig.TOPIC_ARN,
+                SnsChangeConsumerConfig.TOPIC_ARN_PREFIX,
+                SnsChangeConsumerConfig.DEFAULT_RETRIES,
+                SnsChangeConsumerConfig.FIFO_MESSAGE_GROUP_ID_HEADER,
+                SnsChangeConsumerConfig.FIFO_MESSAGE_DEDUP_ID_HEADER,
+                SnsChangeConsumerConfig.FIFO_DEFAULT_GROUP_ID);
+    }
+
+    @Override
+    public List<ComponentMetadata> getConnectorMetadata() {
+        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
     }
 }
