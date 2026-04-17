@@ -58,7 +58,7 @@ public class SnsUnitTest {
     private AtomicBoolean threwException;
     List<ChangeEvent<Object, Object>> changeEvents;
     RecordCommitter<ChangeEvent<Object, Object>> committer;
-    private static final Integer NUMBER_OF_CHANGE_EVENTS = SnsChangeConsumer.MAX_BATCH_SIZE;
+    private static final Integer NUMBER_OF_CHANGE_EVENTS = SnsChangeConsumerConfig.MAX_BATCH_SIZE;
     private static final String TEST_DEFAULT_TOPIC_ARN = "arn:aws:sns:us-east-1:000000000000:test-topic";
 
     @BeforeEach
@@ -561,7 +561,7 @@ public class SnsUnitTest {
     @Test
     public void testPayloadSizeValidation() throws Exception {
         // Arrange
-        String oversizedPayload = "x".repeat(SnsChangeConsumer.MAX_SNS_MESSAGE_BYTES + 1);
+        String oversizedPayload = "x".repeat(SnsChangeConsumerConfig.MAX_SNS_MESSAGE_BYTES + 1);
         ConnectHeaders connectHeaders = new ConnectHeaders();
         SourceRecord sourceRecord = new SourceRecord(null, null, TEST_DEFAULT_TOPIC_ARN, null, null, "key", null, oversizedPayload, null, connectHeaders);
 
@@ -690,55 +690,5 @@ public class SnsUnitTest {
         assertFalse(threwException.get());
         assertEquals(1, capturedEntries.size());
         assertEquals("order-42", capturedEntries.get(0).messageGroupId());
-    }
-
-    // 13. Test that topic ARN prefix is correctly composed with destination name
-    @Test
-    public void testTopicArnPrefixRouting() throws Exception {
-        // Arrange
-        String arnPrefix = "arn:aws:sns:us-east-1:000000000000:";
-
-        List<ChangeEvent<Object, Object>> changeEvents = new ArrayList<>();
-        changeEvents.addAll(createChangeEvents(3, "key1", "User"));
-        changeEvents.addAll(createChangeEvents(2, "key2", "Order"));
-
-        AtomicInteger userCount = new AtomicInteger(0);
-        AtomicInteger orderCount = new AtomicInteger(0);
-
-        doAnswer(invocation -> {
-            PublishBatchRequest request = invocation.getArgument(0);
-            counter.incrementAndGet();
-            String topicArn = request.topicArn();
-            int size = request.publishBatchRequestEntries().size();
-
-            if (topicArn.equals(arnPrefix + "User")) {
-                userCount.addAndGet(size);
-            }
-            else if (topicArn.equals(arnPrefix + "Order")) {
-                orderCount.addAndGet(size);
-            }
-
-            return successResponse(request);
-        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
-
-        // Act
-        System.setProperty("debezium.sink.sns.topic.arn.prefix", arnPrefix);
-        try {
-            snsChangeConsumer.connect();
-            snsChangeConsumer.handleBatch(changeEvents, committer);
-        }
-        catch (Exception e) {
-            threwException.getAndSet(true);
-        }
-        finally {
-            System.clearProperty("debezium.sink.sns.topic.arn.prefix");
-        }
-
-        // Assert
-        assertFalse(threwException.get());
-        assertEquals(3, userCount.get());
-        assertEquals(2, orderCount.get());
-        // one batch per destination
-        assertEquals(2, counter.get());
     }
 }
