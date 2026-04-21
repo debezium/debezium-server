@@ -34,6 +34,7 @@
         <sink.milvus.scope>compile</sink.milvus.scope>
         <sink.qdrant.scope>compile</sink.qdrant.scope>
         <sink.instructlab.scope>compile</sink.instructlab.scope>
+        <sink.fluss.scope>compile</sink.fluss.scope>
     </properties>
 
     <dependencies>
@@ -134,6 +135,11 @@
             <artifactId>debezium-server-instructlab</artifactId>
             <scope>${sink.instructlab.scope}</scope>
         </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-fluss</artifactId>
+            <scope>${sink.fluss.scope}</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -182,6 +188,7 @@
                 <sink.milvus.scope>test</sink.milvus.scope>
                 <sink.qdrant.scope>test</sink.qdrant.scope>
                 <sink.instructlab.scope>test</sink.instructlab.scope>
+                <sink.fluss.scope>test</sink.fluss.scope>
             </properties>
         </profile>
 
@@ -309,6 +316,13 @@
             <id>sink-instructlab</id>
             <properties>
                 <sink.instructlab.scope>compile</sink.instructlab.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-fluss</id>
+            <properties>
+                <sink.fluss.scope>compile</sink.fluss.scope>
             </properties>
         </profile>
 
