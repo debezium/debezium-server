@@ -41,17 +41,12 @@ import io.debezium.data.Envelope;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
-import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
-import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.QuarkusTest;
 
 /**
  * Unit tests for Apache Fluss.
  *
  * @author Chris Cranford
  */
-@QuarkusTest
-@QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
 public class FlussUnitTest {
 
     private static final String BOOTSTRAP_SERVERS = "localhost:9123";
