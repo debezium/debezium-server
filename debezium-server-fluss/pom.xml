@@ -119,6 +119,7 @@
                         <test.type>IT</test.type>
                     </systemProperties>
                     <runOrder>${runOrder}</runOrder>
+                    <argLine>${mockito.argLine} --add-opens=java.base/java.nio=ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>
             <plugin>
