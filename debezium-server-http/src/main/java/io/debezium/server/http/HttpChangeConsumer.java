@@ -19,6 +19,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -52,7 +55,7 @@ import io.debezium.util.Metronome;
  */
 @Named("http")
 @Dependent
-public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpChangeConsumer.class);
 
     private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
@@ -121,19 +124,17 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    public void handle(CapturingEvents<BatchEvent> events) throws InterruptedException {
         if (config.isBatchEnabled()) {
-            handleBatchAggregated(records, committer);
+            handleBatchAggregated(events);
         }
         else {
-            handleBatchIndividual(records, committer);
+            handleBatchIndividual(events);
         }
     }
 
-    private void handleBatchIndividual(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
-        for (ChangeEvent<Object, Object> record : records) {
+    private void handleBatchIndividual(CapturingEvents<BatchEvent> events) throws InterruptedException {
+        for (BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
 
             UUID messageId = UUID.randomUUID();
@@ -148,35 +149,32 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                     }
                     Metronome.sleeper(config.getRetryInterval(), Clock.SYSTEM).pause();
                 }
-                committer.markProcessed(record);
+                record.commit();
             }
         }
-
-        committer.markBatchFinished();
     }
 
-    private void handleBatchAggregated(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
+    private void handleBatchAggregated(CapturingEvents<BatchEvent> records)
             throws InterruptedException {
         // Collect records with non-null values, preserving the record references for markProcessed
-        List<ChangeEvent<Object, Object>> nonNullRecords = new ArrayList<>();
-        for (ChangeEvent<Object, Object> record : records) {
+        List<BatchEvent> nonNullRecords = new ArrayList<>();
+        for (BatchEvent record : records.records()) {
             if (record.value() != null) {
                 nonNullRecords.add(record);
             }
         }
 
         if (nonNullRecords.isEmpty()) {
-            committer.markBatchFinished();
             return;
         }
 
         // Chunk records into sub-batches of at most batchMaxSize
         for (int from = 0; from < nonNullRecords.size(); from += config.getBatchMaxSize()) {
             int to = Math.min(from + config.getBatchMaxSize(), nonNullRecords.size());
-            List<ChangeEvent<Object, Object>> chunk = nonNullRecords.subList(from, to);
+            List<BatchEvent> chunk = nonNullRecords.subList(from, to);
 
             List<String> values = new ArrayList<>(chunk.size());
-            for (ChangeEvent<Object, Object> record : chunk) {
+            for (BatchEvent record : chunk) {
                 values.add((String) record.value());
             }
 
@@ -195,12 +193,11 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
             }
 
             // Mark records processed immediately after their chunk is successfully sent
-            for (ChangeEvent<Object, Object> record : chunk) {
-                committer.markProcessed(record);
+            for (BatchEvent record : chunk) {
+                record.commit();
             }
         }
 
-        committer.markBatchFinished();
     }
 
     private boolean batchSent(String batchPayload, UUID messageId, Map<String, String> headers) throws InterruptedException {
@@ -305,7 +302,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
                 .build();
     }
 
-    private boolean recordSent(ChangeEvent<Object, Object> record, UUID messageId) throws InterruptedException {
+    private boolean recordSent(BatchEvent record, UUID messageId) throws InterruptedException {
         HttpResponse<String> r;
 
         HttpRequest.Builder requestBuilder = generateRequest(record);
@@ -333,7 +330,7 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumEn
     }
 
     @VisibleForTesting
-    HttpRequest.Builder generateRequest(ChangeEvent<Object, Object> record) {
+    HttpRequest.Builder generateRequest(BatchEvent record) {
         String value = (String) record.value();
         HttpRequest.Builder builder = baseRequestBuilder.copy()
                 .POST(HttpRequest.BodyPublishers.ofString(value));
