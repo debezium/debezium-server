@@ -145,8 +145,8 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
 
             final String exchangeName = (config.getExchange() != null && !config.getExchange().isEmpty())
                     ? config.getExchange()
-                    : streamNameMapper.map(events.destination());
-            final String routingKeyName = getRoutingKey(record, events.destination());
+                    : streamNameMapper.map(record.destination());
+            final String routingKeyName = getRoutingKey(record, record.destination());
 
             try {
                 if (isTopicRoutingKeySource() && config.isAutoCreateRoutingKey()) {
