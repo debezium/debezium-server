@@ -5,14 +5,14 @@
  */
 package io.debezium.server.pubsub;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -54,7 +54,7 @@ import io.debezium.server.api.DebeziumServerSink;
  */
 @Named("pubsublite")
 @Dependent
-public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PubSubLiteChangeConsumer.class);
 
@@ -123,11 +123,11 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
+    public void handle(CapturingEvents<BatchEvent> events) throws InterruptedException {
         final List<ApiFuture<String>> deliveries = new ArrayList<>();
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
-            final String topicName = streamNameMapper.map(record.destination());
+            final String topicName = streamNameMapper.map(events.destination());
 
             Publisher publisher = publishers.computeIfAbsent(topicName, (topic) -> publisherBuilder.get(topic));
 
@@ -145,14 +145,13 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
         LOGGER.trace("Sent messages with ids: {}", messageIds);
 
         // Once publishing is confirmed, mark all records as processed
-        for (ChangeEvent<Object, Object> record : records) {
-            committer.markProcessed(record);
+        for (BatchEvent record : events.records()) {
+            record.commit();
         }
 
-        committer.markBatchFinished();
     }
 
-    private PubsubMessage buildPubSubMessage(ChangeEvent<Object, Object> record) {
+    private PubsubMessage buildPubSubMessage(BatchEvent record) {
 
         final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
 
@@ -181,8 +180,8 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
     }
 
     @Override
-    public boolean supportsTombstoneEvents() {
-        return false;
+    public Optional<Boolean> tombstoneSupport() {
+        return Optional.of(false);
     }
 
     @Override

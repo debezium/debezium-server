@@ -23,11 +23,11 @@ import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Test;
 
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.Header;
 import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
@@ -40,7 +40,7 @@ public class HttpChangeConsumerTest {
         HttpChangeConsumer changeConsumer = createTestHttpChangeConsumer(Map.of(
                 "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
-        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
+        HttpRequest request = changeConsumer.generateRequest(createBatchEvent()).build();
 
         String value = request.headers().firstValue("X-DEBEZIUM-h1key").orElse(null);
         assertEquals("aDFWYWx1ZQ==", value);
@@ -52,7 +52,7 @@ public class HttpChangeConsumerTest {
                 "debezium.sink.http.headers.encode.base64", "false",
                 "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
-        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
+        HttpRequest request = changeConsumer.generateRequest(createBatchEvent()).build();
 
         String value = request.headers().firstValue("X-DEBEZIUM-h1key").orElse(null);
         assertEquals("h1Value", value);
@@ -64,12 +64,12 @@ public class HttpChangeConsumerTest {
                 "debezium.sink.http.headers.encode.base64", "false",
                 "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
-        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
+        HttpRequest request = changeConsumer.generateRequest(createBatchEvent()).build();
 
         List<String> headers1 = request.headers().allValues("X-DEBEZIUM-h1key");
         assertEquals(1, headers1.size());
 
-        HttpRequest request2 = changeConsumer.generateRequest(createChangeEvent()).build();
+        HttpRequest request2 = changeConsumer.generateRequest(createBatchEvent()).build();
 
         List<String> headers2 = request2.headers().allValues("X-DEBEZIUM-h1key");
         assertEquals(1, headers2.size());
@@ -82,7 +82,7 @@ public class HttpChangeConsumerTest {
                 "debezium.sink.http.headers.prefix", "XYZ-DBZ-",
                 "debezium.sink.http.url", "http://url",
                 "debezium.format.value", "avro"));
-        HttpRequest request = changeConsumer.generateRequest(createChangeEvent()).build();
+        HttpRequest request = changeConsumer.generateRequest(createBatchEvent()).build();
 
         String value = request.headers().firstValue("XYZ-DBZ-h1key").orElse(null);
         assertEquals("h1Value", value);
@@ -101,9 +101,9 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event = createChangeEvent();
+        var event = createBatchEvent();
 
-        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handle(capturingEvents(event)));
         verify(mockHttpClient, times(3)).send(any(), any());
     }
 
@@ -120,10 +120,10 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event = createChangeEvent();
+        var event = createBatchEvent();
 
         // Should retry when GOAWAY is received and eventually throw DebeziumException
-        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handleBatch(List.of(event), mock()));
+        assertThrows(io.debezium.DebeziumException.class, () -> changeConsumer.handle(capturingEvents(event)));
         verify(mockHttpClient, times(2)).send(any(), any());
     }
 
@@ -142,12 +142,10 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event1 = createChangeEventWithValue("{\"id\":1}");
-        ChangeEvent<Object, Object> event2 = createChangeEventWithValue("{\"id\":2}");
+        var event1 = createChangeEventWithValue("{\"id\":1}");
+        var event2 = createChangeEventWithValue("{\"id\":2}");
 
-        @SuppressWarnings("unchecked")
-        DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer = mock(DebeziumEngine.RecordCommitter.class);
-        changeConsumer.handleBatch(List.of(event1, event2), committer);
+        changeConsumer.handle(capturingEvents(event1, event2));
 
         // Should send exactly one HTTP request (the batch)
         var reqCaptor = org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
@@ -158,8 +156,8 @@ public class HttpChangeConsumerTest {
         assertTrue(sentRequest.bodyPublisher().isPresent());
 
         // Verify all records were marked processed
-        verify(committer, times(2)).markProcessed(any());
-        verify(committer, times(1)).markBatchFinished();
+        verify(event1, times(1)).commit();
+        verify(event2, times(1)).commit();
     }
 
     @Test
@@ -178,22 +176,24 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event1 = createChangeEventWithValue("{\"id\":1}");
-        ChangeEvent<Object, Object> event2 = createChangeEventWithValue("{\"id\":2}");
-        ChangeEvent<Object, Object> event3 = createChangeEventWithValue("{\"id\":3}");
-        ChangeEvent<Object, Object> event4 = createChangeEventWithValue("{\"id\":4}");
-        ChangeEvent<Object, Object> event5 = createChangeEventWithValue("{\"id\":5}");
+        var event1 = createChangeEventWithValue("{\"id\":1}");
+        var event2 = createChangeEventWithValue("{\"id\":2}");
+        var event3 = createChangeEventWithValue("{\"id\":3}");
+        var event4 = createChangeEventWithValue("{\"id\":4}");
+        var event5 = createChangeEventWithValue("{\"id\":5}");
 
-        @SuppressWarnings("unchecked")
-        DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer = mock(DebeziumEngine.RecordCommitter.class);
-        changeConsumer.handleBatch(List.of(event1, event2, event3, event4, event5), committer);
+        changeConsumer.handle(capturingEvents(event1, event2, event3, event4, event5));
 
         // 5 events with max-size=2 should produce 3 HTTP requests (2+2+1)
         verify(mockHttpClient, times(3)).send(any(), any());
 
         // All 5 records should be marked processed
-        verify(committer, times(5)).markProcessed(any());
-        verify(committer, times(1)).markBatchFinished();
+
+        verify(event1, times(1)).commit();
+        verify(event2, times(1)).commit();
+        verify(event3, times(1)).commit();
+        verify(event4, times(1)).commit();
+        verify(event5, times(1)).commit();
     }
 
     @Test
@@ -210,12 +210,10 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event1 = createChangeEventWithValue("{\"id\":1}");
-        ChangeEvent<Object, Object> event2 = createChangeEventWithValue("{\"id\":2}");
+        var event1 = createChangeEventWithValue("{\"id\":1}");
+        var event2 = createChangeEventWithValue("{\"id\":2}");
 
-        @SuppressWarnings("unchecked")
-        DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer = mock(DebeziumEngine.RecordCommitter.class);
-        changeConsumer.handleBatch(List.of(event1, event2), committer);
+        changeConsumer.handle(capturingEvents(event1, event2));
 
         // Should send two individual HTTP requests
         verify(mockHttpClient, times(2)).send(any(), any());
@@ -251,40 +249,39 @@ public class HttpChangeConsumerTest {
                         "debezium.format.value", "json"),
                 mockHttpClient);
 
-        ChangeEvent<Object, Object> event1 = createChangeEventWithValue("{\"id\":1}");
-        ChangeEvent<Object, Object> event2 = createChangeEventWithValue("{\"id\":2}");
-        ChangeEvent<Object, Object> event3 = createChangeEventWithValue("{\"id\":3}");
+        var event1 = createChangeEventWithValue("{\"id\":1}");
+        var event2 = createChangeEventWithValue("{\"id\":2}");
+        var event3 = createChangeEventWithValue("{\"id\":3}");
 
-        @SuppressWarnings("unchecked")
-        DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer = mock(DebeziumEngine.RecordCommitter.class);
-        changeConsumer.handleBatch(List.of(event1, event2, event3), committer);
+        changeConsumer.handle(capturingEvents(event1, event2, event3));
 
         // 1 token request + 2 batch sends (chunks of 2+1) = 3 total HTTP calls
         verify(mockHttpClient, times(3)).send(any(), any());
 
         // All records should be marked processed
-        verify(committer, times(3)).markProcessed(any());
-        verify(committer, times(1)).markBatchFinished();
+        verify(event1, times(1)).commit();
+        verify(event2, times(1)).commit();
+        verify(event3, times(1)).commit();
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    private static ChangeEvent<Object, Object> createChangeEventWithValue(String value) {
-        ChangeEvent<Object, Object> result = mock(ChangeEvent.class);
+    private static BatchEvent createChangeEventWithValue(String value) {
+        BatchEvent result = mock(BatchEvent.class);
         when(result.key()).thenReturn("key");
         when(result.value()).thenReturn(value);
-        when(result.destination()).thenReturn("dest");
+
         when(result.headers()).thenReturn(List.of());
         return result;
     }
 
     // Test subclass that allows injecting a mock HttpClient
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private static ChangeEvent<Object, Object> createChangeEvent() {
 
-        ChangeEvent<Object, Object> result = mock(ChangeEvent.class);
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private static BatchEvent createBatchEvent() {
+
+        BatchEvent result = mock(BatchEvent.class);
         when(result.key()).thenReturn("key");
         when(result.value()).thenReturn("value");
-        when(result.destination()).thenReturn("dest");
         Header header = mock(Header.class);
         when(header.getKey()).thenReturn("h1Key");
         when(header.getValue()).thenReturn("h1Value");
@@ -292,7 +289,6 @@ public class HttpChangeConsumerTest {
         return result;
 
     }
-
     private HttpChangeConsumer createTestHttpChangeConsumer(Map<String, String> testValues) throws URISyntaxException, IOException {
         return createTestHttpChangeConsumer(testValues, mock(HttpClient.class));
     }
@@ -312,5 +308,29 @@ public class HttpChangeConsumerTest {
         result.initWithConfig(testConfig);
 
         return result;
+    }
+
+    private static CapturingEvents<BatchEvent> capturingEvents(BatchEvent ...events) {
+        return new CapturingEvents<>() {
+            @Override
+            public List<BatchEvent> records() {
+                return List.of(events);
+            }
+
+            @Override
+            public String destination() {
+                return "dest";
+            }
+
+            @Override
+            public String source() {
+                return "";
+            }
+
+            @Override
+            public String engine() {
+                return "default";
+            }
+        };
     }
 }

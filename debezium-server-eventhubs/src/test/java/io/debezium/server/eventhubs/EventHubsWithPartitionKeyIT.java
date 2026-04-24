@@ -11,6 +11,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
@@ -27,9 +29,6 @@ import com.azure.messaging.eventhubs.EventHubProducerClient;
 import com.azure.messaging.eventhubs.models.EventPosition;
 import com.azure.messaging.eventhubs.models.PartitionEvent;
 
-import io.debezium.server.DebeziumServer;
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -70,9 +69,6 @@ public class EventHubsWithPartitionKeyIT {
         }
     }
 
-    @Inject
-    DebeziumServer server;
-
     void setupDependencies(@Observes ConnectorStartedEvent event) {
         String finalConnectionString = String.format("%s;EntityPath=%s",
                 EventHubsTestConfigSource.getEventHubsConnectionString(), EventHubsTestConfigSource.getEventHubsName());
@@ -80,9 +76,9 @@ public class EventHubsWithPartitionKeyIT {
         producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 

@@ -5,9 +5,10 @@
  */
 package io.debezium.server.pravega;
 
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine.ChangeConsumer;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 
-public interface PravegaSink extends ChangeConsumer<ChangeEvent<Object, Object>>, AutoCloseable {
+public interface PravegaSink extends DebeziumServerConsumer<CapturingEvents<BatchEvent>>, AutoCloseable {
 
 }

@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
 
 import org.awaitility.Awaitility;
@@ -23,7 +24,6 @@ import com.google.gson.JsonObject;
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.server.TestConfigSource;
-import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.util.Testing;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
@@ -80,9 +80,9 @@ public class MilvusIT {
         client = new MilvusClientV2(config);
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw new RuntimeException(event.getError().get());
+            throw new RuntimeException(event.getError());
         }
     }
 

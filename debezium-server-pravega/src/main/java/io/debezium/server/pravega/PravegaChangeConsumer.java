@@ -9,6 +9,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -39,7 +42,7 @@ import io.pravega.client.stream.impl.ByteArraySerializer;
 
 @Named("pravega")
 @Dependent
-public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class PravegaChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PravegaChangeConsumer.class);
 
@@ -77,9 +80,9 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
+    public void handle(CapturingEvents<BatchEvent> events) {
         try (PravegaSink impl = (config.isTransaction()) ? new PravegaTxnSinkImpl() : new PravegaSinkImpl()) {
-            impl.handleBatch(records, committer);
+            impl.handle(events);
         }
         catch (Exception e) {
             throw new RuntimeException(e);
@@ -90,9 +93,9 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
         private final Map<String, EventStreamWriter<byte[]>> writers = new HashMap<>();
 
         @Override
-        public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
-            for (ChangeEvent<Object, Object> changeEvent : records) {
-                String streamName = streamNameMapper.map(changeEvent.destination());
+        public void handle(CapturingEvents<BatchEvent> events) {
+            for (BatchEvent changeEvent : events.records()) {
+                String streamName = streamNameMapper.map(events.destination());
                 final EventStreamWriter<byte[]> writer = writers.computeIfAbsent(streamName, (stream) -> createWriter(stream));
                 if (changeEvent.key() != null) {
                     writer.writeEvent(getString(changeEvent.key()), getBytes(changeEvent.value()));
@@ -100,9 +103,8 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
                 else {
                     writer.writeEvent(getBytes(changeEvent.value()));
                 }
-                committer.markProcessed(changeEvent);
+                changeEvent.commit();
             }
-            committer.markBatchFinished();
         }
 
         private EventStreamWriter<byte[]> createWriter(String stream) {
@@ -122,9 +124,9 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
         private final Map<String, Transaction<byte[]>> txns = new HashMap<>();
 
         @Override
-        public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer) throws InterruptedException {
-            for (ChangeEvent<Object, Object> changeEvent : records) {
-                String streamName = streamNameMapper.map(changeEvent.destination());
+        public void handle(CapturingEvents<BatchEvent> events) {
+            for (BatchEvent changeEvent : events.records()) {
+                String streamName = streamNameMapper.map(events.destination());
                 final Transaction<byte[]> txn = txns.computeIfAbsent(streamName, (stream) -> createTxn(stream));
                 try {
                     if (changeEvent.key() != null) {
@@ -137,7 +139,7 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
                 catch (TxnFailedException e) {
                     throw new RuntimeException(e);
                 }
-                committer.markProcessed(changeEvent);
+                changeEvent.commit();
             }
             txns.values().forEach(t -> {
                 try {
@@ -147,7 +149,6 @@ public class PravegaChangeConsumer extends BaseChangeConsumer implements ChangeC
                     throw new RuntimeException(e);
                 }
             });
-            committer.markBatchFinished();
             txns.clear();
         }
 

@@ -13,6 +13,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -48,7 +51,7 @@ import io.debezium.server.api.DebeziumServerSink;
  */
 @Named("kafka")
 @Dependent
-public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaChangeConsumer.class);
 
@@ -99,18 +102,16 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
     }
 
     @Override
-    public void handleBatch(final List<ChangeEvent<Object, Object>> records,
-                            final RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    public void handle(final CapturingEvents<BatchEvent> events) throws InterruptedException {
 
-        final List<Future<RecordMetadata>> deliveryFutures = new ArrayList<>(records.size());
+        final List<Future<RecordMetadata>> deliveryFutures = new ArrayList<>(events.records().size());
 
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             try {
                 LOGGER.trace("Received event '{}'", record);
                 Headers headers = convertKafkaHeaders(record);
 
-                String topicName = streamNameMapper.map(record.destination());
+                String topicName = streamNameMapper.map(events.destination());
                 deliveryFutures.add(producer.send(new ProducerRecord<>(topicName, null, null, record.key(), record.value(), headers),
                         (metadata, exception) -> {
                             if (exception != null) {
@@ -129,9 +130,9 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
         }
 
         try {
-            for (int i = 0; i < records.size(); i++) {
+            for (int i = 0; i < events.records().size(); i++) {
                 final var recordMetadataFuture = deliveryFutures.get(i);
-                final var record = records.get(i);
+                final var record = events.records().get(i);
 
                 if (config.getWaitMessageDeliveryTimeout() == 0) {
                     recordMetadataFuture.get();
@@ -141,22 +142,20 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumE
                         recordMetadataFuture.get(config.getWaitMessageDeliveryTimeout(), TimeUnit.MILLISECONDS);
                     }
                     catch (TimeoutException e) {
-                        LOGGER.error("Timed out while waiting to send a record to '{}'", streamNameMapper.map(record.destination()));
+                        LOGGER.error("Timed out while waiting to send a record to '{}'", streamNameMapper.map(events.destination()));
                         throw new DebeziumException(e);
                     }
 
                 }
-                committer.markProcessed(record);
+                record.commit();
             }
         }
         catch (ExecutionException e) {
             throw new DebeziumException(e);
         }
-
-        committer.markBatchFinished();
     }
 
-    private Headers convertKafkaHeaders(ChangeEvent<Object, Object> record) {
+    private Headers convertKafkaHeaders(BatchEvent record) {
         List<Header<Object>> headers = record.headers();
         Headers kafkaHeaders = new RecordHeaders();
         for (Header<Object> header : headers) {
