@@ -43,13 +43,13 @@ import com.rabbitmq.stream.StreamException;
 import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.handler.ssl.SslContext;
@@ -63,7 +63,7 @@ import io.netty.handler.ssl.SslProvider;
  */
 @Named("rabbitmqstream")
 @Dependent
-public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamNativeChangeConsumer.class);
 
@@ -109,7 +109,7 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
         stream.create();
     }
 
-    private Message createMessage(Producer producer, ChangeEvent<Object, Object> record) {
+    private Message createMessage(Producer producer, BatchEvent record) {
         MessageBuilder message = producer.messageBuilder();
         MessageBuilder.ApplicationPropertiesBuilder applicationProperties = message.applicationProperties();
         for (Header<Object> header : record.headers()) {
@@ -250,13 +250,13 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
 
-        CountDownLatch latch = new CountDownLatch(records.size());
+        CountDownLatch latch = new CountDownLatch(events.records().size());
         AtomicBoolean hasError = new AtomicBoolean(false);
 
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
 
             try {
@@ -277,7 +277,7 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
                         confirmationStatus -> {
                             try {
                                 if (confirmationStatus.isConfirmed()) {
-                                    committer.markProcessed(record);
+                                    record.commit();
                                 }
                                 else {
                                     LOGGER.error("Failed to confirm message delivery for event '{}'", record);
@@ -305,7 +305,6 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
         if (!hasError.get()) {
             LOGGER.trace("All messages sent successfully");
-            committer.markBatchFinished();
         }
         else {
             throw new DebeziumException("Batch processing was incomplete due to record processing errors.");
