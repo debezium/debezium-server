@@ -15,8 +15,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
@@ -42,8 +43,6 @@ import com.google.cloud.pubsublite.proto.Subscription;
 import com.google.pubsub.v1.PubsubMessage;
 
 import io.debezium.server.TestConfigSource;
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -90,9 +89,6 @@ public class PubSubLiteIT {
             }
         }
     }
-
-    @Inject
-    DebeziumServer server;
 
     private static final List<PubsubMessage> messages = Collections.synchronizedList(new ArrayList<>());
 
@@ -147,9 +143,9 @@ public class PubSubLiteIT {
         subscriber.startAsync().awaitRunning();
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 
