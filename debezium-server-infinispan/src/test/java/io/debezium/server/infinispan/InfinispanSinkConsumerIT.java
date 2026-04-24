@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.debezium.server.DebeziumServer;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -42,9 +41,6 @@ public class InfinispanSinkConsumerIT {
         Testing.Files.delete(InfinispanTestConfigSource.OFFSET_STORE_PATH);
         Testing.Files.createTestingFile(InfinispanTestConfigSource.OFFSET_STORE_PATH);
     }
-
-    @Inject
-    DebeziumServer server;
 
     private DefaultCacheManager cacheManager;
     private Cache<String, String> cache;
