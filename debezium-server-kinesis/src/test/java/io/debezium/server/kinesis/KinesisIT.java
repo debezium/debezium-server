@@ -9,15 +9,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
-import io.debezium.server.DebeziumServer;
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -53,9 +51,6 @@ public class KinesisIT {
         Testing.Files.createTestingFile(KinesisTestConfigSource.OFFSET_STORE_PATH);
     }
 
-    @Inject
-    DebeziumServer server;
-
     void setupDependencies(@Observes ConnectorStartedEvent event) {
         kinesis = KinesisClient.builder()
                 .region(Region.of(KinesisTestConfigSource.KINESIS_REGION))
@@ -63,9 +58,9 @@ public class KinesisIT {
                 .build();
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 
