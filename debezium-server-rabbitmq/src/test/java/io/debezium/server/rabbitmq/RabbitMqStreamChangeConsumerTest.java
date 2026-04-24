@@ -18,6 +18,9 @@ import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,7 +41,7 @@ class RabbitMqStreamChangeConsumerTest {
 
     private Channel channelMock;
     private StreamNameMapper streamNameMapperMock;
-    private ChangeEvent<Object, Object> eventMock;
+    private BatchEvent eventMock;
     private RecordCommitter<ChangeEvent<Object, Object>> committerMock;
 
     private RabbitMqStreamChangeConsumer rabbitMqStreamChangeConsumer;
@@ -58,7 +61,7 @@ class RabbitMqStreamChangeConsumerTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        eventMock = mock(ChangeEvent.class);
+        eventMock = mock(BatchEvent.class);
         channelMock = mock(Channel.class);
         committerMock = mock(RecordCommitter.class);
         streamNameMapperMock = mock(StreamNameMapper.class);
@@ -92,9 +95,8 @@ class RabbitMqStreamChangeConsumerTest {
         // given
         String topicName = "test-topic";
         String payload = "test content";
-        List<ChangeEvent<Object, Object>> records = List.of(eventMock);
+        CapturingEvents<BatchEvent> records = createCapturingEvents(topicName, eventMock);
 
-        when(eventMock.destination()).thenReturn(topicName);
         when(eventMock.value()).thenReturn(payload);
         when(eventMock.headers()).thenReturn(List.of());
         when(streamNameMapperMock.map(topicName)).thenReturn(topicName);
@@ -102,7 +104,7 @@ class RabbitMqStreamChangeConsumerTest {
         rabbitMqStreamChangeConsumer.config = createConfig(DELIVERY_MODE, ACK_TIMEOUT, topicName, "topic", "ignored", true, true);
 
         // when
-        rabbitMqStreamChangeConsumer.handleBatch(records, committerMock);
+        rabbitMqStreamChangeConsumer.handle(records);
 
         // then
         verify(channelMock).queueDeclare(topicName, true, false, false, null);
@@ -122,9 +124,8 @@ class RabbitMqStreamChangeConsumerTest {
         // given
         String topicName = "test-topic";
         String payload = "test content";
-        List<ChangeEvent<Object, Object>> records = List.of(eventMock);
+        CapturingEvents<BatchEvent> records = createCapturingEvents(topicName, eventMock);
 
-        when(eventMock.destination()).thenReturn(topicName);
         when(eventMock.value()).thenReturn(payload);
         when(eventMock.headers()).thenReturn(List.of());
         when(streamNameMapperMock.map(topicName)).thenReturn(topicName);
@@ -133,7 +134,7 @@ class RabbitMqStreamChangeConsumerTest {
                 staticRoutingKey != null ? staticRoutingKey : "", false, true);
 
         // when
-        rabbitMqStreamChangeConsumer.handleBatch(records, committerMock);
+        rabbitMqStreamChangeConsumer.handle(records);
 
         // then
         verify(channelMock, never()).queueDeclare(any(), anyBoolean(), anyBoolean(), anyBoolean(), any());
@@ -153,9 +154,8 @@ class RabbitMqStreamChangeConsumerTest {
         // given
         String topicName = "test-topic";
         String payload = "test content";
-        List<ChangeEvent<Object, Object>> records = List.of(eventMock);
+        CapturingEvents<BatchEvent> records = createCapturingEvents(topicName, eventMock);
 
-        when(eventMock.destination()).thenReturn(topicName);
         when(eventMock.value()).thenReturn(payload);
         when(eventMock.key()).thenReturn(routingKey);
         when(eventMock.headers()).thenReturn(List.of());
@@ -165,7 +165,7 @@ class RabbitMqStreamChangeConsumerTest {
         rabbitMqStreamChangeConsumer.config = createConfig(DELIVERY_MODE, ACK_TIMEOUT, topicName, "key", "ignored", false, true);
 
         // when
-        rabbitMqStreamChangeConsumer.handleBatch(records, committerMock);
+        rabbitMqStreamChangeConsumer.handle(records);
 
         // then
         verify(channelMock, never()).queueDeclare(any(), anyBoolean(), anyBoolean(), anyBoolean(), any());
@@ -177,5 +177,29 @@ class RabbitMqStreamChangeConsumerTest {
 
         verify(channelMock).basicPublish(topicName, expectedRoutingKey, expectedProperties, payload.getBytes());
         verify(channelMock).waitForConfirmsOrDie(ACK_TIMEOUT);
+    }
+
+    private CapturingEvents<BatchEvent> createCapturingEvents(String topicName, BatchEvent mock) {
+        return new CapturingEvents<>() {
+            @Override
+            public List<BatchEvent> records() {
+                return List.of(mock);
+            }
+
+            @Override
+            public String destination() {
+                return topicName;
+            }
+
+            @Override
+            public String source() {
+                return "";
+            }
+
+            @Override
+            public String engine() {
+                return "";
+            }
+        };
     }
 }
