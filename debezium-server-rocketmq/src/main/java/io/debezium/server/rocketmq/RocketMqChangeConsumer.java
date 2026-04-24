@@ -10,6 +10,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -35,8 +38,6 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
@@ -48,7 +49,7 @@ import io.debezium.server.api.DebeziumServerSink;
  */
 @Named("rocketmq")
 @Dependent
-public class RocketMqChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class RocketMqChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RocketMqChangeConsumer.class);
 
@@ -147,12 +148,12 @@ public class RocketMqChangeConsumer extends BaseChangeConsumer implements Debezi
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
-        final CountDownLatch latch = new CountDownLatch(records.size());
-        for (ChangeEvent<Object, Object> record : records) {
+        final CountDownLatch latch = new CountDownLatch(events.records().size());
+        for (BatchEvent record : events.records()) {
             try {
-                final String topicName = streamNameMapper.map(record.destination());
+                final String topicName = streamNameMapper.map(events.destination());
                 String key = getString(record.key());
 
                 Message message = new Message(topicName, null, key, getBytes(record.value()));
@@ -171,7 +172,7 @@ public class RocketMqChangeConsumer extends BaseChangeConsumer implements Debezi
 
                     @Override
                     public void onException(Throwable throwable) {
-                        LOGGER.error("Failed to send record to {}:", record.destination(), throwable);
+                        LOGGER.error("Failed to send record to {}:", events.destination(), throwable);
                         throw new DebeziumException(throwable);
                     }
                 });
@@ -184,10 +185,9 @@ public class RocketMqChangeConsumer extends BaseChangeConsumer implements Debezi
         // Messages have set default send timeout, so this will not block forever.
         latch.await();
 
-        for (ChangeEvent<Object, Object> record : records) {
-            committer.markProcessed(record);
+        for (BatchEvent record : events.records()) {
+            record.commit();
         }
-        committer.markBatchFinished();
     }
 
 }
