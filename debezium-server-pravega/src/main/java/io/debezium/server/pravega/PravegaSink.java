@@ -5,9 +5,11 @@
  */
 package io.debezium.server.pravega;
 
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine.ChangeConsumer;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 
-public interface PravegaSink extends ChangeConsumer<ChangeEvent<Object, Object>>, AutoCloseable {
+public interface PravegaSink extends AutoCloseable {
+
+    void handle(CapturingEvents<BatchEvent> events) throws InterruptedException;
 
 }
