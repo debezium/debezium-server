@@ -12,6 +12,9 @@ import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -33,8 +36,6 @@ import io.debezium.Module;
 import io.debezium.annotation.VisibleForTesting;
 import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
@@ -50,7 +51,7 @@ import io.debezium.server.api.DebeziumServerSink;
  */
 @Named("rabbitmq")
 @Dependent
-public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RabbitMqStreamChangeConsumer.class);
 
@@ -138,15 +139,14 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
-        for (ChangeEvent<Object, Object> record : records) {
+    public void handle(CapturingEvents<BatchEvent> events) throws InterruptedException {
+        for (BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
 
             final String exchangeName = (config.getExchange() != null && !config.getExchange().isEmpty())
                     ? config.getExchange()
-                    : streamNameMapper.map(record.destination());
-            final String routingKeyName = getRoutingKey(record);
+                    : streamNameMapper.map(events.destination());
+            final String routingKeyName = getRoutingKey(record, events.destination());
 
             try {
                 if (isTopicRoutingKeySource() && config.isAutoCreateRoutingKey()) {
@@ -174,21 +174,20 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
             throw new DebeziumException(e);
         }
 
-        LOGGER.trace("Marking {} records as processed.", records.size());
-        for (ChangeEvent<Object, Object> record : records) {
-            committer.markProcessed(record);
+        LOGGER.trace("Marking {} records as processed.", events.records().size());
+        for (BatchEvent record : events.records()) {
+            record.commit();
         }
 
-        committer.markBatchFinished();
         LOGGER.trace("Batch marked finished");
     }
 
-    private String getRoutingKey(ChangeEvent<Object, Object> eventRecord) {
+    private String getRoutingKey(BatchEvent eventRecord, String destination) {
         if (isStaticRoutingKeySource()) {
             return config.getRoutingKey();
         }
         else if (isTopicRoutingKeySource()) {
-            return streamNameMapper.map(eventRecord.destination());
+            return streamNameMapper.map(destination);
         }
         else if (isKeyRoutingKeySource()) {
             return eventRecord.key() != null ? getString(eventRecord.key()) : EMPTY_ROUTING_KEY;
@@ -208,7 +207,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         return KEY_ROUTING_KEY_SOURCE.equals(config.getRoutingKeySource());
     }
 
-    private static Map<String, Object> convertRabbitMqHeaders(ChangeEvent<Object, Object> record) {
+    private static Map<String, Object> convertRabbitMqHeaders(BatchEvent record) {
         List<Header<Object>> headers = record.headers();
         Map<String, Object> rabbitMqHeaders = new HashMap<>();
         for (Header<Object> header : headers) {
