@@ -7,6 +7,9 @@ package io.debezium.server.nats.streaming;
 
 import java.util.List;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -43,7 +46,7 @@ import io.nats.streaming.StreamingConnection;
 @Named("nats-streaming")
 @Dependent
 public class NatsStreamingChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NatsStreamingChangeConsumer.class);
 
@@ -115,13 +118,11 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records,
-                            RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    public void handle(CapturingEvents<BatchEvent> events) {
 
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             if (record.value() != null) {
-                String subject = streamNameMapper.map(record.destination());
+                String subject = streamNameMapper.map(events.destination());
                 byte[] recordBytes = getBytes(record.value());
                 LOGGER.trace("Received event @ {} = '{}'", subject, record.value());
 
@@ -132,9 +133,8 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
                     throw new DebeziumException(e);
                 }
             }
-            committer.markProcessed(record);
+            record.commit();
         }
-        committer.markBatchFinished();
     }
 
     @Override
