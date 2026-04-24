@@ -17,6 +17,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -37,8 +40,6 @@ import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
@@ -66,7 +67,7 @@ import io.nats.client.impl.NatsMessage;
 @Named("nats-jetstream")
 @Dependent
 public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NatsJetStreamChangeConsumer.class);
 
@@ -173,23 +174,21 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records,
-                            RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
-        if (!config.isAsyncEnabled() || records.isEmpty()) {
-            handleBatchSync(records, committer);
+        if (!config.isAsyncEnabled() || events.records().isEmpty()) {
+            handleBatchSync(events.records(), events.destination());
             return;
         }
-        handleBatchAsync(records, committer);
+        handleBatchAsync(events.records(), events.destination());
     }
 
-    private void handleBatchSync(List<ChangeEvent<Object, Object>> records,
-                                 RecordCommitter<ChangeEvent<Object, Object>> committer)
+    private void handleBatchSync(List<BatchEvent> records, String destination)
             throws InterruptedException {
 
-        for (ChangeEvent<Object, Object> rec : records) {
+        for (BatchEvent rec : records) {
             if (rec.value() != null) {
-                String subject = streamNameMapper.map(rec.destination());
+                String subject = streamNameMapper.map(destination);
                 LOGGER.trace("Received event @ {} = '{}'", subject, rec.value());
                 byte[] recordBytes = getBytes(rec.value());
 
@@ -206,19 +205,16 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                 publishWithRetry(subject, natsHeaders, recordBytes);
 
             }
-            committer.markProcessed(rec);
+            rec.commit();
         }
-        committer.markBatchFinished();
     }
 
-    private void handleBatchAsync(List<ChangeEvent<Object, Object>> records,
-                                  RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    private void handleBatchAsync(List<BatchEvent> records, String destination) throws InterruptedException {
 
         List<CompletableFuture<PublishAck>> futures = records.stream()
                 .filter(rec -> rec.value() != null)
                 .map(rec -> {
-                    String subject = streamNameMapper.map(rec.destination());
+                    String subject = streamNameMapper.map(destination);
                     LOGGER.trace("Received event for async processing @ {} = '{}'", subject, rec.value());
                     byte[] recordBytes = getBytes(rec.value());
 
@@ -254,20 +250,18 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
                 })
                 .toList();
         if (futures.isEmpty()) {
-            for (ChangeEvent<Object, Object> rec : records) {
-                committer.markProcessed(rec);
+            for (BatchEvent rec : records) {
+                rec.commit();
             }
-            committer.markBatchFinished();
             return;
         }
         try {
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]))
                     .get(config.getAsyncTimeoutMs(), TimeUnit.MILLISECONDS);
 
-            for (ChangeEvent<Object, Object> rec : records) {
-                committer.markProcessed(rec);
+            for (BatchEvent rec : records) {
+                rec.commit();
             }
-            committer.markBatchFinished();
             LOGGER.debug("Successfully published batch of {} messages", records.size());
         }
         catch (TimeoutException e) {
