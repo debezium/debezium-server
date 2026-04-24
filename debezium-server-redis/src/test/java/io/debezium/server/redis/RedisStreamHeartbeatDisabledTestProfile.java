@@ -5,9 +5,20 @@
  */
 package io.debezium.server.redis;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
+import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
+
 public class RedisStreamHeartbeatDisabledTestProfile extends RedisStreamTestProfile {
+
+    @Override
+    public List<TestResourceEntry> testResources() {
+        return Arrays.asList(new TestResourceEntry(RedisTestResourceLifecycleManager.class),
+                new TestResourceEntry(PostgresTestResourceLifecycleManager.class));
+    }
+
     @Override
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = super.getConfigOverrides();
