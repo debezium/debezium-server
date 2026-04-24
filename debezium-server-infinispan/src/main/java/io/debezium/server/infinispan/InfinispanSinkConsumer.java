@@ -9,6 +9,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -42,7 +45,7 @@ import io.debezium.server.api.DebeziumServerSink;
  */
 @Named("infinispan")
 @Dependent
-public class InfinispanSinkConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class InfinispanSinkConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InfinispanSinkConsumer.class);
 
@@ -107,10 +110,9 @@ public class InfinispanSinkConsumer extends BaseChangeConsumer implements Debezi
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
-        Map<Object, Object> entries = new HashMap<>(records.size());
-        for (ChangeEvent<Object, Object> record : records) {
+    public void handle(CapturingEvents<BatchEvent> events) {
+        Map<Object, Object> entries = new HashMap<>(events.records().size());
+        for (BatchEvent record : events.records()) {
             if (record.value() != null) {
                 LOGGER.trace("Received event {} = '{}'", getString(record.key()), getString(record.value()));
                 entries.put(record.key(), record.value());
@@ -124,11 +126,9 @@ public class InfinispanSinkConsumer extends BaseChangeConsumer implements Debezi
             throw new DebeziumException(e);
         }
 
-        for (ChangeEvent<Object, Object> record : records) {
-            committer.markProcessed(record);
+        for (BatchEvent record : events.records()) {
+            record.commit();
         }
-
-        committer.markBatchFinished();
     }
 
     @Override
