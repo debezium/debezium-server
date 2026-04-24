@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -27,9 +30,7 @@ import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.data.Envelope;
 import io.debezium.data.Envelope.Operation;
-import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
@@ -53,7 +54,7 @@ import io.qdrant.client.grpc.Points.PointStruct;
 @Named("qdrant")
 @Dependent
 public class QdrantChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(QdrantChangeConsumer.class);
 
@@ -110,20 +111,17 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records,
-                            RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
 
-        for (final ChangeEvent<Object, Object> record : records) {
+        for (final BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
 
-            final var collectionName = streamNameMapper.map(record.destination());
+            final var collectionName = streamNameMapper.map(events.destination());
 
-            final var sourceRecord = toSourceRecord(record);
-
-            if (isSchemaChange(sourceRecord)) {
+            if (isSchemaChange(record.record())) {
                 LOGGER.debug("Schema change event, ignoring it");
-                committer.markProcessed(record);
+                record.commit();
                 continue;
             }
 
@@ -131,20 +129,20 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
                 throw new DebeziumException("Qdrant does not support collections without primary key");
             }
 
-            if (sourceRecord.value() == null) {
-                deleteRecord(collectionName, record, committer);
+            if (record.record().value() == null) {
+                deleteRecord(collectionName, record);
             }
-            else if (Envelope.isEnvelopeSchema(sourceRecord.valueSchema())) {
-                final var valueStruct = (Struct) sourceRecord.value();
-                final var payload = ((Struct) sourceRecord.value()).getStruct(Envelope.FieldName.AFTER);
+            else if (Envelope.isEnvelopeSchema(record.record().valueSchema())) {
+                final var valueStruct = (Struct) record.record().value();
+                final var payload = ((Struct) record.record().value()).getStruct(Envelope.FieldName.AFTER);
                 switch (Operation.forCode(valueStruct.getString(Envelope.FieldName.OPERATION))) {
                     case Operation.READ:
                     case Operation.CREATE:
                     case Operation.UPDATE:
-                        upsertRecord(collectionName, record, payload, committer);
+                        upsertRecord(collectionName, record, payload);
                         break;
                     case Operation.DELETE:
-                        deleteRecord(collectionName, record, committer);
+                        deleteRecord(collectionName, record);
                         break;
                     default:
                         LOGGER.info("Unsupported operation, skipping record '{}'", record);
@@ -152,22 +150,11 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
             }
             else {
                 // Extracted new record state
-                final var payload = (Struct) sourceRecord.value();
-                upsertRecord(collectionName, record, payload, committer);
+                final var payload = (Struct) record.record().value();
+                upsertRecord(collectionName, record, payload);
             }
         }
 
-        committer.markBatchFinished();
-    }
-
-    protected SourceRecord toSourceRecord(final ChangeEvent<Object, Object> record) {
-        // Qdrant sink requires access to the message schema so it can process
-        // the fields individually based on their type
-        // This is not a part of public Debezium Engine API but is an
-        // implementation detail on which Debezium Server can rely
-        @SuppressWarnings("rawtypes")
-        final var sourceRecord = ((EmbeddedEngineChangeEvent) record).sourceRecord();
-        return sourceRecord;
     }
 
     private boolean isSchemaChange(final SourceRecord record) {
@@ -175,10 +162,9 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
                 && SchemaFactory.get().isSchemaChangeSchema(record.valueSchema());
     }
 
-    private void upsertRecord(String collectionName, ChangeEvent<Object, Object> record, Struct payload,
-                              RecordCommitter<ChangeEvent<Object, Object>> committer)
+    private void upsertRecord(String collectionName, BatchEvent record, Struct payload)
             throws InterruptedException {
-        final var key = ((Struct) toSourceRecord(record).key());
+        final var key = ((Struct) record.record().key());
 
         final var point = PointStruct.newBuilder().setId(messageFactory.toPointId(key))
                 .setVectors(messageFactory.toVectors(collectionName, payload))
@@ -191,13 +177,12 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
             throw new DebeziumException("Error while upserting data into Qdrant", e.getCause());
         }
 
-        committer.markProcessed(record);
+        record.commit();
     }
 
-    private void deleteRecord(String collectionName, ChangeEvent<Object, Object> record,
-                              RecordCommitter<ChangeEvent<Object, Object>> committer)
+    private void deleteRecord(String collectionName, BatchEvent record)
             throws InterruptedException {
-        final var key = ((Struct) toSourceRecord(record).key());
+        final var key = ((Struct) record.record().key());
 
         try {
             final var deleteResult = qdrantClient.deleteAsync(collectionName, List.of(messageFactory.toPointId(key))).get();
@@ -206,7 +191,7 @@ public class QdrantChangeConsumer extends BaseChangeConsumer
             throw new DebeziumException("Error while deleteing data from Qdrant", e.getCause());
         }
 
-        committer.markProcessed(record);
+        record.commit();
     }
 
     @Override
