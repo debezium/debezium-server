@@ -20,6 +20,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -35,7 +38,6 @@ import io.debezium.Module;
 import io.debezium.config.Configuration;
 import io.debezium.config.Field;
 import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
@@ -56,7 +58,7 @@ import io.debezium.util.DelayStrategy;
 @Named("redis")
 @Dependent
 public class RedisStreamChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisStreamChangeConsumer.class);
 
@@ -71,7 +73,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
     private static final String EXTENDED_MESSAGE_VALUE_KEY = "value";
     private RedisClient client;
 
-    private Function<ChangeEvent<Object, Object>, Map<String, String>> recordMapFunction;
+    private Function<BatchEvent, Map<String, String>> recordMapFunction;
 
     private RedisMemoryThreshold redisMemoryThreshold;
 
@@ -156,21 +158,20 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records,
-                            RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
         DelayStrategy delayStrategy = DelayStrategy.exponential(Duration.ofMillis(config.getInitialRetryDelay()),
                 Duration.ofMillis(config.getMaxRetryDelay()));
 
         DelayStrategy delayStrategyOnRecordsConsumption = DelayStrategy.constant(Duration.ofMillis(config.getWaitRetryDelay()));
 
-        LOGGER.debug("Handling a batch of {} records", records.size());
-        batches(records, config.getBatchSize()).forEach(batch -> {
+        LOGGER.debug("Handling a batch of {} records", events.records().size());
+        batches(events.records(), config.getBatchSize()).forEach(batch -> {
             boolean completedSuccessfully = false;
 
             // Clone the batch and remove the records that have been successfully processed.
             // Move to the next batch once this list is empty.
-            List<ChangeEvent<Object, Object>> clonedBatch = batch.stream().collect(Collectors.toList());
+            List<BatchEvent> clonedBatch = batch.stream().collect(Collectors.toList());
 
             // As long as we failed to execute the current batch to the stream, we should
             // retry if the reason
@@ -192,14 +193,14 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         LOGGER.debug("Preparing a Redis Pipeline of {} records", clonedBatch.size());
 
                         List<SimpleEntry<String, Map<String, String>>> recordsMap = new ArrayList<>(clonedBatch.size());
-                        List<ChangeEvent<Object, Object>> processedRecords = new ArrayList<ChangeEvent<Object, Object>>();
-                        for (ChangeEvent<Object, Object> record : clonedBatch) {
-                            String destination = streamNameMapper.map(record.destination());
+                        List<BatchEvent> processedRecords = new ArrayList<BatchEvent>();
+                        for (BatchEvent record : clonedBatch) {
+                            String destination = streamNameMapper.map(events.destination());
 
-                            // Check if this is a heartbeat message that should be skipped
+                            // Check if this is a hear<ChangeEvent<Object, Object>>tbeat message that should be skipped
                             if (config.isSkipHeartbeatMessages() && destination.startsWith(heartbeatPrefix)) {
                                 // Mark as processed and track for removal from clonedBatch
-                                committer.markProcessed(record);
+                                record.commit();
                                 processedRecords.add(record);
                                 continue;
                             }
@@ -241,8 +242,8 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                             }
                             else {
                                 // Mark the record as processed
-                                ChangeEvent<Object, Object> currentRecord = clonedBatch.get(index);
-                                committer.markProcessed(currentRecord);
+                                BatchEvent currentRecord = clonedBatch.get(index);
+                                currentRecord.commit();
                                 processedRecords.add(currentRecord);
                             }
 
@@ -274,9 +275,6 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                 delayStrategy.sleepWhen(!completedSuccessfully);
             }
         });
-
-        // Mark the whole batch as finished once the sub batches completed
-        committer.markBatchFinished();
     }
 
     private static long getObjectSize(SimpleEntry<String, Map<String, String>> record) {
