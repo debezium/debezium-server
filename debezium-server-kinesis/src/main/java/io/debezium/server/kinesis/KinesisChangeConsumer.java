@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -57,7 +60,7 @@ import software.amazon.awssdk.services.kinesis.model.PutRecordsResultEntry;
  */
 @Named("kinesis")
 @Dependent
-public class KinesisChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class KinesisChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KinesisChangeConsumer.class);
 
@@ -121,33 +124,32 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
 
         // Guard if records are empty
-        if (records.isEmpty()) {
-            committer.markBatchFinished();
+        if (events.records().isEmpty()) {
             return;
         }
 
         String streamName;
-        List<ChangeEvent<Object, Object>> batch = new ArrayList<>();
+        List<BatchEvent> batch = new ArrayList<>();
 
         // Group the records by destination
-        Map<String, List<ChangeEvent<Object, Object>>> segmentedBatches = records.stream().collect(Collectors.groupingBy(record -> record.destination()));
+        Map<String, List<BatchEvent>> segmentedBatches = events.records().stream().collect(Collectors.groupingBy(record -> events.destination()));
 
         // Iterate over the segmentedBatches
-        for (List<ChangeEvent<Object, Object>> segmentedBatch : segmentedBatches.values()) {
+        for (Map.Entry<String, List<BatchEvent>> segmentedBatch : segmentedBatches.entrySet()) {
             // Iterate over the batch
 
-            for (int i = 0; i < segmentedBatch.size(); i += config.getBatchSize()) {
+            for (int i = 0; i < segmentedBatch.getValue().size(); i += config.getBatchSize()) {
 
                 // Create a sublist of the batch given the batchSize
-                batch = segmentedBatch.subList(i, Math.min(i + config.getBatchSize(), segmentedBatch.size()));
+                batch = segmentedBatch.getValue().subList(i, Math.min(i + config.getBatchSize(), segmentedBatch.getValue().size()));
                 List<PutRecordsRequestEntry> putRecordsRequestEntryList = new ArrayList<>();
-                streamName = batch.get(0).destination();
+                streamName = segmentedBatch.getKey();
 
-                for (ChangeEvent<Object, Object> record : batch) {
+                for (BatchEvent record : batch) {
 
                     Object rv = record.value();
                     if (rv == null) {
@@ -202,14 +204,12 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
                     }
                 }
 
-                for (ChangeEvent<Object, Object> record : batch) {
-                    committer.markProcessed(record);
+                for (BatchEvent record : batch) {
+                    record.commit();
                 }
             }
         }
 
-        // Mark Batch Finished
-        committer.markBatchFinished();
     }
 
     private PutRecordsResponse recordsSent(List<PutRecordsRequestEntry> putRecordsRequestEntryList, String streamName) {
