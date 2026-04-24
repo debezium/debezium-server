@@ -15,8 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.util.Testing;
-import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.QuarkusIntegrationTest;
+import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
 import redis.clients.jedis.HostAndPort;
@@ -27,9 +26,8 @@ import redis.clients.jedis.Jedis;
  *
  * @author Yossi Shirizli
  */
-@QuarkusIntegrationTest
+@QuarkusTest
 @TestProfile(RedisStreamHeartbeatDisabledTestProfile.class)
-@QuarkusTestResource(RedisTestResourceLifecycleManager.class)
 public class RedisStreamHeartbeatDisabledIT {
 
     private static final String HEARTBEAT_PREFIX = "__debezium-heartbeat";

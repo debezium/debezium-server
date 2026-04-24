@@ -13,7 +13,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import io.quarkus.test.junit.QuarkusIntegrationTest;
+import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
 import redis.clients.jedis.DefaultJedisClientConfig;
@@ -25,7 +25,7 @@ import redis.clients.jedis.SslVerifyMode;
 /**
  *  Verifies that records can be streamed to Redis using Redis specific SSL configuration options.
  */
-@QuarkusIntegrationTest
+@QuarkusTest
 @TestProfile(RedisSSLOptionsStreamTestProfile.class)
 public class RedisSSLOptionsStreamIT {
 
