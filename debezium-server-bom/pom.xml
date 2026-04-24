@@ -23,6 +23,7 @@
         <version.pravega>0.13.0</version.pravega>
         <version.nats>2.21.2</version.nats>
         <version.stan>2.2.3</version.stan>
+        <version.fluss>0.9.0-incubating</version.fluss>
         <version.commons.logging>1.2</version.commons.logging>
         <version.jmx.exporter>1.0.1</version.jmx.exporter>
 
@@ -212,6 +213,11 @@
             </dependency>
             <dependency>
                 <groupId>io.debezium</groupId>
+                <artifactId>debezium-server-fluss</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.debezium</groupId>
                 <artifactId>debezium-server-core</artifactId>
                 <type>test-jar</type>
                 <version>${project.version}</version>
@@ -287,6 +293,11 @@
                 <groupId>io.nats</groupId>
                 <artifactId>java-nats-streaming</artifactId>
                 <version>${version.stan}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.fluss</groupId>
+                <artifactId>fluss-client</artifactId>
+                <version>${version.fluss}</version>
             </dependency>
             <dependency>
                 <groupId>io.debezium</groupId>
