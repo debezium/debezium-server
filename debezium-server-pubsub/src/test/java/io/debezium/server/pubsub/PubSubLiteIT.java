@@ -41,7 +41,6 @@ import com.google.cloud.pubsublite.cloudpubsub.SubscriberSettings;
 import com.google.cloud.pubsublite.proto.Subscription;
 import com.google.pubsub.v1.PubsubMessage;
 
-import io.debezium.server.DebeziumServer;
 import io.debezium.server.TestConfigSource;
 import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.server.events.ConnectorStartedEvent;
