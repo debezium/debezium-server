@@ -6,19 +6,15 @@
 package io.debezium.server.redis;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.management.MBeanServerConnection;
+import javax.management.MBeanServer;
 import javax.management.ObjectName;
-import javax.management.remote.JMXConnector;
-import javax.management.remote.JMXConnectorFactory;
-import javax.management.remote.JMXServiceURL;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
@@ -27,7 +23,7 @@ import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.doc.FixFor;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.QuarkusIntegrationTest;
+import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
 import redis.clients.jedis.HostAndPort;
@@ -42,7 +38,7 @@ import redis.clients.jedis.resps.StreamEntry;
  * @author M Sazzadul Hoque
  * @author Yossi Shirizli
  */
-@QuarkusIntegrationTest
+@QuarkusTest
 @TestProfile(RedisStreamTestProfile.class)
 @QuarkusTestResource(RedisTestResourceLifecycleManager.class)
 public class RedisStreamIT {
@@ -59,15 +55,16 @@ public class RedisStreamIT {
         TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, MESSAGE_COUNT);
 
         Long streamLength = jedis.xlen(STREAM_NAME);
-        assertTrue(streamLength == MESSAGE_COUNT, "Expected stream length of " + MESSAGE_COUNT);
 
-        final List<StreamEntry> entries = jedis.xrange(STREAM_NAME, (StreamEntryID) null, (StreamEntryID) null);
+        assertThat(streamLength).isEqualTo(MESSAGE_COUNT);
+
+        final List<StreamEntry> entries = jedis.xrange(STREAM_NAME, null, (StreamEntryID) null);
         for (StreamEntry entry : entries) {
             Map<String, String> map = entry.getFields();
-            assertTrue(map.size() == 1, "Expected map of size 1");
+            assertThat(map).hasSize(1);
             Map.Entry<String, String> mapEntry = map.entrySet().iterator().next();
-            assertTrue(mapEntry.getKey().startsWith("{\"schema\":"), "Expected json like key starting with {\"schema\":...");
-            assertTrue(mapEntry.getValue().startsWith("{\"schema\":"), "Expected json like value starting with {\"schema\":...");
+            assertThat(mapEntry.getKey()).startsWith("{\"schema\":");
+            assertThat(mapEntry.getValue()).startsWith("{\"schema\":");
         }
 
         Awaitility.await()
@@ -75,21 +72,18 @@ public class RedisStreamIT {
                 .pollInterval(Duration.ofSeconds(1))
                 .ignoreExceptions()
                 .untilAsserted(() -> {
-                    JMXConnector jmxc = createJmxConnection();
-                    MBeanServerConnection connection = jmxc.getMBeanServerConnection();
+                    MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
 
-                    Set<ObjectName> beans = connection.queryNames(new ObjectName("debezium.postgres:type=connector-metrics,*"), null);
+                    Set<ObjectName> beans = mBeanServer.queryNames(new ObjectName("debezium.postgres:type=connector-metrics,*"), null);
                     assertThat(beans).as("JMX beans not found").isNotEmpty();
 
                     long totalEventsSeen = beans.stream()
-                            .mapToLong(bean -> getAttribute(connection, bean, "TotalNumberOfEventsSeen"))
+                            .mapToLong(bean -> getAttribute(mBeanServer, bean, "TotalNumberOfEventsSeen"))
                             .sum();
-
-                    jmxc.close();
 
                     assertThat(totalEventsSeen)
                             .as("Total events seen across all JMX contexts")
-                            .isGreaterThanOrEqualTo((long) MESSAGE_COUNT);
+                            .isGreaterThanOrEqualTo(MESSAGE_COUNT);
                 });
         jedis.close();
     }
@@ -131,7 +125,7 @@ public class RedisStreamIT {
         Long streamLength = jedis.xlen(STREAM_NAME);
         Testing.print("Entries in " + STREAM_NAME + ":" + streamLength);
         jedis.close();
-        assertTrue(streamLength == MESSAGE_COUNT, "Redis Connection Test Failed");
+        assertThat(streamLength).isEqualTo(MESSAGE_COUNT);
     }
 
     /**
@@ -164,27 +158,17 @@ public class RedisStreamIT {
 
         Thread.sleep(1000);
         Testing.print("Entries in " + STREAM_NAME + ":" + jedis.xlen(STREAM_NAME));
-        assertTrue(jedis.xlen(STREAM_NAME) < TOTAL_RECORDS);
+        assertThat(jedis.xlen(STREAM_NAME)).isLessThan(TOTAL_RECORDS);
 
         Thread.sleep(1000);
         jedis.configSet("maxmemory", "0");
         TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, TOTAL_RECORDS);
 
         long streamLength = jedis.xlen(STREAM_NAME);
-        assertTrue(streamLength == TOTAL_RECORDS, "Redis OOM Test Failed");
+        assertThat(streamLength).isEqualTo(TOTAL_RECORDS);
     }
 
-    private JMXConnector createJmxConnection() {
-        try {
-            JMXServiceURL url = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://localhost:1099/jmxrmi");
-            return JMXConnectorFactory.connect(url, null);
-        }
-        catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private long getAttribute(MBeanServerConnection connection, ObjectName bean, String attribute) {
+    private long getAttribute(MBeanServer connection, ObjectName bean, String attribute) {
         try {
             return ((Number) connection.getAttribute(bean, attribute)).longValue();
         }

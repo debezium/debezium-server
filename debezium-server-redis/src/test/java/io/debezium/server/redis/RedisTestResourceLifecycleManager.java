@@ -29,6 +29,15 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
     private static final AtomicBoolean running = new AtomicBoolean(false);
     private static final FixedHostPortGenericContainer<?> container = new FixedHostPortGenericContainer<>(Images.REDIS_IMAGE)
             .withFixedExposedPort(HOST_PORT, REDIS_PORT);
+    public static final String OFFSET_STORAGE_REDIS = "debezium.source.offset.storage.redis.address";
+    public static final String DEBEZIUM_SOURCE_SCHEMA_HISTORY_INTERNAL_REDIS_ADDRESS = "debezium.source.schema.history.internal.redis.address";
+
+    private Map<String, String> initArgs;
+
+    @Override
+    public void init(Map<String, String> initArgs) {
+        this.initArgs = initArgs;
+    }
 
     private static synchronized void start(boolean ignored) {
         if (!running.get()) {
@@ -48,7 +57,6 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
         Map<String, String> params = new ConcurrentHashMap<>();
         params.put("debezium.sink.type", "redis");
         params.put("debezium.sink.redis.address", RedisTestResourceLifecycleManager.getRedisContainerAddress());
-        params.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         params.put("debezium.source.offset.flush.interval.ms", "0");
         params.put("debezium.source.topic.prefix", "testc");
         params.put("debezium.source.schema.include.list", "inventory");
@@ -57,6 +65,16 @@ public class RedisTestResourceLifecycleManager implements QuarkusTestResourceLif
         params.put("debezium.transforms.addheader.type", "org.apache.kafka.connect.transforms.InsertHeader");
         params.put("debezium.transforms.addheader.header", "headerKey");
         params.put("debezium.transforms.addheader.value.literal", "headerValue");
+
+        params.putAll(initArgs);
+
+        if (initArgs.containsKey(OFFSET_STORAGE_REDIS)) {
+            params.put(OFFSET_STORAGE_REDIS, RedisTestResourceLifecycleManager.getRedisContainerAddress());
+        }
+
+        if (initArgs.containsKey(DEBEZIUM_SOURCE_SCHEMA_HISTORY_INTERNAL_REDIS_ADDRESS)) {
+            params.put(DEBEZIUM_SOURCE_SCHEMA_HISTORY_INTERNAL_REDIS_ADDRESS, RedisTestResourceLifecycleManager.getRedisContainerAddress());
+        }
 
         return params;
     }

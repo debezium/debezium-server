@@ -12,20 +12,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import jakarta.enterprise.inject.Alternative;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.config.Configuration;
+import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.doc.FixFor;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.history.SchemaHistory;
 import io.debezium.relational.history.SchemaHistoryMetrics;
+import io.debezium.runtime.Connector;
+import io.debezium.runtime.Debezium;
+import io.debezium.runtime.DebeziumEngineFilterStrategy;
 import io.debezium.testing.testcontainers.MySqlTestResourceLifecycleManager;
 import io.debezium.util.Testing;
-import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.QuarkusIntegrationTest;
+import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 
 import redis.clients.jedis.HostAndPort;
@@ -38,9 +43,8 @@ import redis.clients.jedis.resps.StreamEntry;
  *
  * @author Oren Elias
  */
-@QuarkusIntegrationTest
+@QuarkusTest
 @TestProfile(RedisSchemaHistoryTestProfile.class)
-@QuarkusTestResource(RedisTestResourceLifecycleManager.class)
 public class RedisSchemaHistoryIT {
 
     private static final String STREAM_NAME = "metadata:debezium:schema_history";
@@ -64,6 +68,11 @@ public class RedisSchemaHistoryIT {
     public void afterEach() {
         if (this.history != null) {
             this.history.stop();
+        }
+        try {
+            RedisTestResourceLifecycleManager.unpause();
+        }
+        catch (Exception ignored) {
         }
     }
 
@@ -146,4 +155,13 @@ public class RedisSchemaHistoryIT {
                 "`",
                 "`");
     }
+
+    @Alternative
+    static class TestDebeziumEngineFilterStrategy implements DebeziumEngineFilterStrategy {
+        @Override
+        public boolean test(Debezium debezium) {
+            return debezium.connector().equals(new Connector(MySqlConnector.class.getCanonicalName()));
+        }
+    }
+
 }
