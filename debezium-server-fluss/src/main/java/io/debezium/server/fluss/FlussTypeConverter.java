@@ -67,8 +67,6 @@ import io.debezium.util.Strings;
  */
 public class FlussTypeConverter {
 
-    private static final long MILLIS_PER_DAY = 86_400_000L;
-
     private static final Set<String> DEBEZIUM_STRING_LOGICAL_TYPES = Set.of(
             Json.LOGICAL_NAME,
             Uuid.LOGICAL_NAME,
@@ -212,7 +210,7 @@ public class FlussTypeConverter {
             case String s when DEBEZIUM_GEOMETRY_LOGICAL_TYPES.contains(s) ->
                 ((Struct) value).getBytes(Geometry.WKB_FIELD);
             case String s when KAFKA_DATE_LOGICAL_NAME.equals(s) ->
-                (int) (((java.util.Date) value).getTime() / MILLIS_PER_DAY);
+                org.apache.kafka.connect.data.Date.fromLogical(schema, (java.util.Date) value);
             case String s when KAFKA_TIME_LOGICAL_NAME.equals(s) ->
                 (int) ((java.util.Date) value).getTime();
             case String s when KAFKA_TIMESTAMP_LOGICAL_NAME.equals(s) ->
