@@ -5,7 +5,6 @@
  */
 package io.debezium.server.fluss;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -49,8 +48,7 @@ import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.api.DebeziumServerSink;
-import io.debezium.util.Clock;
-import io.debezium.util.Metronome;
+import io.debezium.server.util.RetryExecutor;
 
 /**
  * An implementation of the {@link io.debezium.engine.DebeziumEngine.ChangeConsumer} interface that publishes
@@ -69,13 +67,15 @@ public class FlussChangeConsumer extends BaseChangeConsumer
     private static final Logger LOGGER = LoggerFactory.getLogger(FlussChangeConsumer.class);
 
     private static final String PROP_PREFIX = "debezium.sink.fluss.";
-    private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
 
     private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
     private final Map<TablePath, AppendWriter> appendWriters = new ConcurrentHashMap<>();
     private final Map<TablePath, UpsertWriter> upsertWriters = new ConcurrentHashMap<>();
     private final Map<TablePath, TableDescriptor> tableDescriptorCache = new ConcurrentHashMap<>();
 
+    // These are visible for testing.
+    // Can use DebeziumServerSink#configure in the future
+    RetryExecutor retryExecutor;
     FlussChangeConsumerConfig config;
     Connection connection;
     Admin admin;
@@ -94,6 +94,12 @@ public class FlussChangeConsumer extends BaseChangeConsumer
 
         LOGGER.info("Connected to Fluss at '{}', default database: '{}'",
                 config.getBootstrapServers(), config.getDefaultDatabase());
+
+        retryExecutor = new RetryExecutor(
+                config.getMaxRetries(),
+                config.getRetryInterval().toMillis(),
+                config.getRetryMaxInterval().toMillis(),
+                config.getDefaultRetryBackoffMultiplier());
     }
 
     @PreDestroy
@@ -160,23 +166,13 @@ public class FlussChangeConsumer extends BaseChangeConsumer
     private void writeRecordWithRetry(ChangeEvent<Object, Object> record, TablePath tablePath,
                                       TableDescriptor descriptor, boolean hasPrimaryKey)
             throws InterruptedException {
-
-        int attempts = 0;
-        while (true) {
-            try {
-                writeRecord(record, tablePath, descriptor, hasPrimaryKey);
-                return;
-            }
-            catch (Exception e) {
-                attempts++;
-                if (attempts >= config.getMaxRetries()) {
-                    throw new DebeziumException(
-                            "Exceeded maximum retry attempts (" + config.getMaxRetries() + ") writing to " + tablePath, e);
-                }
-                LOGGER.warn("Write attempt {} failed for {}, retrying", attempts, tablePath, e);
-                Metronome.sleeper(RETRY_INTERVAL, Clock.SYSTEM).pause();
-            }
-        }
+        retryExecutor.executeWithRetry(
+                () -> {
+                    writeRecord(record, tablePath, descriptor, hasPrimaryKey);
+                    return null;
+                },
+                this::isRetriableFlussException,
+                "Writing to Fluss " + tablePath);
     }
 
     private void writeRecord(ChangeEvent<Object, Object> record, TablePath tablePath,
@@ -341,13 +337,22 @@ public class FlussChangeConsumer extends BaseChangeConsumer
         }
     }
 
+    private boolean isRetriableFlussException(Exception e) {
+        // Future extension point to control retriable/non-retriable exceptions
+        // Right now, all exceptions are simply retried
+        return true;
+    }
+
     @Override
     public Field.Set getConfigFields() {
         return Field.setOf(
                 FlussChangeConsumerConfig.BOOTSTRAP_SERVERS,
                 FlussChangeConsumerConfig.DEFAULT_DATABASE,
                 FlussChangeConsumerConfig.TABLE_AUTO_CREATE,
-                FlussChangeConsumerConfig.DEFAULT_RETRIES);
+                FlussChangeConsumerConfig.RETRIES_MAX,
+                FlussChangeConsumerConfig.RETRIES_INTERVAL_MS,
+                FlussChangeConsumerConfig.RETRIES_MAX_INTERVAL_MS,
+                FlussChangeConsumerConfig.RETRIES_BACKOFF_MULTIPLIER);
     }
 
     @Override
