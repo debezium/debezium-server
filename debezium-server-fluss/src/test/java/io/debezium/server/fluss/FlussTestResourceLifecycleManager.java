@@ -5,6 +5,9 @@
  */
 package io.debezium.server.fluss;
 
+import static io.debezium.server.Images.FLUSS_IMAGE;
+import static io.debezium.server.Images.FLUSS_ZOOKEEPER_IMAGE;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,9 +35,6 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
  */
 public class FlussTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
-    private static final String FLUSS_IMAGE = "apache/fluss:0.9.0-incubating";
-    private static final String ZK_IMAGE = "zookeeper:3.9";
-
     private static final int COORDINATOR_PORT = 9123;
     private static final int TABLET_PORT = 10123;
     private static final int ZK_PORT = 2181;
@@ -48,7 +48,7 @@ public class FlussTestResourceLifecycleManager implements QuarkusTestResourceLif
     }
 
     @SuppressWarnings("resource")
-    private static final GenericContainer<?> zookeeper = new GenericContainer<>(DockerImageName.parse(ZK_IMAGE))
+    private static final GenericContainer<?> zookeeper = new GenericContainer<>(DockerImageName.parse(FLUSS_ZOOKEEPER_IMAGE))
             .withNetworkMode("host")
             .waitingFor(Wait.forLogMessage(".*binding to port.*", 1));
 
