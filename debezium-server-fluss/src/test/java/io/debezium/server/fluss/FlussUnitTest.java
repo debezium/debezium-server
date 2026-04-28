@@ -5,6 +5,7 @@
  */
 package io.debezium.server.fluss;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -36,6 +38,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
 import io.debezium.data.Envelope;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
@@ -83,6 +86,7 @@ public class FlussUnitTest {
             .build();
 
     private FlussChangeConsumer consumer;
+    private Connection mockConnection;
     private Admin mockAdmin;
     private AppendWriter mockAppendWriter;
     private UpsertWriter mockUpsertWriter;
@@ -91,9 +95,9 @@ public class FlussUnitTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     public void setup() {
-        Connection mockConnection = mock(Connection.class);
         Table mockTable = mock(Table.class);
 
+        mockConnection = mock(Connection.class);
         mockAdmin = mock(Admin.class);
         mockAppendWriter = mock(AppendWriter.class);
         mockUpsertWriter = mock(UpsertWriter.class);
@@ -110,10 +114,17 @@ public class FlussUnitTest {
 
         committer = mock(RecordCommitter.class);
 
+        initConsumer(Map.of());
+    }
+
+    private void initConsumer(Map<String, String> overrides) {
+        final Map<String, String> config = new HashMap<>();
+        config.put("bootstrap.servers", BOOTSTRAP_SERVERS);
+        config.put("default.database", DEFAULT_DATABASE);
+        config.putAll(overrides);
+
         consumer = new FlussChangeConsumer();
-        consumer.config = new FlussChangeConsumerConfig(Configuration.from(Map.of(
-                "bootstrap.servers", BOOTSTRAP_SERVERS,
-                "default.database", DEFAULT_DATABASE)));
+        consumer.config = new FlussChangeConsumerConfig(Configuration.from(config));
         consumer.connection = mockConnection;
         consumer.admin = mockAdmin;
         consumer.retryExecutor = new RetryExecutor(
@@ -332,6 +343,64 @@ public class FlussUnitTest {
         verify(mockAppendWriter, times(1)).flush();
         verify(committer, times(5)).markProcessed(any());
         verify(committer).markBatchFinished();
+    }
+
+    @Test
+    public void testUpsertModeWritesUpsertToTableWithPrimaryKey() throws Exception {
+        initConsumer(Map.of("primary.key.mode", "upsert"));
+        setupPrimaryKeyTableDescriptor(TABLE_PATH);
+
+        final List<ChangeEvent<Object, Object>> events = List.of(
+                createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
+
+        consumer.handleBatch(events, committer);
+
+        verify(mockUpsertWriter).upsert(any(InternalRow.class));
+        verify(mockUpsertWriter).flush();
+        verify(committer).markProcessed(events.getFirst());
+        verify(committer).markBatchFinished();
+    }
+
+    @Test
+    public void testAppendModeWritesAppendToTableWithNoPrimaryKey() throws Exception {
+        initConsumer(Map.of("primary.key.mode", "append"));
+        setupLogTableDescriptor(TABLE_PATH);
+
+        final List<ChangeEvent<Object, Object>> events = List.of(
+                createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
+
+        consumer.handleBatch(events, committer);
+
+        verify(mockAppendWriter).append(any(InternalRow.class));
+        verify(mockAppendWriter).flush();
+        verify(committer).markProcessed(events.getFirst());
+        verify(committer).markBatchFinished();
+    }
+
+    @Test
+    public void testUpsertModeThrowsWhenTableHasNoPrimaryKey() throws Exception {
+        initConsumer(Map.of("primary.key.mode", "upsert"));
+        setupLogTableDescriptor(TABLE_PATH);
+
+        final List<ChangeEvent<Object, Object>> events = List.of(
+                createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
+
+        assertThatThrownBy(() -> consumer.handleBatch(events, committer))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("primary.key.mode=upsert");
+    }
+
+    @Test
+    public void testAppendModeThrowsWhenTableHasPrimaryKey() throws Exception {
+        initConsumer(Map.of("primary.key.mode", "append"));
+        setupPrimaryKeyTableDescriptor(TABLE_PATH);
+
+        final List<ChangeEvent<Object, Object>> events = List.of(
+                createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
+
+        assertThatThrownBy(() -> consumer.handleBatch(events, committer))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("primary.key.mode=append");
     }
 
     private void setupLogTableDescriptor(TablePath tablePath) throws Exception {
