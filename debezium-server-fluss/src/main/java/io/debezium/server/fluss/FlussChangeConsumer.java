@@ -72,6 +72,7 @@ public class FlussChangeConsumer extends BaseChangeConsumer
     private final Map<TablePath, AppendWriter> appendWriters = new ConcurrentHashMap<>();
     private final Map<TablePath, UpsertWriter> upsertWriters = new ConcurrentHashMap<>();
     private final Map<TablePath, TableDescriptor> tableDescriptorCache = new ConcurrentHashMap<>();
+    private final FlussTypeConverter typeConverter = new FlussTypeConverter();
 
     // These are visible for testing.
     // Can use DebeziumServerSink#configure in the future
@@ -236,7 +237,7 @@ public class FlussChangeConsumer extends BaseChangeConsumer
             final String name = fieldNames.get(i);
             final org.apache.kafka.connect.data.Field field = schema.field(name);
             final Object value = (field != null) ? data.get(field) : null;
-            row.setField(i, FlussTypeConverter.toFlussValue(value, field != null ? field.schema() : null));
+            row.setField(i, typeConverter.toFlussValue(value, field != null ? field.schema() : null));
         }
 
         return row;
@@ -287,7 +288,7 @@ public class FlussChangeConsumer extends BaseChangeConsumer
             throw new DebeziumException("Cannot auto-create table " + tablePath + ": no 'after' field schema found.");
         }
 
-        final org.apache.fluss.metadata.Schema flussSchema = FlussTypeConverter.toFlussSchema(afterSchema, new ArrayList<>());
+        final org.apache.fluss.metadata.Schema flussSchema = typeConverter.toFlussSchema(afterSchema, new ArrayList<>());
         final TableDescriptor descriptor = TableDescriptor.builder().schema(flussSchema).build();
         admin.createTable(tablePath, descriptor, true).get();
         LOGGER.info("Auto-created Fluss table {}", tablePath);
