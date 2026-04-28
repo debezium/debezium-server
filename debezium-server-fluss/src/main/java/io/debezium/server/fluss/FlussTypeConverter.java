@@ -36,6 +36,7 @@ import org.apache.fluss.types.TinyIntType;
 import org.apache.kafka.connect.data.Struct;
 
 import io.debezium.DebeziumException;
+import io.debezium.data.Bits;
 import io.debezium.data.Enum;
 import io.debezium.data.EnumSet;
 import io.debezium.data.Json;
@@ -86,6 +87,13 @@ public class FlussTypeConverter {
             Geography.LOGICAL_NAME,
             Point.LOGICAL_NAME);
 
+    private static final String KAFKA_DATE_LOGICAL_NAME = org.apache.kafka.connect.data.Date.LOGICAL_NAME;
+    private static final String KAFKA_TIME_LOGICAL_NAME = org.apache.kafka.connect.data.Time.LOGICAL_NAME;
+    private static final String KAFKA_TIMESTAMP_LOGICAL_NAME = org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME;
+    private static final String DBZ_DATE_SCHEMA_NAME = io.debezium.time.Date.SCHEMA_NAME;
+    private static final String DBZ_TIME_SCHEMA_NAME = io.debezium.time.Time.SCHEMA_NAME;
+    private static final String DBZ_TIMESTAMP_SCHEMA_NAME = io.debezium.time.Timestamp.SCHEMA_NAME;
+
     record DecimalParameters(int precision, int scale) {
         static DecimalParameters from(org.apache.kafka.connect.data.Schema schema) {
             final int scale = Integer.parseInt(schema.parameters().get(SCALE_FIELD));
@@ -125,66 +133,50 @@ public class FlussTypeConverter {
     public DataType toFlussDataType(org.apache.kafka.connect.data.Schema connectSchema) {
         final String schemaName = Strings.defaultIfBlank(connectSchema.name(), "");
 
-        if (LOGICAL_NAME.equals(schemaName)) {
-            final DecimalParameters params = DecimalParameters.from(connectSchema);
-            return new DecimalType(params.precision(), params.scale());
-        }
-
-        if (io.debezium.data.Bits.LOGICAL_NAME.equals(schemaName)) {
-            return new BytesType();
-        }
-
-        if (DEBEZIUM_STRING_LOGICAL_TYPES.contains(schemaName)
-                || DEBEZIUM_SERIALIZE_AS_STRING_LOGICAL_TYPES.contains(schemaName)
-                || VariableScaleDecimal.LOGICAL_NAME.equals(schemaName)) {
-            return new StringType();
-        }
-
-        if (DEBEZIUM_GEOMETRY_LOGICAL_TYPES.contains(schemaName)) {
-            return new BytesType();
-        }
-
-        if (org.apache.kafka.connect.data.Date.LOGICAL_NAME.equals(schemaName)
-                || io.debezium.time.Date.SCHEMA_NAME.equals(schemaName)) {
-            return new DateType();
-        }
-
-        if (org.apache.kafka.connect.data.Time.LOGICAL_NAME.equals(schemaName)
-                || io.debezium.time.Time.SCHEMA_NAME.equals(schemaName)) {
-            return new TimeType();
-        }
-
-        if (MicroTime.SCHEMA_NAME.equals(schemaName) || NanoTime.SCHEMA_NAME.equals(schemaName)) {
-            // Fluss has no sub-millisecond TimeType, store raw value as BIGINT
-            return new BigIntType();
-        }
-
-        if (org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME.equals(schemaName)
-                || io.debezium.time.Timestamp.SCHEMA_NAME.equals(schemaName)
-                || MicroTimestamp.SCHEMA_NAME.equals(schemaName)) {
-            return new TimestampType();
-        }
-
-        if (NanoTimestamp.SCHEMA_NAME.equals(schemaName)) {
-            // Fluss has no nanosecond-precision TimestampType, store raw value as BIGINT
-            return new BigIntType();
-        }
-
-        if (ZonedTimestamp.SCHEMA_NAME.equals(schemaName)) {
-            return new LocalZonedTimestampType();
-        }
-
-        return switch (connectSchema.type()) {
-            case INT8 -> new TinyIntType();
-            case INT16 -> new SmallIntType();
-            case INT32 -> new IntType();
-            case INT64 -> new BigIntType();
-            case FLOAT32 -> new FloatType();
-            case FLOAT64 -> new DoubleType();
-            case BOOLEAN -> new BooleanType();
-            case STRING -> new StringType();
-            case BYTES -> new BytesType();
-            default -> throw new DebeziumException("Unsupported Connect type for Fluss schema creation: " + connectSchema.type());
+        return switch (schemaName) {
+            case String s when LOGICAL_NAME.equals(s) -> {
+                final DecimalParameters params = DecimalParameters.from(connectSchema);
+                yield new DecimalType(params.precision(), params.scale());
+            }
+            case String s when Bits.LOGICAL_NAME.equals(s) ->
+                new BytesType();
+            case String s when DEBEZIUM_STRING_LOGICAL_TYPES.contains(s)
+                    || DEBEZIUM_SERIALIZE_AS_STRING_LOGICAL_TYPES.contains(s)
+                    || VariableScaleDecimal.LOGICAL_NAME.equals(s) ->
+                new StringType();
+            case String s when DEBEZIUM_GEOMETRY_LOGICAL_TYPES.contains(s) ->
+                new BytesType();
+            case String s when KAFKA_DATE_LOGICAL_NAME.equals(s)
+                    || DBZ_DATE_SCHEMA_NAME.equals(s) ->
+                new DateType();
+            case String s when KAFKA_TIME_LOGICAL_NAME.equals(s)
+                    || DBZ_TIME_SCHEMA_NAME.equals(s) ->
+                new TimeType();
+            case String s when MicroTime.SCHEMA_NAME.equals(s)
+                    || NanoTime.SCHEMA_NAME.equals(s) ->
+                // Fluss has no sub-millisecond TimeType, store raw value as BIGINT
+                new BigIntType();
+            case String s when KAFKA_TIMESTAMP_LOGICAL_NAME.equals(s)
+                    || DBZ_TIMESTAMP_SCHEMA_NAME.equals(s)
+                    || MicroTimestamp.SCHEMA_NAME.equals(s) ->
+                new TimestampType();
+            case String s when NanoTimestamp.SCHEMA_NAME.equals(s) ->
+                // Fluss has no nanosecond-precision TimestampType, store raw value as BIGINT
+                new BigIntType();
+            case String s when ZonedTimestamp.SCHEMA_NAME.equals(s) ->
+                new LocalZonedTimestampType();
+            default -> switch (connectSchema.type()) {
+                case INT8 -> new TinyIntType();
+                case INT16 -> new SmallIntType();
+                case INT32 -> new IntType();
+                case INT64 -> new BigIntType();
+                case FLOAT32 -> new FloatType();
+                case FLOAT64 -> new DoubleType();
+                case BOOLEAN -> new BooleanType();
+                case STRING -> new StringType();
+                case BYTES -> new BytesType();
+                default -> throw new DebeziumException("Unsupported Connect type for Fluss schema creation: " + connectSchema.type());
+            };
         };
     }
 
@@ -201,69 +193,48 @@ public class FlussTypeConverter {
         }
 
         final String schemaName = Strings.defaultIfBlank(schema.name(), "");
-
-        if (LOGICAL_NAME.equals(schemaName)) {
-            // Struct.get() returns the logical BigDecimal directly for Decimal fields
-            final DecimalParameters params = DecimalParameters.from(schema);
-            return Decimal.fromBigDecimal((BigDecimal) value, params.precision(), params.scale());
-        }
-
-        if (io.debezium.data.Bits.LOGICAL_NAME.equals(schemaName)) {
-            return value;
-        }
-
-        if (DEBEZIUM_STRING_LOGICAL_TYPES.contains(schemaName)) {
-            return BinaryString.fromString((String) value);
-        }
-
-        if (DEBEZIUM_SERIALIZE_AS_STRING_LOGICAL_TYPES.contains(schemaName)) {
-            return BinaryString.fromString(value.toString());
-        }
-
-        if (VariableScaleDecimal.LOGICAL_NAME.equals(schemaName)) {
-            final BigDecimal decimal = VariableScaleDecimal.toLogical((Struct) value).getDecimalValue().orElse(null);
-            return BinaryString.fromString(decimal != null ? decimal.toPlainString() : "NaN");
-        }
-
-        if (DEBEZIUM_GEOMETRY_LOGICAL_TYPES.contains(schemaName)) {
-            return ((Struct) value).getBytes(Geometry.WKB_FIELD);
-        }
-
-        if (org.apache.kafka.connect.data.Date.LOGICAL_NAME.equals(schemaName)) {
-            return (int) (((java.util.Date) value).getTime() / MILLIS_PER_DAY);
-        }
-
-        if (org.apache.kafka.connect.data.Time.LOGICAL_NAME.equals(schemaName)) {
-            return (int) ((java.util.Date) value).getTime();
-        }
-
-        if (org.apache.kafka.connect.data.Timestamp.LOGICAL_NAME.equals(schemaName)) {
-            return TimestampNtz.fromMillis(((java.util.Date) value).getTime());
-        }
-
-        if (io.debezium.time.Timestamp.SCHEMA_NAME.equals(schemaName)) {
-            return TimestampNtz.fromMillis(((Number) value).longValue());
-        }
-
-        if (MicroTimestamp.SCHEMA_NAME.equals(schemaName)) {
-            return TimestampNtz.fromMicros(((Number) value).longValue());
-        }
-
-        if (ZonedTimestamp.SCHEMA_NAME.equals(schemaName)) {
-            return TimestampLtz.fromInstant(ZonedDateTime.parse((String) value).toInstant());
-        }
-
-        return switch (schema.type()) {
-            case INT8 -> ((Number) value).byteValue();
-            case INT16 -> ((Number) value).shortValue();
-            case INT32 -> ((Number) value).intValue();
-            case INT64 -> ((Number) value).longValue();
-            case FLOAT32 -> ((Number) value).floatValue();
-            case FLOAT64 -> ((Number) value).doubleValue();
-            case BOOLEAN -> (Boolean) value;
-            case STRING -> BinaryString.fromString((String) value);
-            case BYTES -> (byte[]) value;
-            default -> value;
+        return switch (schemaName) {
+            case String s when LOGICAL_NAME.equals(s) -> {
+                // Struct.get() returns the logical BigDecimal directly for Decimal fields
+                final DecimalParameters params = DecimalParameters.from(schema);
+                yield Decimal.fromBigDecimal((BigDecimal) value, params.precision(), params.scale());
+            }
+            case String s when Bits.LOGICAL_NAME.equals(s) ->
+                value;
+            case String s when DEBEZIUM_STRING_LOGICAL_TYPES.contains(s) ->
+                BinaryString.fromString((String) value);
+            case String s when DEBEZIUM_SERIALIZE_AS_STRING_LOGICAL_TYPES.contains(s) ->
+                BinaryString.fromString(value.toString());
+            case String s when VariableScaleDecimal.LOGICAL_NAME.equals(s) -> {
+                final BigDecimal decimal = VariableScaleDecimal.toLogical((Struct) value).getDecimalValue().orElse(null);
+                yield BinaryString.fromString(decimal != null ? decimal.toPlainString() : "NaN");
+            }
+            case String s when DEBEZIUM_GEOMETRY_LOGICAL_TYPES.contains(s) ->
+                ((Struct) value).getBytes(Geometry.WKB_FIELD);
+            case String s when KAFKA_DATE_LOGICAL_NAME.equals(s) ->
+                (int) (((java.util.Date) value).getTime() / MILLIS_PER_DAY);
+            case String s when KAFKA_TIME_LOGICAL_NAME.equals(s) ->
+                (int) ((java.util.Date) value).getTime();
+            case String s when KAFKA_TIMESTAMP_LOGICAL_NAME.equals(s) ->
+                TimestampNtz.fromMillis(((java.util.Date) value).getTime());
+            case String s when DBZ_TIMESTAMP_SCHEMA_NAME.equals(s) ->
+                TimestampNtz.fromMillis(((Number) value).longValue());
+            case String s when MicroTimestamp.SCHEMA_NAME.equals(s) ->
+                TimestampNtz.fromMicros(((Number) value).longValue());
+            case String s when ZonedTimestamp.SCHEMA_NAME.equals(s) ->
+                TimestampLtz.fromInstant(ZonedDateTime.parse((String) value).toInstant());
+            default -> switch (schema.type()) {
+                case INT8 -> ((Number) value).byteValue();
+                case INT16 -> ((Number) value).shortValue();
+                case INT32 -> ((Number) value).intValue();
+                case INT64 -> ((Number) value).longValue();
+                case FLOAT32 -> ((Number) value).floatValue();
+                case FLOAT64 -> ((Number) value).doubleValue();
+                case BOOLEAN -> (Boolean) value;
+                case STRING -> BinaryString.fromString((String) value);
+                case BYTES -> (byte[]) value;
+                default -> value;
+            };
         };
     }
 }
