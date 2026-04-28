@@ -146,6 +146,7 @@ public class FlussChangeConsumer extends BaseChangeConsumer
             final SourceRecord firstSourceRecord = toSourceRecord(entry.getValue().getFirst());
             final TableDescriptor descriptor = getOrFetchDescriptor(tablePath, firstSourceRecord);
             final boolean hasPrimaryKey = descriptor.hasPrimaryKey();
+            validatePrimaryKeyMode(tablePath, hasPrimaryKey);
 
             for (ChangeEvent<Object, Object> record : entry.getValue()) {
                 writeRecordWithRetry(record, tablePath, descriptor, hasPrimaryKey);
@@ -261,6 +262,26 @@ public class FlussChangeConsumer extends BaseChangeConsumer
                 throw new DebeziumException("Failed to fetch table descriptor for " + path, e);
             }
         });
+    }
+
+    private void validatePrimaryKeyMode(TablePath tablePath, boolean hasPrimaryKey) {
+        switch (config.getPrimaryKeyMode()) {
+            case UPSERT -> {
+                if (!hasPrimaryKey) {
+                    throw new DebeziumException("primary.key.mode=upsert requires table " + tablePath
+                            + " to have a primary key, but the table has none.");
+                }
+            }
+            case APPEND -> {
+                if (hasPrimaryKey) {
+                    throw new DebeziumException("primary.key.mode=append requires table " + tablePath
+                            + " to have no primary key, but the table has a primary key.");
+                }
+            }
+            default -> {
+                // No validation for auto
+            }
+        }
     }
 
     private void ensureTableExists(TablePath tablePath, SourceRecord sourceRecord) throws Exception {
