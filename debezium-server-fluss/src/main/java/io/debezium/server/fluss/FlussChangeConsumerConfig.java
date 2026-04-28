@@ -9,7 +9,9 @@ import java.time.Duration;
 
 import org.apache.kafka.common.config.ConfigDef;
 
+import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
+import io.debezium.config.EnumeratedValue;
 import io.debezium.config.Field;
 
 /**
@@ -18,6 +20,32 @@ import io.debezium.config.Field;
  * @author Chris Cranford
  */
 public class FlussChangeConsumerConfig {
+
+    public enum PrimaryKeyMode implements EnumeratedValue {
+        AUTO("auto"),
+        UPSERT("upsert"),
+        APPEND("append");
+
+        private final String value;
+
+        PrimaryKeyMode(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String getValue() {
+            return value;
+        }
+
+        public static PrimaryKeyMode parse(String value) {
+            for (PrimaryKeyMode mode : values()) {
+                if (mode.getValue().equalsIgnoreCase(value)) {
+                    return mode;
+                }
+            }
+            throw new DebeziumException("Invalid primary.key.mode '" + value + "'. Must be one of: auto, upsert, append.");
+        }
+    }
 
     public static final int DEFAULT_RETRY_COUNT = 5;
     public static final long DEFAULT_RETRY_INITIAL_INTERVAL_MS = 1000;
@@ -37,6 +65,17 @@ public class FlussChangeConsumerConfig {
             .withWidth(ConfigDef.Width.MEDIUM)
             .withImportance(ConfigDef.Importance.HIGH)
             .withDescription("Default Fluss database used when resolving table paths from event destinations.");
+
+    public static final Field PRIMARY_KEY_MODE = Field.create("primary.key.mode")
+            .withDisplayName("Primary Key Mode")
+            .withType(ConfigDef.Type.STRING)
+            .withDefault("auto")
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Controls how the sink selects the write mode for each table. "
+                    + "'auto' (default) switches automatically based on whether the target table has a primary key; "
+                    + "'upsert' requires the table to have a primary key, and throws an error if it does not; "
+                    + "'append' requires the table to have no primary key, and throws an error if it does.");
 
     public static final Field TABLE_AUTO_CREATE = Field.create("table.auto.create")
             .withDisplayName("Auto-create Tables")
@@ -82,6 +121,7 @@ public class FlussChangeConsumerConfig {
 
     private final String bootstrapServers;
     private final String defaultDatabase;
+    private final PrimaryKeyMode primaryKeyMode;
     private final boolean tableAutoCreate;
     private final int maxRetries;
     private final Duration retryInterval;
@@ -91,6 +131,7 @@ public class FlussChangeConsumerConfig {
     public FlussChangeConsumerConfig(Configuration config) {
         bootstrapServers = config.getString(BOOTSTRAP_SERVERS);
         defaultDatabase = config.getString(DEFAULT_DATABASE);
+        primaryKeyMode = PrimaryKeyMode.parse(config.getString(PRIMARY_KEY_MODE));
         tableAutoCreate = config.getBoolean(TABLE_AUTO_CREATE);
         maxRetries = config.getInteger(RETRIES_MAX);
         retryInterval = Duration.ofMillis(config.getLong(RETRIES_INTERVAL_MS));
@@ -104,6 +145,10 @@ public class FlussChangeConsumerConfig {
 
     public String getDefaultDatabase() {
         return defaultDatabase;
+    }
+
+    public PrimaryKeyMode getPrimaryKeyMode() {
+        return primaryKeyMode;
     }
 
     public boolean isTableAutoCreate() {

@@ -73,35 +73,44 @@ public class FlussTestResourceLifecycleManager implements QuarkusTestResourceLif
             zookeeper.start();
             coordinator.start();
             tablet.start();
-            createTestTable();
+            createTestTables();
             running.set(true);
         }
     }
 
-    // Pre-create the customers table as a log table (no primary key) so the test
-    // does not depend on the auto-create feature or schema-enabled JSON format.
-    private static void createTestTable() {
+    private static void createTestTables() {
         final Configuration flussConfig = new Configuration();
         flussConfig.setString("bootstrap.servers", BOOTSTRAP_SERVERS);
 
         try (Connection connection = ConnectionFactory.createConnection(flussConfig); Admin admin = connection.getAdmin()) {
-            final TablePath tablePath = TablePath.of(FlussTestConfigSource.DEFAULT_DATABASE, FlussIT.TABLE_NAME);
+            // Log table (no primary key), used by FlussIT and FlussConnectFormatIT.
+            // Pre-created so those tests do not depend on auto-create or schema-enabled JSON format.
+            createTableIfAbsent(admin, TablePath.of(FlussTestConfigSource.DEFAULT_DATABASE, FlussIT.TABLE_NAME),
+                    Schema.newBuilder()
+                            .column("id", new IntType())
+                            .column("first_name", new StringType())
+                            .column("last_name", new StringType())
+                            .column("email", new StringType())
+                            .build());
 
-            boolean exists = admin.tableExists(tablePath).get();
-            if (!exists) {
-                final Schema schema = Schema.newBuilder()
-                        .column("id", new IntType())
-                        .column("first_name", new StringType())
-                        .column("last_name", new StringType())
-                        .column("email", new StringType())
-                        .build();
-
-                TableDescriptor descriptor = TableDescriptor.builder().schema(schema).build();
-                admin.createTable(tablePath, descriptor, false).get();
-            }
+            // Primary-key table, used by FlussUpsertModeIT to exercise upsert mode end-to-end.
+            createTableIfAbsent(admin, TablePath.of(FlussTestConfigSource.DEFAULT_DATABASE, FlussUpsertModeIT.TABLE_NAME),
+                    Schema.newBuilder()
+                            .column("id", new IntType())
+                            .column("first_name", new StringType())
+                            .column("last_name", new StringType())
+                            .column("email", new StringType())
+                            .primaryKey("id")
+                            .build());
         }
         catch (Exception e) {
-            throw new RuntimeException("Failed to pre-create Fluss test table", e);
+            throw new RuntimeException("Failed to pre-create Fluss test tables", e);
+        }
+    }
+
+    private static void createTableIfAbsent(Admin admin, TablePath tablePath, Schema schema) throws Exception {
+        if (!admin.tableExists(tablePath).get()) {
+            admin.createTable(tablePath, TableDescriptor.builder().schema(schema).build(), false).get();
         }
     }
 
