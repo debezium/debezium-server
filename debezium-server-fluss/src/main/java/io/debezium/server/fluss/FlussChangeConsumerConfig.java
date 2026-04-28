@@ -5,6 +5,8 @@
  */
 package io.debezium.server.fluss;
 
+import java.time.Duration;
+
 import org.apache.kafka.common.config.ConfigDef;
 
 import io.debezium.config.Configuration;
@@ -18,6 +20,9 @@ import io.debezium.config.Field;
 public class FlussChangeConsumerConfig {
 
     public static final int DEFAULT_RETRY_COUNT = 5;
+    public static final long DEFAULT_RETRY_INITIAL_INTERVAL_MS = 1000;
+    public static final long DEFAULT_RETRY_MAX_INTERVAL_MS = 60_000;
+    public static final double DEFAULT_RETRY_BACKOFF_MULTIPLIER = 2.0;
 
     public static final Field BOOTSTRAP_SERVERS = Field.create("bootstrap.servers")
             .withDisplayName("Bootstrap Servers")
@@ -43,24 +48,54 @@ public class FlussChangeConsumerConfig {
                     + "deriving the schema from the Debezium event schema. Requires the JSON converter "
                     + "with schemas.enable=true.");
 
-    public static final Field DEFAULT_RETRIES = Field.create("default.retries")
-            .withDisplayName("Default Retries")
+    public static final Field RETRIES_MAX = Field.create("retries.max")
+            .withDisplayName("Maximum Retries")
             .withType(ConfigDef.Type.INT)
             .withDefault(DEFAULT_RETRY_COUNT)
             .withWidth(ConfigDef.Width.SHORT)
             .withImportance(ConfigDef.Importance.MEDIUM)
             .withDescription("Maximum number of retry attempts on transient write failures.");
 
+    public static final Field RETRIES_INTERVAL_MS = Field.create("retries.interval.ms")
+            .withDisplayName("Retry Interval")
+            .withType(ConfigDef.Type.INT)
+            .withDefault(DEFAULT_RETRY_INITIAL_INTERVAL_MS)
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("The initial retry interval in milliseconds.");
+
+    public static final Field RETRIES_MAX_INTERVAL_MS = Field.create("retries.max.interval.ms")
+            .withDisplayName("Retry Maximum Interval")
+            .withType(ConfigDef.Type.INT)
+            .withDefault(DEFAULT_RETRY_MAX_INTERVAL_MS)
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("The maximum retry interval in milliseconds.");
+
+    public static final Field RETRIES_BACKOFF_MULTIPLIER = Field.create("retries.backoff.multiplier")
+            .withDisplayName("Retry Backoff Multiplier")
+            .withType(ConfigDef.Type.DOUBLE)
+            .withDefault(String.valueOf(DEFAULT_RETRY_BACKOFF_MULTIPLIER))
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Backoff multiplier for retry intervals.");
+
     private final String bootstrapServers;
     private final String defaultDatabase;
     private final boolean tableAutoCreate;
     private final int maxRetries;
+    private final Duration retryInterval;
+    private final Duration retryMaxInterval;
+    private final double retryBackoffMultiplier;
 
     public FlussChangeConsumerConfig(Configuration config) {
         bootstrapServers = config.getString(BOOTSTRAP_SERVERS);
         defaultDatabase = config.getString(DEFAULT_DATABASE);
         tableAutoCreate = config.getBoolean(TABLE_AUTO_CREATE);
-        maxRetries = config.getInteger(DEFAULT_RETRIES);
+        maxRetries = config.getInteger(RETRIES_MAX);
+        retryInterval = Duration.ofMillis(config.getLong(RETRIES_INTERVAL_MS));
+        retryMaxInterval = Duration.ofMillis(config.getLong(RETRIES_MAX_INTERVAL_MS));
+        retryBackoffMultiplier = Double.parseDouble(config.getString(RETRIES_BACKOFF_MULTIPLIER));
     }
 
     public String getBootstrapServers() {
@@ -77,5 +112,17 @@ public class FlussChangeConsumerConfig {
 
     public int getMaxRetries() {
         return maxRetries;
+    }
+
+    public Duration getRetryInterval() {
+        return retryInterval;
+    }
+
+    public Duration getRetryMaxInterval() {
+        return retryMaxInterval;
+    }
+
+    public double getDefaultRetryBackoffMultiplier() {
+        return retryBackoffMultiplier;
     }
 }

@@ -41,6 +41,7 @@ import io.debezium.data.Envelope;
 import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.server.util.RetryExecutor;
 
 /**
  * Unit tests for Apache Fluss.
@@ -115,6 +116,11 @@ public class FlussUnitTest {
                 "default.database", DEFAULT_DATABASE)));
         consumer.connection = mockConnection;
         consumer.admin = mockAdmin;
+        consumer.retryExecutor = new RetryExecutor(
+                consumer.config.getMaxRetries(),
+                consumer.config.getRetryInterval().toMillis(),
+                consumer.config.getRetryMaxInterval().toMillis(),
+                consumer.config.getDefaultRetryBackoffMultiplier());
     }
 
     @Test
