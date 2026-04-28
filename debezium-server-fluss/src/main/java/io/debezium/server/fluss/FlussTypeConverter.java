@@ -103,7 +103,7 @@ public class FlussTypeConverter {
      * @param primaryKeyFields names of columns that form the primary key; empty list for log tables
      * @return a Fluss Schema ready for table creation
      */
-    public static Schema toFlussSchema(org.apache.kafka.connect.data.Schema connectSchema, List<String> primaryKeyFields) {
+    public Schema toFlussSchema(org.apache.kafka.connect.data.Schema connectSchema, List<String> primaryKeyFields) {
         final Schema.Builder builder = Schema.newBuilder();
         for (org.apache.kafka.connect.data.Field field : connectSchema.fields()) {
             builder.column(field.name(), toFlussDataType(field.schema()));
@@ -122,7 +122,7 @@ public class FlussTypeConverter {
      * @param connectSchema the Connect field schema
      * @return corresponding Fluss DataType
      */
-    static DataType toFlussDataType(org.apache.kafka.connect.data.Schema connectSchema) {
+    public DataType toFlussDataType(org.apache.kafka.connect.data.Schema connectSchema) {
         final String schemaName = Strings.defaultIfBlank(connectSchema.name(), "");
 
         if (LOGICAL_NAME.equals(schemaName)) {
@@ -195,7 +195,7 @@ public class FlussTypeConverter {
      * @param schema the Connect schema of the field
      * @return the value in the form expected by Fluss {@link org.apache.fluss.row.GenericRow#setField}
      */
-    static Object toFlussValue(Object value, org.apache.kafka.connect.data.Schema schema) {
+    public Object toFlussValue(Object value, org.apache.kafka.connect.data.Schema schema) {
         if (value == null || schema == null) {
             return null;
         }
