@@ -42,6 +42,7 @@ import org.apache.fluss.types.TimeType;
 import org.apache.fluss.types.TimestampType;
 import org.apache.fluss.types.TinyIntType;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.DebeziumException;
@@ -72,49 +73,56 @@ import io.debezium.time.ZonedTimestamp;
  */
 public class FlussTypeConverterTest {
 
+    private FlussTypeConverter typeConverter;
+
+    @BeforeEach
+    void beforeEach() {
+        typeConverter = new FlussTypeConverter();
+    }
+
     @Test
     void toFlussDataTypeInt8() {
-        assertThat(FlussTypeConverter.toFlussDataType(INT8_SCHEMA)).isInstanceOf(TinyIntType.class);
+        assertThat(typeConverter.toFlussDataType(INT8_SCHEMA)).isInstanceOf(TinyIntType.class);
     }
 
     @Test
     void toFlussDataTypeInt16() {
-        assertThat(FlussTypeConverter.toFlussDataType(INT16_SCHEMA)).isInstanceOf(SmallIntType.class);
+        assertThat(typeConverter.toFlussDataType(INT16_SCHEMA)).isInstanceOf(SmallIntType.class);
     }
 
     @Test
     void toFlussDataTypeInt32() {
-        assertThat(FlussTypeConverter.toFlussDataType(INT32_SCHEMA)).isInstanceOf(IntType.class);
+        assertThat(typeConverter.toFlussDataType(INT32_SCHEMA)).isInstanceOf(IntType.class);
     }
 
     @Test
     void toFlussDataTypeInt64() {
-        assertThat(FlussTypeConverter.toFlussDataType(INT64_SCHEMA)).isInstanceOf(BigIntType.class);
+        assertThat(typeConverter.toFlussDataType(INT64_SCHEMA)).isInstanceOf(BigIntType.class);
     }
 
     @Test
     void toFlussDataTypeFloat32() {
-        assertThat(FlussTypeConverter.toFlussDataType(FLOAT32_SCHEMA)).isInstanceOf(FloatType.class);
+        assertThat(typeConverter.toFlussDataType(FLOAT32_SCHEMA)).isInstanceOf(FloatType.class);
     }
 
     @Test
     void toFlussDataTypeFloat64() {
-        assertThat(FlussTypeConverter.toFlussDataType(FLOAT64_SCHEMA)).isInstanceOf(DoubleType.class);
+        assertThat(typeConverter.toFlussDataType(FLOAT64_SCHEMA)).isInstanceOf(DoubleType.class);
     }
 
     @Test
     void toFlussDataTypeBoolean() {
-        assertThat(FlussTypeConverter.toFlussDataType(BOOLEAN_SCHEMA)).isInstanceOf(BooleanType.class);
+        assertThat(typeConverter.toFlussDataType(BOOLEAN_SCHEMA)).isInstanceOf(BooleanType.class);
     }
 
     @Test
     void toFlussDataTypeString() {
-        assertThat(FlussTypeConverter.toFlussDataType(STRING_SCHEMA)).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(STRING_SCHEMA)).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeBytes() {
-        assertThat(FlussTypeConverter.toFlussDataType(BYTES_SCHEMA)).isInstanceOf(BytesType.class);
+        assertThat(typeConverter.toFlussDataType(BYTES_SCHEMA)).isInstanceOf(BytesType.class);
     }
 
     @Test
@@ -123,7 +131,7 @@ public class FlussTypeConverterTest {
                 .parameter("connect.decimal.precision", "10")
                 .build();
 
-        final var result = FlussTypeConverter.toFlussDataType(decimalSchema);
+        final var result = typeConverter.toFlussDataType(decimalSchema);
         assertThat(result).isInstanceOf(DecimalType.class);
 
         final DecimalType decimalType = (DecimalType) result;
@@ -135,7 +143,7 @@ public class FlussTypeConverterTest {
     void toFlussDataTypeDecimalWithDefaultPrecision() {
         final org.apache.kafka.connect.data.Schema decimalSchema = org.apache.kafka.connect.data.Decimal.builder(2).build();
 
-        final var result = FlussTypeConverter.toFlussDataType(decimalSchema);
+        final var result = typeConverter.toFlussDataType(decimalSchema);
         assertThat(result).isInstanceOf(DecimalType.class);
 
         final DecimalType decimalType = (DecimalType) result;
@@ -146,66 +154,66 @@ public class FlussTypeConverterTest {
     @Test
     void toFlussDataTypeUnsupportedTypeThrows() {
         final org.apache.kafka.connect.data.Schema mapSchema = SchemaBuilder.map(STRING_SCHEMA, INT32_SCHEMA).build();
-        assertThatThrownBy(() -> FlussTypeConverter.toFlussDataType(mapSchema))
+        assertThatThrownBy(() -> typeConverter.toFlussDataType(mapSchema))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("Unsupported Connect type");
     }
 
     @Test
     void toFlussValueNullValue() {
-        assertThat(FlussTypeConverter.toFlussValue(null, INT32_SCHEMA)).isNull();
+        assertThat(typeConverter.toFlussValue(null, INT32_SCHEMA)).isNull();
     }
 
     @Test
     void toFlussValueNullSchema() {
-        assertThat(FlussTypeConverter.toFlussValue(42, null)).isNull();
+        assertThat(typeConverter.toFlussValue(42, null)).isNull();
     }
 
     @Test
     void toFlussValueInt8() {
-        final Object result = FlussTypeConverter.toFlussValue((byte) 1, INT8_SCHEMA);
+        final Object result = typeConverter.toFlussValue((byte) 1, INT8_SCHEMA);
         assertThat(result).isInstanceOf(Byte.class).isEqualTo((byte) 1);
     }
 
     @Test
     void toFlussValueInt16() {
-        final Object result = FlussTypeConverter.toFlussValue((short) 100, INT16_SCHEMA);
+        final Object result = typeConverter.toFlussValue((short) 100, INT16_SCHEMA);
         assertThat(result).isInstanceOf(Short.class).isEqualTo((short) 100);
     }
 
     @Test
     void toFlussValueInt32() {
-        final Object result = FlussTypeConverter.toFlussValue(42, INT32_SCHEMA);
+        final Object result = typeConverter.toFlussValue(42, INT32_SCHEMA);
         assertThat(result).isInstanceOf(Integer.class).isEqualTo(42);
     }
 
     @Test
     void toFlussValueInt64() {
-        final Object result = FlussTypeConverter.toFlussValue(123456789L, INT64_SCHEMA);
+        final Object result = typeConverter.toFlussValue(123456789L, INT64_SCHEMA);
         assertThat(result).isInstanceOf(Long.class).isEqualTo(123456789L);
     }
 
     @Test
     void toFlussValueFloat32() {
-        final Object result = FlussTypeConverter.toFlussValue(1.5f, FLOAT32_SCHEMA);
+        final Object result = typeConverter.toFlussValue(1.5f, FLOAT32_SCHEMA);
         assertThat(result).isInstanceOf(Float.class).isEqualTo(1.5f);
     }
 
     @Test
     void toFlussValueFloat64() {
-        final Object result = FlussTypeConverter.toFlussValue(3.14, FLOAT64_SCHEMA);
+        final Object result = typeConverter.toFlussValue(3.14, FLOAT64_SCHEMA);
         assertThat(result).isInstanceOf(Double.class).isEqualTo(3.14);
     }
 
     @Test
     void toFlussValueBoolean() {
-        final Object result = FlussTypeConverter.toFlussValue(true, BOOLEAN_SCHEMA);
+        final Object result = typeConverter.toFlussValue(true, BOOLEAN_SCHEMA);
         assertThat(result).isInstanceOf(Boolean.class).isEqualTo(true);
     }
 
     @Test
     void toFlussValueString() {
-        final Object result = FlussTypeConverter.toFlussValue("hello", STRING_SCHEMA);
+        final Object result = typeConverter.toFlussValue("hello", STRING_SCHEMA);
         assertThat(result).isInstanceOf(BinaryString.class);
         assertThat(result.toString()).isEqualTo("hello");
     }
@@ -213,7 +221,7 @@ public class FlussTypeConverterTest {
     @Test
     void toFlussValueBytes() {
         final byte[] bytes = new byte[]{ 1, 2, 3 };
-        final Object result = FlussTypeConverter.toFlussValue(bytes, BYTES_SCHEMA);
+        final Object result = typeConverter.toFlussValue(bytes, BYTES_SCHEMA);
         assertThat(result).isInstanceOf(byte[].class).isEqualTo(bytes);
     }
 
@@ -224,7 +232,7 @@ public class FlussTypeConverterTest {
                 .build();
         final BigDecimal bigDecimal = new BigDecimal("12.3456");
 
-        final Object result = FlussTypeConverter.toFlussValue(bigDecimal, decimalSchema);
+        final Object result = typeConverter.toFlussValue(bigDecimal, decimalSchema);
         assertThat(result).isInstanceOf(Decimal.class);
 
         final Decimal decimal = (Decimal) result;
@@ -237,82 +245,82 @@ public class FlussTypeConverterTest {
         final org.apache.kafka.connect.data.Schema decimalSchema = org.apache.kafka.connect.data.Decimal.builder(2).build();
         final BigDecimal bigDecimal = new BigDecimal("99.99");
 
-        final Object result = FlussTypeConverter.toFlussValue(bigDecimal, decimalSchema);
+        final Object result = typeConverter.toFlussValue(bigDecimal, decimalSchema);
         assertThat(result).isInstanceOf(Decimal.class);
     }
 
     @Test
     void toFlussDataTypeConnectDate() {
-        assertThat(FlussTypeConverter.toFlussDataType(org.apache.kafka.connect.data.Date.SCHEMA))
+        assertThat(typeConverter.toFlussDataType(org.apache.kafka.connect.data.Date.SCHEMA))
                 .isInstanceOf(DateType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumDate() {
-        assertThat(FlussTypeConverter.toFlussDataType(io.debezium.time.Date.builder().build()))
+        assertThat(typeConverter.toFlussDataType(io.debezium.time.Date.builder().build()))
                 .isInstanceOf(DateType.class);
     }
 
     @Test
     void toFlussDataTypeConnectTime() {
-        assertThat(FlussTypeConverter.toFlussDataType(org.apache.kafka.connect.data.Time.SCHEMA))
+        assertThat(typeConverter.toFlussDataType(org.apache.kafka.connect.data.Time.SCHEMA))
                 .isInstanceOf(TimeType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumTime() {
-        assertThat(FlussTypeConverter.toFlussDataType(io.debezium.time.Time.builder().build()))
+        assertThat(typeConverter.toFlussDataType(io.debezium.time.Time.builder().build()))
                 .isInstanceOf(TimeType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumMicroTime() {
-        assertThat(FlussTypeConverter.toFlussDataType(MicroTime.builder().build())).isInstanceOf(BigIntType.class);
+        assertThat(typeConverter.toFlussDataType(MicroTime.builder().build())).isInstanceOf(BigIntType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumNanoTime() {
-        assertThat(FlussTypeConverter.toFlussDataType(NanoTime.builder().build())).isInstanceOf(BigIntType.class);
+        assertThat(typeConverter.toFlussDataType(NanoTime.builder().build())).isInstanceOf(BigIntType.class);
     }
 
     @Test
     void toFlussDataTypeConnectTimestamp() {
-        assertThat(FlussTypeConverter.toFlussDataType(org.apache.kafka.connect.data.Timestamp.SCHEMA))
+        assertThat(typeConverter.toFlussDataType(org.apache.kafka.connect.data.Timestamp.SCHEMA))
                 .isInstanceOf(TimestampType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumTimestamp() {
-        assertThat(FlussTypeConverter.toFlussDataType(io.debezium.time.Timestamp.builder().build()))
+        assertThat(typeConverter.toFlussDataType(io.debezium.time.Timestamp.builder().build()))
                 .isInstanceOf(TimestampType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumMicroTimestamp() {
-        assertThat(FlussTypeConverter.toFlussDataType(MicroTimestamp.builder().build())).isInstanceOf(TimestampType.class);
+        assertThat(typeConverter.toFlussDataType(MicroTimestamp.builder().build())).isInstanceOf(TimestampType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumNanoTimestamp() {
-        assertThat(FlussTypeConverter.toFlussDataType(NanoTimestamp.builder().build())).isInstanceOf(BigIntType.class);
+        assertThat(typeConverter.toFlussDataType(NanoTimestamp.builder().build())).isInstanceOf(BigIntType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumZonedTimestamp() {
-        assertThat(FlussTypeConverter.toFlussDataType(ZonedTimestamp.builder().build())).isInstanceOf(LocalZonedTimestampType.class);
+        assertThat(typeConverter.toFlussDataType(ZonedTimestamp.builder().build())).isInstanceOf(LocalZonedTimestampType.class);
     }
 
     @Test
     void toFlussValueConnectDate() {
         final Date date = new Date(2 * 86_400_000L); // day 2
-        final Object result = FlussTypeConverter.toFlussValue(date, org.apache.kafka.connect.data.Date.SCHEMA);
+        final Object result = typeConverter.toFlussValue(date, org.apache.kafka.connect.data.Date.SCHEMA);
         assertThat(result).isInstanceOf(Integer.class).isEqualTo(2);
     }
 
     @Test
     void toFlussValueConnectTime() {
         final Date time = new Date(3_600_000L); // 1 hour in ms
-        final Object result = FlussTypeConverter.toFlussValue(time, org.apache.kafka.connect.data.Time.SCHEMA);
+        final Object result = typeConverter.toFlussValue(time, org.apache.kafka.connect.data.Time.SCHEMA);
         assertThat(result).isInstanceOf(Integer.class).isEqualTo(3_600_000);
     }
 
@@ -320,7 +328,7 @@ public class FlussTypeConverterTest {
     void toFlussValueConnectTimestamp() {
         final long epochMs = 1_700_000_000_000L;
         final Date ts = new Date(epochMs);
-        final Object result = FlussTypeConverter.toFlussValue(ts, org.apache.kafka.connect.data.Timestamp.SCHEMA);
+        final Object result = typeConverter.toFlussValue(ts, org.apache.kafka.connect.data.Timestamp.SCHEMA);
         assertThat(result).isInstanceOf(TimestampNtz.class);
         assertThat(((TimestampNtz) result).getMillisecond()).isEqualTo(epochMs);
     }
@@ -328,7 +336,7 @@ public class FlussTypeConverterTest {
     @Test
     void toFlussValueDebeziumTimestamp() {
         final long epochMs = 1_700_000_000_000L;
-        final Object result = FlussTypeConverter.toFlussValue(epochMs, io.debezium.time.Timestamp.builder().build());
+        final Object result = typeConverter.toFlussValue(epochMs, io.debezium.time.Timestamp.builder().build());
         assertThat(result).isInstanceOf(TimestampNtz.class);
         assertThat(((TimestampNtz) result).getMillisecond()).isEqualTo(epochMs);
     }
@@ -336,7 +344,7 @@ public class FlussTypeConverterTest {
     @Test
     void toFlussValueDebeziumMicroTimestamp() {
         final long epochMicros = 1_700_000_000_000_000L;
-        final Object result = FlussTypeConverter.toFlussValue(epochMicros, MicroTimestamp.builder().build());
+        final Object result = typeConverter.toFlussValue(epochMicros, MicroTimestamp.builder().build());
         assertThat(result).isInstanceOf(TimestampNtz.class);
         assertThat(((TimestampNtz) result).toEpochMicros()).isEqualTo(epochMicros);
     }
@@ -344,90 +352,90 @@ public class FlussTypeConverterTest {
     @Test
     void toFlussValueDebeziumZonedTimestamp() {
         final String isoTs = "2023-11-15T10:30:00.000+05:30";
-        final Object result = FlussTypeConverter.toFlussValue(isoTs, ZonedTimestamp.builder().build());
+        final Object result = typeConverter.toFlussValue(isoTs, ZonedTimestamp.builder().build());
         assertThat(result).isInstanceOf(TimestampLtz.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumBits() {
-        assertThat(FlussTypeConverter.toFlussDataType(Bits.builder(8).build())).isInstanceOf(BytesType.class);
+        assertThat(typeConverter.toFlussDataType(Bits.builder(8).build())).isInstanceOf(BytesType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumJson() {
-        assertThat(FlussTypeConverter.toFlussDataType(Json.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(Json.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumUuid() {
-        assertThat(FlussTypeConverter.toFlussDataType(Uuid.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(Uuid.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumXml() {
-        assertThat(FlussTypeConverter.toFlussDataType(Xml.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(Xml.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumEnum() {
-        assertThat(FlussTypeConverter.toFlussDataType(Enum.builder("A,B,C").build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(Enum.builder("A,B,C").build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumEnumSet() {
-        assertThat(FlussTypeConverter.toFlussDataType(EnumSet.builder("A,B,C").build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(EnumSet.builder("A,B,C").build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumTsVector() {
-        assertThat(FlussTypeConverter.toFlussDataType(TsVector.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(TsVector.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumVariableScaleDecimal() {
-        assertThat(FlussTypeConverter.toFlussDataType(VariableScaleDecimal.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(VariableScaleDecimal.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumGeometry() {
-        assertThat(FlussTypeConverter.toFlussDataType(Geometry.builder().build())).isInstanceOf(BytesType.class);
+        assertThat(typeConverter.toFlussDataType(Geometry.builder().build())).isInstanceOf(BytesType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumGeography() {
-        assertThat(FlussTypeConverter.toFlussDataType(Geography.builder().build())).isInstanceOf(BytesType.class);
+        assertThat(typeConverter.toFlussDataType(Geography.builder().build())).isInstanceOf(BytesType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumPoint() {
-        assertThat(FlussTypeConverter.toFlussDataType(Point.builder().build())).isInstanceOf(BytesType.class);
+        assertThat(typeConverter.toFlussDataType(Point.builder().build())).isInstanceOf(BytesType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumFloatVector() {
-        assertThat(FlussTypeConverter.toFlussDataType(FloatVector.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(FloatVector.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumDoubleVector() {
-        assertThat(FlussTypeConverter.toFlussDataType(DoubleVector.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(DoubleVector.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussDataTypeDebeziumSparseDoubleVector() {
-        assertThat(FlussTypeConverter.toFlussDataType(SparseDoubleVector.builder().build())).isInstanceOf(StringType.class);
+        assertThat(typeConverter.toFlussDataType(SparseDoubleVector.builder().build())).isInstanceOf(StringType.class);
     }
 
     @Test
     void toFlussValueDebeziumBits() {
         final byte[] bits = new byte[]{ 0b00001111 };
-        final Object result = FlussTypeConverter.toFlussValue(bits, Bits.builder(8).build());
+        final Object result = typeConverter.toFlussValue(bits, Bits.builder(8).build());
         assertThat(result).isInstanceOf(byte[].class).isEqualTo(bits);
     }
 
     @Test
     void toFlussValueDebeziumJson() {
-        final Object result = FlussTypeConverter.toFlussValue("{\"key\":1}", Json.builder().build());
+        final Object result = typeConverter.toFlussValue("{\"key\":1}", Json.builder().build());
         assertThat(result).isInstanceOf(BinaryString.class);
         assertThat(result.toString()).isEqualTo("{\"key\":1}");
     }
@@ -435,7 +443,7 @@ public class FlussTypeConverterTest {
     @Test
     void toFlussValueDebeziumUuid() {
         final String uuid = "550e8400-e29b-41d4-a716-446655440000";
-        final Object result = FlussTypeConverter.toFlussValue(uuid, Uuid.builder().build());
+        final Object result = typeConverter.toFlussValue(uuid, Uuid.builder().build());
         assertThat(result).isInstanceOf(BinaryString.class);
         assertThat(result.toString()).isEqualTo(uuid);
     }
@@ -444,7 +452,7 @@ public class FlussTypeConverterTest {
     void toFlussValueDebeziumVariableScaleDecimal() {
         final org.apache.kafka.connect.data.Schema schema = VariableScaleDecimal.builder().build();
         final org.apache.kafka.connect.data.Struct struct = VariableScaleDecimal.fromLogical(schema, new BigDecimal("12.345"));
-        final Object result = FlussTypeConverter.toFlussValue(struct, schema);
+        final Object result = typeConverter.toFlussValue(struct, schema);
         assertThat(result).isInstanceOf(BinaryString.class);
         assertThat(new BigDecimal(result.toString())).isEqualByComparingTo(new BigDecimal("12.345"));
     }
@@ -454,20 +462,20 @@ public class FlussTypeConverterTest {
         final byte[] wkb = new byte[]{ 1, 2, 3, 4 };
         final org.apache.kafka.connect.data.Schema schema = Geometry.builder().build();
         final org.apache.kafka.connect.data.Struct struct = Geometry.createValue(schema, wkb, null);
-        final Object result = FlussTypeConverter.toFlussValue(struct, schema);
+        final Object result = typeConverter.toFlussValue(struct, schema);
         assertThat(result).isInstanceOf(byte[].class).isEqualTo(wkb);
     }
 
     @Test
     void toFlussValueDebeziumFloatVector() {
-        final Object result = FlussTypeConverter.toFlussValue(List.of(1.0f, 2.0f, 3.0f), FloatVector.builder().build());
+        final Object result = typeConverter.toFlussValue(List.of(1.0f, 2.0f, 3.0f), FloatVector.builder().build());
         assertThat(result).isInstanceOf(BinaryString.class);
         assertThat(result.toString()).isNotEmpty();
     }
 
     @Test
     void toFlussValueDebeziumDoubleVector() {
-        final Object result = FlussTypeConverter.toFlussValue(List.of(1.0, 2.0, 3.0), DoubleVector.builder().build());
+        final Object result = typeConverter.toFlussValue(List.of(1.0, 2.0, 3.0), DoubleVector.builder().build());
         assertThat(result).isInstanceOf(BinaryString.class);
         assertThat(result.toString()).isNotEmpty();
     }
@@ -479,7 +487,7 @@ public class FlussTypeConverterTest {
                 .field("name", STRING_SCHEMA)
                 .build();
 
-        final Schema flussSchema = FlussTypeConverter.toFlussSchema(connectSchema, List.of());
+        final Schema flussSchema = typeConverter.toFlussSchema(connectSchema, List.of());
 
         assertThat(flussSchema.getColumns()).hasSize(2);
         assertThat(flussSchema.getColumns().get(0).getName()).isEqualTo("id");
@@ -497,7 +505,7 @@ public class FlussTypeConverterTest {
                 .field("age", INT32_SCHEMA)
                 .build();
 
-        final Schema flussSchema = FlussTypeConverter.toFlussSchema(connectSchema, List.of("id"));
+        final Schema flussSchema = typeConverter.toFlussSchema(connectSchema, List.of("id"));
 
         assertThat(flussSchema.getColumns()).hasSize(3);
         assertThat(flussSchema.getPrimaryKey()).isPresent();
@@ -512,7 +520,7 @@ public class FlussTypeConverterTest {
                 .field("value", STRING_SCHEMA)
                 .build();
 
-        final Schema flussSchema = FlussTypeConverter.toFlussSchema(connectSchema, List.of("tenant_id", "user_id"));
+        final Schema flussSchema = typeConverter.toFlussSchema(connectSchema, List.of("tenant_id", "user_id"));
 
         assertThat(flussSchema.getPrimaryKey()).isPresent();
         assertThat(flussSchema.getPrimaryKey().get().getColumnNames()).containsExactly("tenant_id", "user_id");
@@ -533,7 +541,7 @@ public class FlussTypeConverterTest {
                 .field("f_decimal", org.apache.kafka.connect.data.Decimal.builder(2).build())
                 .build();
 
-        final Schema flussSchema = FlussTypeConverter.toFlussSchema(connectSchema, List.of());
+        final Schema flussSchema = typeConverter.toFlussSchema(connectSchema, List.of());
 
         final Map<String, Class<?>> expectedTypes = Map.of(
                 "f_int8", TinyIntType.class,
