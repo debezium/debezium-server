@@ -13,9 +13,6 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Properties;
 
-import io.debezium.relational.RelationalDatabaseConnectorConfig;
-import io.debezium.runtime.DebeziumConnectorRegistry;
-import io.debezium.runtime.EngineManifest;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
@@ -23,6 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import io.debezium.DebeziumException;
+import io.debezium.relational.RelationalDatabaseConnectorConfig;
+import io.debezium.runtime.DebeziumConnectorRegistry;
+import io.debezium.runtime.EngineManifest;
 import io.debezium.runtime.events.ConnectorStartedEvent;
 import io.debezium.util.Collect;
 import io.debezium.util.Testing;
