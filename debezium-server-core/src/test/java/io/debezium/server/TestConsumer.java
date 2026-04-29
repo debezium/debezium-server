@@ -9,15 +9,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.util.Testing;
-import jakarta.inject.Singleton;
 
 @Singleton
 @Named("test")

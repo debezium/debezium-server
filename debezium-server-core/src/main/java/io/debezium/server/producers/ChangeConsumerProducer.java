@@ -7,10 +7,8 @@ package io.debezium.server.producers;
 
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_TYPE;
 
-import io.debezium.server.api.ChangeConsumerHandler;
-import io.debezium.server.api.DebeziumServerConsumer;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.Startup;
+import java.util.Optional;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
@@ -24,8 +22,10 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
-
-import java.util.Optional;
+import io.debezium.server.api.ChangeConsumerHandler;
+import io.debezium.server.api.DebeziumServerConsumer;
+import io.quarkus.arc.Unremovable;
+import io.quarkus.runtime.Startup;
 
 /**
  * CDI producer that creates and validates the {@link ChangeConsumerHandler} based on configuration.
@@ -53,7 +53,6 @@ public class ChangeConsumerProducer {
         this.instance = instance;
         this.config = config;
     }
-
 
     @Startup
     @Produces
