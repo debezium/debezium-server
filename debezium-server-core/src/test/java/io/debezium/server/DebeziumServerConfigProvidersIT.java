@@ -5,25 +5,25 @@
  */
 package io.debezium.server;
 
-import io.debezium.runtime.events.DebeziumCompletionEvent;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Duration;
+
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
-
-import java.time.Duration;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration test that verifies basic reading from PostgreSQL database.

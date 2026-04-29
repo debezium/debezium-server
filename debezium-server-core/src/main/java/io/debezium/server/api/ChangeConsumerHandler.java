@@ -1,9 +1,9 @@
 package io.debezium.server.api;
 
+import java.util.Optional;
+
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
-
-import java.util.Optional;
 
 /**
  * Factory interface for obtaining the configured sink consumer and its capabilities.

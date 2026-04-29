@@ -1,13 +1,13 @@
 package io.debezium.server.producers;
 
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.server.api.ChangeConsumerHandler;
-import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
+import io.debezium.engine.DebeziumEngine;
+import io.debezium.server.api.ChangeConsumerHandler;
+import io.quarkus.arc.Unremovable;
 import io.quarkus.debezium.engine.capture.CapturingTombstoneEvents;
+import io.quarkus.runtime.Startup;
 
 /**
  * CDI producer that creates the {@link CapturingTombstoneEvents} configuration for tombstone event handling.
