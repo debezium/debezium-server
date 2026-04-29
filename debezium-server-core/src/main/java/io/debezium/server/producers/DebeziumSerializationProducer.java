@@ -4,14 +4,11 @@ import static io.debezium.server.configuration.DebeziumProperties.PROP_HEADER_FO
 import static io.debezium.server.configuration.DebeziumProperties.PROP_KEY_FORMAT;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_VALUE_FORMAT;
 
-import io.quarkus.arc.Unremovable;
-import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
 import org.eclipse.microprofile.config.Config;
 
-import io.debezium.server.configuration.DebeziumConfiguration;
 import io.debezium.DebeziumException;
 import io.debezium.embedded.ClientProvided;
 import io.debezium.embedded.Connect;
@@ -24,6 +21,9 @@ import io.debezium.engine.format.Protobuf;
 import io.debezium.engine.format.SerializationFormat;
 import io.debezium.engine.format.SimpleString;
 import io.debezium.runtime.DebeziumSerialization;
+import io.debezium.server.configuration.DebeziumConfiguration;
+import io.quarkus.arc.Unremovable;
+import io.quarkus.runtime.Startup;
 
 /**
  * CDI producer that creates the {@link DebeziumSerialization} configuration for change event serialization.

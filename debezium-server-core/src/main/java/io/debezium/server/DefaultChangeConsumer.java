@@ -5,21 +5,20 @@
  */
 package io.debezium.server;
 
-import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_TYPE;
-import static io.debezium.server.configuration.DebeziumProperties.PROP_SOURCE_PREFIX;
 import static io.debezium.openlineage.OpenLineageConfig.OPEN_LINEAGE_INTEGRATION_ENABLED;
 import static io.debezium.openlineage.dataset.DatasetMetadata.STREAM_DATASET_TYPE;
 import static io.debezium.openlineage.dataset.DatasetMetadata.DataStore.KAFKA;
 import static io.debezium.openlineage.dataset.DatasetMetadata.DatasetKind.OUTPUT;
+import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_TYPE;
+import static io.debezium.server.configuration.DebeziumProperties.PROP_SOURCE_PREFIX;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-import io.debezium.server.api.ChangeConsumerHandler;
-import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.eclipse.microprofile.config.Config;
 import org.slf4j.Logger;
@@ -34,6 +33,8 @@ import io.debezium.openlineage.dataset.DatasetMetadata;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.Capturing;
 import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.ChangeConsumerHandler;
+import io.quarkus.runtime.Startup;
 
 @ApplicationScoped
 @Startup
@@ -45,7 +46,6 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
     private final boolean isOpenLineageEnabled;
-
 
     @Inject
     public DefaultChangeConsumer(ChangeConsumerHandler delegateConsumer, Config config) {
