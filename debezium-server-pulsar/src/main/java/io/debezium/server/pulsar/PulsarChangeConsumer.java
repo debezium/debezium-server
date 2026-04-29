@@ -16,6 +16,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -52,7 +55,7 @@ import io.debezium.server.api.DebeziumServerSink;
  */
 @Named("pulsar")
 @Dependent
-public class PulsarChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class PulsarChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PulsarChangeConsumer.class);
 
@@ -160,13 +163,13 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @SuppressWarnings("unchecked")
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
         final Map<String, Producer<?>> batchProducers = new HashMap<>();
 
-        for (final ChangeEvent<Object, Object> record : records) {
+        for (final BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
-            final String topicName = streamNameMapper.map(record.destination());
+            final String topicName = streamNameMapper.map(events.destination());
             final Producer<?> producer = producers.computeIfAbsent(topicName, (topic) -> createProducer(topic, record.value()));
             batchProducers.put(topicName, producer);
 
@@ -189,15 +192,10 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                     .whenComplete((messageId, exception) -> {
                         if (exception == null) {
                             LOGGER.trace("Sent message with id: {}", messageId);
-                            try {
-                                committer.markProcessed(record);
-                            }
-                            catch (InterruptedException e) {
-                                throw new DebeziumException(e);
-                            }
+                            record.commit();
                         }
                         else {
-                            LOGGER.error("Failed to send record to {} destination", record.destination(), exception);
+                            LOGGER.error("Failed to send record to "+ events.destination() + " destination", exception);
                         }
                     });
         }
@@ -225,8 +223,6 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
             LOGGER.error("Failed to send batch", exception);
             throw new DebeziumException(exception);
         }
-
-        committer.markBatchFinished();
     }
 
     @Override

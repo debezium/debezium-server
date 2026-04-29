@@ -19,8 +19,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
@@ -39,8 +39,6 @@ import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 
 import io.debezium.DebeziumException;
 import io.debezium.doc.FixFor;
-import io.debezium.server.DebeziumServer;
-import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -57,8 +55,6 @@ import io.quarkus.test.junit.QuarkusTest;
 @QuarkusTestResource(HttpTestResourceLifecycleManager.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class HttpIT {
-    @Inject
-    DebeziumServer server;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpIT.class);
     private static final int MESSAGE_COUNT = 4;
@@ -71,9 +67,9 @@ public class HttpIT {
         Testing.Files.createTestingFile(HttpTestConfigSource.OFFSET_STORE_PATH);
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            Exception e = (Exception) event.getError().get();
+            Exception e = (Exception) event.getError();
             if (e instanceof DebeziumException && expectServerFail && e.getMessage().equals(expectedErrorMessage)) {
                 LOGGER.info("Expected server failure: {}", e);
                 return;

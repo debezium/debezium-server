@@ -10,14 +10,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.server.TestConfigSource;
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.pravega.client.ClientConfig;
@@ -50,9 +50,9 @@ public class PravegaIT {
         Testing.Print.enable();
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) {
         if (!event.isSuccess()) {
-            throw new RuntimeException(event.getError().get());
+            throw new RuntimeException(event.getError());
         }
     }
 

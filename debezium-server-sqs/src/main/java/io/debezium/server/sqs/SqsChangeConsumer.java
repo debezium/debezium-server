@@ -9,6 +9,9 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -22,9 +25,6 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine.ChangeConsumer;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
@@ -47,7 +47,7 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest.Builder;
  */
 @Named("sqs")
 @Dependent
-public class SqsChangeConsumer extends BaseChangeConsumer implements ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class SqsChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
     protected static final String PROP_PREFIX = "debezium.sink.sqs.";
     private static final Logger LOGGER = LoggerFactory.getLogger(SqsChangeConsumer.class);
     private static final Duration RETRY_INTERVAL = Duration.ofSeconds(1);
@@ -101,25 +101,24 @@ public class SqsChangeConsumer extends BaseChangeConsumer implements ChangeConsu
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
 
             int attempts = 0;
-            while (!recordSent(record)) {
+            while (!recordSent(record, events.destination())) {
                 attempts++;
                 if (attempts >= DEFAULT_RETRIES) {
                     throw new DebeziumException("Exceeded maximum number of attempts to publish event " + record);
                 }
                 Metronome.sleeper(RETRY_INTERVAL, Clock.SYSTEM).pause();
             }
-            committer.markProcessed(record);
+            record.commit();
         }
-        committer.markBatchFinished();
     }
 
-    private boolean recordSent(ChangeEvent<Object, Object> event) {
+    private boolean recordSent(BatchEvent event, String destination) {
         Object eventValue = event.value();
         if (eventValue == null) {
             eventValue = "";
@@ -141,7 +140,7 @@ public class SqsChangeConsumer extends BaseChangeConsumer implements ChangeConsu
             return true;
         }
         catch (SdkClientException exception) {
-            LOGGER.error("Failed to send record to {}", event.destination(), exception);
+            LOGGER.error("Failed to send record to {}", destination, exception);
             return false;
         }
     }

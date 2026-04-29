@@ -12,13 +12,13 @@ import java.time.Duration;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -39,8 +39,9 @@ import io.quarkus.test.junit.TestProfile;
 public class DebeziumServerConfigProvidersIT {
 
     private static final int MESSAGE_COUNT = 4;
+
     @Inject
-    DebeziumServer server;
+    TestConsumer testConsumer;
 
     {
         Testing.Files.delete(TestConfigSource.OFFSET_STORE_PATH);
@@ -53,16 +54,16 @@ public class DebeziumServerConfigProvidersIT {
 
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 
     @Test
-    public void testPostgresWithJson() throws Exception {
+    public void testPostgresWithJson() {
         Testing.Print.enable();
-        final TestConsumer testConsumer = (TestConsumer) server.getConsumer();
+
         Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
                 .until(() -> (testConsumer.getValues().size() >= MESSAGE_COUNT));
         assertThat(testConsumer.getValues().size()).isEqualTo(MESSAGE_COUNT);
