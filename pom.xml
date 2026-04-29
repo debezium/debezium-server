@@ -79,6 +79,7 @@
         <module>debezium-server-rocketmq</module>
         <module>debezium-server-sqs</module>
         <module>debezium-server-sns</module>
+        <module>debezium-server-fluss</module>
         <module>debezium-server-instructlab</module>
         <module>debezium-system-tests</module>
     </modules>

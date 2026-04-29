@@ -31,4 +31,6 @@ public class Images {
     public static final String WIREMOCK_IMAGE = "mirror.gcr.io/wiremock/wiremock:3.2.0";
     public static final String NATS_IMAGE = "mirror.gcr.io/library/nats:latest";
     public static final String NATS_STREAMING_IMAGE = "mirror.gcr.io/library/nats-streaming:latest";
+    public static final String FLUSS_IMAGE = "apache/fluss:0.9.0-incubating";
+    public static final String FLUSS_ZOOKEEPER_IMAGE = "zookeeper:3.9";
 }
