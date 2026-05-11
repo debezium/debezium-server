@@ -12,7 +12,7 @@ import jakarta.enterprise.event.Observes;
 
 import org.junit.jupiter.api.Test;
 
-import io.debezium.server.events.ConnectorCompletedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -39,9 +39,9 @@ public class SqsIT {
         Testing.Files.createTestingFile(SqsTestConfigSource.OFFSET_STORE_PATH);
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 

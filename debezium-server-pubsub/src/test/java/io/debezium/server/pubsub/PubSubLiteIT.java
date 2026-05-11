@@ -15,8 +15,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-import io.debezium.runtime.events.ConnectorStartedEvent;
-import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
 
 import org.awaitility.Awaitility;
@@ -42,6 +40,8 @@ import com.google.cloud.pubsublite.cloudpubsub.SubscriberSettings;
 import com.google.cloud.pubsublite.proto.Subscription;
 import com.google.pubsub.v1.PubsubMessage;
 
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.server.TestConfigSource;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
