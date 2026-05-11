@@ -337,6 +337,10 @@
                     <artifactId>jmx_prometheus_javaagent</artifactId>
                 </dependency>
                 <dependency>
+                    <groupId>io.opentelemetry.javaagent</groupId>
+                    <artifactId>opentelemetry-javaagent</artifactId>
+                </dependency>
+                <dependency>
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-connector-mariadb</artifactId>
                 </dependency>
@@ -417,6 +421,10 @@
                 <dependency>
                     <groupId>io.prometheus.jmx</groupId>
                     <artifactId>jmx_prometheus_javaagent</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.opentelemetry.javaagent</groupId>
+                    <artifactId>opentelemetry-javaagent</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>

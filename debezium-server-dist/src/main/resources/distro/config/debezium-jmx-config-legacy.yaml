@@ -1,0 +1,377 @@
+---
+# OpenTelemetry JMX Metric Insight configuration for Debezium
+# Metric names use prefix debezium.metrics. with JMX attribute names
+# Context (streaming/snapshot) is extracted as a label from the ObjectName
+
+rules:
+  # Rule 1: Connectors with task and database dimensions (e.g., SQL Server, MongoDB)
+  - bean: debezium.*:type=connector-metrics,context=*,server=*,task=*,database=*
+    metricAttribute:
+      name: param(server)
+      task: param(task)
+      database: param(database)
+      context: param(context)
+    prefix: debezium.metrics.
+    mapping:
+      TotalNumberOfEventsSeen:
+        metric: TotalNumberOfEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfCreateEventsSeen:
+        metric: TotalNumberOfCreateEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfUpdateEventsSeen:
+        metric: TotalNumberOfUpdateEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfDeleteEventsSeen:
+        metric: TotalNumberOfDeleteEventsSeen
+        type: counter
+        unit: '{events}'
+      NumberOfErroneousEvents:
+        metric: NumberOfErroneousEvents
+        type: counter
+        unit: '{events}'
+      NumberOfEventsFiltered:
+        metric: NumberOfEventsFiltered
+        type: counter
+        unit: '{events}'
+      NumberOfUnchangedEventsSkipped:
+        metric: NumberOfUnchangedEventsSkipped
+        type: counter
+        unit: '{events}'
+        dropNegativeValues: true
+      NumberOfCommittedTransactions:
+        metric: NumberOfCommittedTransactions
+        type: counter
+        unit: '{transactions}'
+      MilliSecondsBehindSource:
+        metric: MilliSecondsBehindSource
+        type: gauge
+        unit: ms
+      MilliSecondsSinceLastEvent:
+        metric: MilliSecondsSinceLastEvent
+        type: gauge
+        unit: ms
+      QueueTotalCapacity:
+        metric: QueueTotalCapacity
+        type: gauge
+        unit: '{events}'
+      QueueRemainingCapacity:
+        metric: QueueRemainingCapacity
+        type: gauge
+        unit: '{events}'
+      MaxQueueSizeInBytes:
+        metric: MaxQueueSizeInBytes
+        type: gauge
+        unit: By
+      CurrentQueueSizeInBytes:
+        metric: CurrentQueueSizeInBytes
+        type: gauge
+        unit: By
+      SnapshotDurationInSeconds:
+        metric: SnapshotDurationInSeconds
+        type: gauge
+        unit: s
+      RemainingTableCount:
+        metric: RemainingTableCount
+        type: gauge
+        unit: '{tables}'
+      TotalTableCount:
+        metric: TotalTableCount
+        type: gauge
+        unit: '{tables}'
+      Connected:
+        metric: Connected
+        type: state
+        metricAttribute:
+          debezium.connected.status:
+            connected: 'true'
+            disconnected: '*'
+      SnapshotCompleted:
+        metric: SnapshotCompleted
+        type: state
+        metricAttribute:
+          debezium.snapshot.status:
+            completed: 'true'
+            not_completed: '*'
+      SnapshotAborted:
+        metric: SnapshotAborted
+        type: state
+        metricAttribute:
+          debezium.snapshot.aborted:
+            aborted: 'true'
+            not_aborted: '*'
+      SnapshotRunning:
+        metric: SnapshotRunning
+        type: state
+        metricAttribute:
+          debezium.snapshot.running:
+            running: 'true'
+            not_running: '*'
+      SnapshotPaused:
+        metric: SnapshotPaused
+        type: state
+        metricAttribute:
+          debezium.snapshot.paused:
+            paused: 'true'
+            not_paused: '*'
+      SnapshotPausedDurationInSeconds:
+        metric: SnapshotPausedDurationInSeconds
+        type: gauge
+        unit: s
+      SnapshotSkipped:
+        metric: SnapshotSkipped
+        type: state
+        metricAttribute:
+          debezium.snapshot.skipped:
+            skipped: 'true'
+            not_skipped: '*'
+
+  # Rule 2: Connectors with task dimension (no database)
+  - bean: debezium.*:type=connector-metrics,context=*,server=*,task=*
+    metricAttribute:
+      name: param(server)
+      task: param(task)
+      context: param(context)
+    prefix: debezium.metrics.
+    mapping:
+      TotalNumberOfEventsSeen:
+        metric: TotalNumberOfEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfCreateEventsSeen:
+        metric: TotalNumberOfCreateEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfUpdateEventsSeen:
+        metric: TotalNumberOfUpdateEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfDeleteEventsSeen:
+        metric: TotalNumberOfDeleteEventsSeen
+        type: counter
+        unit: '{events}'
+      NumberOfErroneousEvents:
+        metric: NumberOfErroneousEvents
+        type: counter
+        unit: '{events}'
+      NumberOfEventsFiltered:
+        metric: NumberOfEventsFiltered
+        type: counter
+        unit: '{events}'
+      NumberOfUnchangedEventsSkipped:
+        metric: NumberOfUnchangedEventsSkipped
+        type: counter
+        unit: '{events}'
+        dropNegativeValues: true
+      NumberOfCommittedTransactions:
+        metric: NumberOfCommittedTransactions
+        type: counter
+        unit: '{transactions}'
+      MilliSecondsBehindSource:
+        metric: MilliSecondsBehindSource
+        type: gauge
+        unit: ms
+      MilliSecondsSinceLastEvent:
+        metric: MilliSecondsSinceLastEvent
+        type: gauge
+        unit: ms
+      QueueTotalCapacity:
+        metric: QueueTotalCapacity
+        type: gauge
+        unit: '{events}'
+      QueueRemainingCapacity:
+        metric: QueueRemainingCapacity
+        type: gauge
+        unit: '{events}'
+      MaxQueueSizeInBytes:
+        metric: MaxQueueSizeInBytes
+        type: gauge
+        unit: By
+      CurrentQueueSizeInBytes:
+        metric: CurrentQueueSizeInBytes
+        type: gauge
+        unit: By
+      SnapshotDurationInSeconds:
+        metric: SnapshotDurationInSeconds
+        type: gauge
+        unit: s
+      RemainingTableCount:
+        metric: RemainingTableCount
+        type: gauge
+        unit: '{tables}'
+      TotalTableCount:
+        metric: TotalTableCount
+        type: gauge
+        unit: '{tables}'
+      Connected:
+        metric: Connected
+        type: state
+        metricAttribute:
+          debezium.connected.status:
+            connected: 'true'
+            disconnected: '*'
+      SnapshotCompleted:
+        metric: SnapshotCompleted
+        type: state
+        metricAttribute:
+          debezium.snapshot.status:
+            completed: 'true'
+            not_completed: '*'
+      SnapshotAborted:
+        metric: SnapshotAborted
+        type: state
+        metricAttribute:
+          debezium.snapshot.aborted:
+            aborted: 'true'
+            not_aborted: '*'
+      SnapshotRunning:
+        metric: SnapshotRunning
+        type: state
+        metricAttribute:
+          debezium.snapshot.running:
+            running: 'true'
+            not_running: '*'
+      SnapshotPaused:
+        metric: SnapshotPaused
+        type: state
+        metricAttribute:
+          debezium.snapshot.paused:
+            paused: 'true'
+            not_paused: '*'
+      SnapshotPausedDurationInSeconds:
+        metric: SnapshotPausedDurationInSeconds
+        type: gauge
+        unit: s
+      SnapshotSkipped:
+        metric: SnapshotSkipped
+        type: state
+        metricAttribute:
+          debezium.snapshot.skipped:
+            skipped: 'true'
+            not_skipped: '*'
+
+  # Rule 3: Connectors without task or database dimensions
+  - bean: debezium.*:type=connector-metrics,context=*,server=*
+    metricAttribute:
+      name: param(server)
+      context: param(context)
+    prefix: debezium.metrics.
+    mapping:
+      TotalNumberOfEventsSeen:
+        metric: TotalNumberOfEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfCreateEventsSeen:
+        metric: TotalNumberOfCreateEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfUpdateEventsSeen:
+        metric: TotalNumberOfUpdateEventsSeen
+        type: counter
+        unit: '{events}'
+      TotalNumberOfDeleteEventsSeen:
+        metric: TotalNumberOfDeleteEventsSeen
+        type: counter
+        unit: '{events}'
+      NumberOfErroneousEvents:
+        metric: NumberOfErroneousEvents
+        type: counter
+        unit: '{events}'
+      NumberOfEventsFiltered:
+        metric: NumberOfEventsFiltered
+        type: counter
+        unit: '{events}'
+      NumberOfUnchangedEventsSkipped:
+        metric: NumberOfUnchangedEventsSkipped
+        type: counter
+        unit: '{events}'
+        dropNegativeValues: true
+      NumberOfCommittedTransactions:
+        metric: NumberOfCommittedTransactions
+        type: counter
+        unit: '{transactions}'
+      MilliSecondsBehindSource:
+        metric: MilliSecondsBehindSource
+        type: gauge
+        unit: ms
+      MilliSecondsSinceLastEvent:
+        metric: MilliSecondsSinceLastEvent
+        type: gauge
+        unit: ms
+      QueueTotalCapacity:
+        metric: QueueTotalCapacity
+        type: gauge
+        unit: '{events}'
+      QueueRemainingCapacity:
+        metric: QueueRemainingCapacity
+        type: gauge
+        unit: '{events}'
+      MaxQueueSizeInBytes:
+        metric: MaxQueueSizeInBytes
+        type: gauge
+        unit: By
+      CurrentQueueSizeInBytes:
+        metric: CurrentQueueSizeInBytes
+        type: gauge
+        unit: By
+      SnapshotDurationInSeconds:
+        metric: SnapshotDurationInSeconds
+        type: gauge
+        unit: s
+      RemainingTableCount:
+        metric: RemainingTableCount
+        type: gauge
+        unit: '{tables}'
+      TotalTableCount:
+        metric: TotalTableCount
+        type: gauge
+        unit: '{tables}'
+      Connected:
+        metric: Connected
+        type: state
+        metricAttribute:
+          debezium.connected.status:
+            connected: 'true'
+            disconnected: '*'
+      SnapshotCompleted:
+        metric: SnapshotCompleted
+        type: state
+        metricAttribute:
+          debezium.snapshot.status:
+            completed: 'true'
+            not_completed: '*'
+      SnapshotAborted:
+        metric: SnapshotAborted
+        type: state
+        metricAttribute:
+          debezium.snapshot.aborted:
+            aborted: 'true'
+            not_aborted: '*'
+      SnapshotRunning:
+        metric: SnapshotRunning
+        type: state
+        metricAttribute:
+          debezium.snapshot.running:
+            running: 'true'
+            not_running: '*'
+      SnapshotPaused:
+        metric: SnapshotPaused
+        type: state
+        metricAttribute:
+          debezium.snapshot.paused:
+            paused: 'true'
+            not_paused: '*'
+      SnapshotPausedDurationInSeconds:
+        metric: SnapshotPausedDurationInSeconds
+        type: gauge
+        unit: s
+      SnapshotSkipped:
+        metric: SnapshotSkipped
+        type: state
+        metricAttribute:
+          debezium.snapshot.skipped:
+            skipped: 'true'
+            not_skipped: '*'
