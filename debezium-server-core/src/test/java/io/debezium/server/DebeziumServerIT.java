@@ -23,7 +23,9 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.debezium.config.CommonConnectorConfig;
 import io.debezium.engine.DebeziumEngine;
-import io.debezium.runtime.*;
+import io.debezium.runtime.DebeziumConnectorRegistry;
+import io.debezium.runtime.DebeziumStatus;
+import io.debezium.runtime.EngineManifest;
 import io.debezium.runtime.events.ConnectorStartedEvent;
 import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
