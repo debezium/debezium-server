@@ -25,6 +25,7 @@
         <version.stan>2.2.3</version.stan>
         <version.commons.logging>1.2</version.commons.logging>
         <version.jmx.exporter>1.0.1</version.jmx.exporter>
+        <version.otel.agent>2.27.0</version.otel.agent>
 
         <!-- Testing -->
         <version.junit.pioneer>2.0.1</version.junit.pioneer>
@@ -37,6 +38,12 @@
                 <groupId>io.prometheus.jmx</groupId>
                 <artifactId>jmx_prometheus_javaagent</artifactId>
                 <version>${version.jmx.exporter}</version>
+            </dependency>
+            <!-- OpenTelemetry Java Agent -->
+            <dependency>
+                <groupId>io.opentelemetry.javaagent</groupId>
+                <artifactId>opentelemetry-javaagent</artifactId>
+                <version>${version.otel.agent}</version>
             </dependency>
             <!-- Aligning versions/fixing scopes -->
             <dependency>

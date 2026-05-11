@@ -1,0 +1,468 @@
+---
+# OpenTelemetry JMX Metric Insight configuration for Debezium
+#
+# Metric names follow OTel naming conventions:
+#   debezium.{component}.{metric} — dot-separated, lowercase
+#
+# Units follow OTel/UCUM conventions:
+#   {event}, {transaction}, {table} (singular), s (seconds), By (bytes)
+#
+# The context dimension (streaming/snapshot) is extracted from the MBean ObjectName.
+
+rules:
+
+  # Rule 1: Connectors with task and database dimensions (e.g., SQL Server, MongoDB)
+  - bean: debezium.*:type=connector-metrics,context=*,server=*,task=*,database=*
+    metricAttribute:
+      debezium.logical.name: param(server)
+      debezium.task.id: param(task)
+      debezium.database: param(database)
+      debezium.context: param(context)
+    prefix: debezium.
+    mapping:
+
+      TotalNumberOfCreateEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(create)
+      TotalNumberOfUpdateEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(update)
+      TotalNumberOfDeleteEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(delete)
+
+      NumberOfErroneousEvents:
+        metric: event.erroneous.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events that resulted in an error during processing.
+      NumberOfEventsFiltered:
+        metric: event.filtered.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events excluded by the connector filter configuration.
+      NumberOfUnchangedEventsSkipped:
+        metric: event.skipped.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events skipped because they contained no data changes.
+        dropNegativeValues: true
+
+      NumberOfCommittedTransactions:
+        metric: transaction.committed.count
+        type: counter
+        unit: "{transaction}"
+        desc: The number of committed transactions processed from the source database.
+
+      MilliSecondsBehindSource:
+        metric: source.lag
+        type: gauge
+        sourceUnit: ms
+        unit: s
+        desc: The time between a change occurring in the source database and Debezium processing it.
+      MilliSecondsSinceLastEvent:
+        metric: event.time_since_last
+        type: gauge
+        sourceUnit: ms
+        unit: s
+        desc: The elapsed time since the last change event was processed.
+
+      QueueTotalCapacity:
+        metric: queue.limit
+        type: gauge
+        unit: "{event}"
+        desc: The configured maximum number of events the internal queue can hold.
+      QueueRemainingCapacity:
+        metric: queue.remaining_capacity
+        type: updowncounter
+        unit: "{event}"
+        desc: The number of available slots in the internal event queue.
+      MaxQueueSizeInBytes:
+        metric: queue.size.limit
+        type: gauge
+        unit: By
+        desc: The configured maximum size of the internal queue in bytes.
+      CurrentQueueSizeInBytes:
+        metric: queue.size
+        type: updowncounter
+        unit: By
+        desc: The current size of the internal event queue in bytes.
+
+      SnapshotDurationInSeconds:
+        metric: snapshot.duration
+        type: gauge
+        unit: s
+        desc: The total elapsed time of the current or most recent snapshot.
+      SnapshotPausedDurationInSeconds:
+        metric: snapshot.paused_duration
+        type: gauge
+        unit: s
+        desc: The total time the snapshot has spent in a paused state.
+      RemainingTableCount:
+        metric: snapshot.table.remaining_count
+        type: gauge
+        unit: "{table}"
+        desc: The number of tables remaining to be captured during the snapshot.
+      TotalTableCount:
+        metric: snapshot.table.count
+        type: gauge
+        unit: "{table}"
+        desc: The total number of tables included in the snapshot.
+
+      Connected:
+        metric: connection.status
+        type: state
+        metricAttribute:
+          debezium.connection.state:
+            connected: 'true'
+            disconnected: '*'
+      SnapshotCompleted:
+        metric: snapshot.completed
+        type: state
+        metricAttribute:
+          debezium.snapshot.completed.state:
+            completed: 'true'
+            not_completed: '*'
+      SnapshotAborted:
+        metric: snapshot.aborted
+        type: state
+        metricAttribute:
+          debezium.snapshot.aborted.state:
+            aborted: 'true'
+            not_aborted: '*'
+      SnapshotRunning:
+        metric: snapshot.running
+        type: state
+        metricAttribute:
+          debezium.snapshot.running.state:
+            running: 'true'
+            not_running: '*'
+      SnapshotPaused:
+        metric: snapshot.paused
+        type: state
+        metricAttribute:
+          debezium.snapshot.paused.state:
+            paused: 'true'
+            not_paused: '*'
+      SnapshotSkipped:
+        metric: snapshot.skipped
+        type: state
+        metricAttribute:
+          debezium.snapshot.skipped.state:
+            skipped: 'true'
+            not_skipped: '*'
+
+  # Rule 2: Connectors with task dimension (no database)
+  - bean: debezium.*:type=connector-metrics,context=*,server=*,task=*
+    metricAttribute:
+      debezium.logical.name: param(server)
+      debezium.task.id: param(task)
+      debezium.context: param(context)
+    prefix: debezium.
+    mapping:
+
+      TotalNumberOfCreateEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(create)
+      TotalNumberOfUpdateEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(update)
+      TotalNumberOfDeleteEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(delete)
+
+      NumberOfErroneousEvents:
+        metric: event.erroneous.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events that resulted in an error during processing.
+      NumberOfEventsFiltered:
+        metric: event.filtered.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events excluded by the connector filter configuration.
+      NumberOfUnchangedEventsSkipped:
+        metric: event.skipped.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events skipped because they contained no data changes.
+        dropNegativeValues: true
+
+      NumberOfCommittedTransactions:
+        metric: transaction.committed.count
+        type: counter
+        unit: "{transaction}"
+        desc: The number of committed transactions processed from the source database.
+
+      MilliSecondsBehindSource:
+        metric: source.lag
+        type: gauge
+        sourceUnit: ms
+        unit: s
+        desc: The time between a change occurring in the source database and Debezium processing it.
+      MilliSecondsSinceLastEvent:
+        metric: event.time_since_last
+        type: gauge
+        sourceUnit: ms
+        unit: s
+        desc: The elapsed time since the last change event was processed.
+
+      QueueTotalCapacity:
+        metric: queue.limit
+        type: gauge
+        unit: "{event}"
+        desc: The configured maximum number of events the internal queue can hold.
+      QueueRemainingCapacity:
+        metric: queue.remaining_capacity
+        type: updowncounter
+        unit: "{event}"
+        desc: The number of available slots in the internal event queue.
+      MaxQueueSizeInBytes:
+        metric: queue.size.limit
+        type: gauge
+        unit: By
+        desc: The configured maximum size of the internal queue in bytes.
+      CurrentQueueSizeInBytes:
+        metric: queue.size
+        type: updowncounter
+        unit: By
+        desc: The current size of the internal event queue in bytes.
+
+      SnapshotDurationInSeconds:
+        metric: snapshot.duration
+        type: gauge
+        unit: s
+        desc: The total elapsed time of the current or most recent snapshot.
+      SnapshotPausedDurationInSeconds:
+        metric: snapshot.paused_duration
+        type: gauge
+        unit: s
+        desc: The total time the snapshot has spent in a paused state.
+      RemainingTableCount:
+        metric: snapshot.table.remaining_count
+        type: gauge
+        unit: "{table}"
+        desc: The number of tables remaining to be captured during the snapshot.
+      TotalTableCount:
+        metric: snapshot.table.count
+        type: gauge
+        unit: "{table}"
+        desc: The total number of tables included in the snapshot.
+
+      Connected:
+        metric: connection.status
+        type: state
+        metricAttribute:
+          debezium.connection.state:
+            connected: 'true'
+            disconnected: '*'
+      SnapshotCompleted:
+        metric: snapshot.completed
+        type: state
+        metricAttribute:
+          debezium.snapshot.completed.state:
+            completed: 'true'
+            not_completed: '*'
+      SnapshotAborted:
+        metric: snapshot.aborted
+        type: state
+        metricAttribute:
+          debezium.snapshot.aborted.state:
+            aborted: 'true'
+            not_aborted: '*'
+      SnapshotRunning:
+        metric: snapshot.running
+        type: state
+        metricAttribute:
+          debezium.snapshot.running.state:
+            running: 'true'
+            not_running: '*'
+      SnapshotPaused:
+        metric: snapshot.paused
+        type: state
+        metricAttribute:
+          debezium.snapshot.paused.state:
+            paused: 'true'
+            not_paused: '*'
+      SnapshotSkipped:
+        metric: snapshot.skipped
+        type: state
+        metricAttribute:
+          debezium.snapshot.skipped.state:
+            skipped: 'true'
+            not_skipped: '*'
+
+  # Rule 3: Connectors without task or database dimensions
+  - bean: debezium.*:type=connector-metrics,context=*,server=*
+    metricAttribute:
+      debezium.logical.name: param(server)
+      debezium.context: param(context)
+    prefix: debezium.
+    mapping:
+
+      TotalNumberOfCreateEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(create)
+      TotalNumberOfUpdateEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(update)
+      TotalNumberOfDeleteEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(delete)
+
+      NumberOfErroneousEvents:
+        metric: event.erroneous.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events that resulted in an error during processing.
+      NumberOfEventsFiltered:
+        metric: event.filtered.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events excluded by the connector filter configuration.
+      NumberOfUnchangedEventsSkipped:
+        metric: event.skipped.count
+        type: counter
+        unit: "{event}"
+        desc: The number of events skipped because they contained no data changes.
+        dropNegativeValues: true
+
+      NumberOfCommittedTransactions:
+        metric: transaction.committed.count
+        type: counter
+        unit: "{transaction}"
+        desc: The number of committed transactions processed from the source database.
+
+      MilliSecondsBehindSource:
+        metric: source.lag
+        type: gauge
+        sourceUnit: ms
+        unit: s
+        desc: The time between a change occurring in the source database and Debezium processing it.
+      MilliSecondsSinceLastEvent:
+        metric: event.time_since_last
+        type: gauge
+        sourceUnit: ms
+        unit: s
+        desc: The elapsed time since the last change event was processed.
+
+      QueueTotalCapacity:
+        metric: queue.limit
+        type: gauge
+        unit: "{event}"
+        desc: The configured maximum number of events the internal queue can hold.
+      QueueRemainingCapacity:
+        metric: queue.remaining_capacity
+        type: updowncounter
+        unit: "{event}"
+        desc: The number of available slots in the internal event queue.
+      MaxQueueSizeInBytes:
+        metric: queue.size.limit
+        type: gauge
+        unit: By
+        desc: The configured maximum size of the internal queue in bytes.
+      CurrentQueueSizeInBytes:
+        metric: queue.size
+        type: updowncounter
+        unit: By
+        desc: The current size of the internal event queue in bytes.
+
+      SnapshotDurationInSeconds:
+        metric: snapshot.duration
+        type: gauge
+        unit: s
+        desc: The total elapsed time of the current or most recent snapshot.
+      SnapshotPausedDurationInSeconds:
+        metric: snapshot.paused_duration
+        type: gauge
+        unit: s
+        desc: The total time the snapshot has spent in a paused state.
+      RemainingTableCount:
+        metric: snapshot.table.remaining_count
+        type: gauge
+        unit: "{table}"
+        desc: The number of tables remaining to be captured during the snapshot.
+      TotalTableCount:
+        metric: snapshot.table.count
+        type: gauge
+        unit: "{table}"
+        desc: The total number of tables included in the snapshot.
+
+      Connected:
+        metric: connection.status
+        type: state
+        metricAttribute:
+          debezium.connection.state:
+            connected: 'true'
+            disconnected: '*'
+      SnapshotCompleted:
+        metric: snapshot.completed
+        type: state
+        metricAttribute:
+          debezium.snapshot.completed.state:
+            completed: 'true'
+            not_completed: '*'
+      SnapshotAborted:
+        metric: snapshot.aborted
+        type: state
+        metricAttribute:
+          debezium.snapshot.aborted.state:
+            aborted: 'true'
+            not_aborted: '*'
+      SnapshotRunning:
+        metric: snapshot.running
+        type: state
+        metricAttribute:
+          debezium.snapshot.running.state:
+            running: 'true'
+            not_running: '*'
+      SnapshotPaused:
+        metric: snapshot.paused
+        type: state
+        metricAttribute:
+          debezium.snapshot.paused.state:
+            paused: 'true'
+            not_paused: '*'
+      SnapshotSkipped:
+        metric: snapshot.skipped
+        type: state
+        metricAttribute:
+          debezium.snapshot.skipped.state:
+            skipped: 'true'
+            not_skipped: '*'

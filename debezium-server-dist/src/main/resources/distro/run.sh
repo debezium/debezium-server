@@ -49,6 +49,7 @@ fi
 
 source ./jmx/enable_jmx.sh
 source ./lib_metrics/enable_exporter.sh
+source ./lib_metrics/enable_otel_agent.sh
 
 exec "$JAVA_BINARY" $DEBEZIUM_OPTS $JAVA_OPTS -cp \
     $RUNNER$PATH_SEP$LIB_CONFIG_PATH$PATH_SEP$LIB_PATH io.debezium.server.Main
