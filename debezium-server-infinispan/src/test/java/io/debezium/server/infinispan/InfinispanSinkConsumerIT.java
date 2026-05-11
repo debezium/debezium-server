@@ -9,8 +9,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 
-import jakarta.inject.Inject;
-
 import org.awaitility.Awaitility;
 import org.infinispan.Cache;
 import org.infinispan.client.hotrod.RemoteCache;

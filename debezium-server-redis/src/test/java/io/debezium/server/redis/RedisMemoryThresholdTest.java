@@ -15,8 +15,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import io.debezium.runtime.BatchEvent;
-import io.debezium.runtime.CapturingEvents;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
@@ -27,6 +25,8 @@ import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.storage.redis.RedisClient;
 import io.debezium.util.Collect;
 
@@ -183,7 +183,8 @@ public class RedisMemoryThresholdTest {
 
     private static class HeartbeatBatchEvent implements BatchEvent {
 
-        HeartbeatBatchEvent() {}
+        HeartbeatBatchEvent() {
+        }
 
         @Override
         public Object key() {
