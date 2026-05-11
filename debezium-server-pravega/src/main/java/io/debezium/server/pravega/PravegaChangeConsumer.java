@@ -9,9 +9,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import io.debezium.runtime.BatchEvent;
-import io.debezium.runtime.CapturingEvents;
-import io.debezium.server.api.DebeziumServerConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -24,12 +21,12 @@ import org.slf4j.LoggerFactory;
 
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine.ChangeConsumer;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;

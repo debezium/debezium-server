@@ -16,8 +16,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.debezium.runtime.events.ConnectorStartedEvent;
-import io.debezium.runtime.events.DebeziumCompletionEvent;
 import jakarta.enterprise.event.Observes;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -28,6 +26,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.util.Testing;
 
 public abstract class KafkaBaseIT {

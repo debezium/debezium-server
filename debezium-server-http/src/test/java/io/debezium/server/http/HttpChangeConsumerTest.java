@@ -23,12 +23,12 @@ import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 
-import io.debezium.runtime.BatchEvent;
-import io.debezium.runtime.CapturingEvents;
 import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.engine.Header;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
 
@@ -289,6 +289,7 @@ public class HttpChangeConsumerTest {
         return result;
 
     }
+
     private HttpChangeConsumer createTestHttpChangeConsumer(Map<String, String> testValues) throws URISyntaxException, IOException {
         return createTestHttpChangeConsumer(testValues, mock(HttpClient.class));
     }
@@ -310,7 +311,7 @@ public class HttpChangeConsumerTest {
         return result;
     }
 
-    private static CapturingEvents<BatchEvent> capturingEvents(BatchEvent ...events) {
+    private static CapturingEvents<BatchEvent> capturingEvents(BatchEvent... events) {
         return new CapturingEvents<>() {
             @Override
             public List<BatchEvent> records() {
