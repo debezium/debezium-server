@@ -43,7 +43,7 @@ public class DebeziumServerPostgresIT {
 
     private static final int MESSAGE_COUNT = 4;
     @Inject
-    DebeziumServer server;
+    TestConsumer testConsumer;
 
     @Inject
     DebeziumMetrics metrics;
@@ -59,8 +59,6 @@ public class DebeziumServerPostgresIT {
     public void shouldSnapshot() {
 
         Testing.Print.enable();
-
-        final TestConsumer testConsumer = (TestConsumer) server.getConsumer();
 
         waitSnapshotCompletion();
 
@@ -81,8 +79,6 @@ public class DebeziumServerPostgresIT {
     @Order(2)
     public void shouldStream() throws SQLException {
         Testing.Print.enable();
-
-        final TestConsumer testConsumer = (TestConsumer) server.getConsumer();
 
         waitSnapshotCompletion();
 
