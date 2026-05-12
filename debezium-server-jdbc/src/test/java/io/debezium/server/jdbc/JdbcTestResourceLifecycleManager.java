@@ -14,8 +14,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
+import io.debezium.server.Images;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
 /**
@@ -26,12 +28,13 @@ public class JdbcTestResourceLifecycleManager implements QuarkusTestResourceLife
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JdbcTestResourceLifecycleManager.class);
 
-    public static PostgreSQLContainer<?> container;
+    public static PostgreSQLContainer container;
 
     @Override
     public Map<String, String> start() {
         try {
-            container = new PostgreSQLContainer<>("postgres:16-alpine")
+            container = new PostgreSQLContainer(DockerImageName.parse(Images.POSTGRES_IMAGE)
+                    .asCompatibleSubstituteFor("postgres"))
                     .withDatabaseName("target_db")
                     .withUsername("postgres")
                     .withPassword("postgres");

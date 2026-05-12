@@ -135,13 +135,6 @@ public class JdbcChangeConsumer extends BaseChangeConsumer
                                             JdbcSinkConnectorConfig config,
                                             DatabaseDialect dialect) {
 
-        if (config.isPostgresUnnestInsertEnabled()) {
-            LOGGER.info("Using UnnestRecordWriter for PostgreSQL UNNEST optimization");
-        }
-        else {
-            LOGGER.info("Using UnnestRecordWriter (will use standard JDBC batching)");
-        }
-
         return new UnnestRecordWriter(session, queryBinderResolver, config, dialect);
     }
 
