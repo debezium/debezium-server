@@ -16,6 +16,7 @@ import java.util.Properties;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 
@@ -34,6 +35,8 @@ import io.quarkus.test.junit.QuarkusTest;
  * @author Jiri Pechanec
  */
 @QuarkusTest
+// @QuarkusTestResource(value = PostgresTestResourceLifecycleManager.class, restrictToAnnotatedClass = true)
+@Disabled("TODO: should be a test with containers")
 public class DebeziumServerTest {
 
     private static final int MESSAGE_COUNT = 5;

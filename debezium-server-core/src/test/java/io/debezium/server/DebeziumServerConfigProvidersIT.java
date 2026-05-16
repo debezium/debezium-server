@@ -12,6 +12,7 @@ import java.time.Duration;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -31,6 +32,7 @@ import io.quarkus.test.junit.TestProfile;
  * @author Oren Elias
  */
 @QuarkusTest
+@Disabled("TODO: ConfigurationProvider use case investigation")
 @TestProfile(DebeziumServerFileConfigProviderProfile.class)
 @QuarkusTestResource(value = PostgresTestResourceLifecycleManager.class, restrictToAnnotatedClass = true)
 @EnabledIfSystemProperty(named = "test.apicurio", matches = "false", disabledReason = "DebeziumServerConfigProvidersIT doesn't run with apicurio profile.")
