@@ -212,7 +212,13 @@ public class FlussChangeConsumer extends BaseChangeConsumer
 
         final RowType rowType = descriptor.getSchema().getRowType();
 
-        if (hasPrimaryKey) {
+        if (shouldUseAppendWriter(hasPrimaryKey)) {
+            if (!Envelope.Operation.DELETE.code().equals(op) && after != null) {
+                final AppendWriter writer = getOrCreateAppendWriter(tablePath);
+                writer.append(buildRow(after, rowSchema, rowType));
+            }
+        }
+        else {
             final UpsertWriter writer = getOrCreateUpsertWriter(tablePath);
             if (Envelope.Operation.DELETE.code().equals(op) && before != null) {
                 final Schema beforeSchema = valueSchema.field(Envelope.FieldName.BEFORE).schema();
@@ -220,12 +226,6 @@ public class FlussChangeConsumer extends BaseChangeConsumer
             }
             else if (after != null) {
                 writer.upsert(buildRow(after, rowSchema, rowType));
-            }
-        }
-        else {
-            if (!Envelope.Operation.DELETE.code().equals(op) && after != null) {
-                final AppendWriter writer = getOrCreateAppendWriter(tablePath);
-                writer.append(buildRow(after, rowSchema, rowType));
             }
         }
     }
@@ -274,14 +274,22 @@ public class FlussChangeConsumer extends BaseChangeConsumer
             }
             case APPEND -> {
                 if (hasPrimaryKey) {
-                    throw new DebeziumException("primary.key.mode=append requires table " + tablePath
-                            + " to have no primary key, but the table has a primary key.");
+                    LOGGER.info("primary.key.mode=append is configured but table {} has a primary key; "
+                            + "records will be appended (primary key semantics ignored).", tablePath);
                 }
             }
             default -> {
                 // No validation for auto
             }
         }
+    }
+
+    private boolean shouldUseAppendWriter(boolean hasPrimaryKey) {
+        return switch (config.getPrimaryKeyMode()) {
+            case APPEND -> true;
+            case UPSERT -> false;
+            case AUTO -> !hasPrimaryKey;
+        };
     }
 
     private void ensureTableExists(TablePath tablePath, SourceRecord sourceRecord) throws Exception {
@@ -341,14 +349,14 @@ public class FlussChangeConsumer extends BaseChangeConsumer
 
     private void flushWriters(TablePath tablePath, boolean hasPrimaryKey) {
         try {
-            if (hasPrimaryKey) {
-                UpsertWriter writer = upsertWriters.get(tablePath);
+            if (shouldUseAppendWriter(hasPrimaryKey)) {
+                AppendWriter writer = appendWriters.get(tablePath);
                 if (writer != null) {
                     writer.flush();
                 }
             }
             else {
-                AppendWriter writer = appendWriters.get(tablePath);
+                UpsertWriter writer = upsertWriters.get(tablePath);
                 if (writer != null) {
                     writer.flush();
                 }

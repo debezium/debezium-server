@@ -75,7 +75,7 @@ public class FlussChangeConsumerConfig {
             .withDescription("Controls how the sink selects the write mode for each table. "
                     + "'auto' (default) switches automatically based on whether the target table has a primary key; "
                     + "'upsert' requires the table to have a primary key, and throws an error if it does not; "
-                    + "'append' requires the table to have no primary key, and throws an error if it does.");
+                    + "'append' always uses append-only writes, ignoring the table's primary key if present.");
 
     public static final Field TABLE_AUTO_CREATE = Field.create("table.auto.create")
             .withDisplayName("Auto-create Tables")

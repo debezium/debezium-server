@@ -391,16 +391,66 @@ public class FlussUnitTest {
     }
 
     @Test
-    public void testAppendModeThrowsWhenTableHasPrimaryKey() throws Exception {
+    public void testAppendModeWritesAppendToTableWithPrimaryKey() throws Exception {
         initConsumer(Map.of("primary.key.mode", "append"));
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
         final List<ChangeEvent<Object, Object>> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
 
-        assertThatThrownBy(() -> consumer.handleBatch(events, committer))
-                .isInstanceOf(DebeziumException.class)
-                .hasMessageContaining("primary.key.mode=append");
+        consumer.handleBatch(events, committer);
+
+        verify(mockAppendWriter).append(any(InternalRow.class));
+        verify(mockAppendWriter).flush();
+        verify(mockUpsertWriter, never()).upsert(any());
+        verify(committer).markProcessed(events.getFirst());
+        verify(committer).markBatchFinished();
+    }
+
+    @Test
+    public void testAppendModeDeleteSkippedOnTableWithPrimaryKey() throws Exception {
+        initConsumer(Map.of("primary.key.mode", "append"));
+        setupPrimaryKeyTableDescriptor(TABLE_PATH);
+
+        final List<ChangeEvent<Object, Object>> events = List.of(
+                createEnvelopeEvent(TABLE_NAME, rowStruct(1, "Alice"), null, Envelope.Operation.DELETE));
+
+        consumer.handleBatch(events, committer);
+
+        verify(mockAppendWriter, never()).append(any());
+        verify(mockUpsertWriter, never()).upsert(any());
+        verify(mockUpsertWriter, never()).delete(any());
+        verify(committer).markProcessed(events.getFirst());
+        verify(committer).markBatchFinished();
+    }
+
+    @Test
+    public void testAppendModeUpdateWrittenAsAppendOnTableWithPrimaryKey() throws Exception {
+        initConsumer(Map.of("primary.key.mode", "append"));
+        setupPrimaryKeyTableDescriptor(TABLE_PATH);
+
+        final List<ChangeEvent<Object, Object>> events = List.of(
+                createEnvelopeEvent(TABLE_NAME, rowStruct(1, "Alice"), rowStruct(1, "Bob"), Envelope.Operation.UPDATE));
+
+        consumer.handleBatch(events, committer);
+
+        verify(mockAppendWriter).append(any(InternalRow.class));
+        verify(mockAppendWriter).flush();
+        verify(mockUpsertWriter, never()).upsert(any());
+        verify(committer).markProcessed(events.getFirst());
+        verify(committer).markBatchFinished();
+    }
+
+    @Test
+    public void testAppendModeTombstoneSkippedOnTableWithPrimaryKey() throws Exception {
+        initConsumer(Map.of("primary.key.mode", "append"));
+        setupPrimaryKeyTableDescriptor(TABLE_PATH);
+
+        consumer.handleBatch(List.of(createTombstone(TABLE_NAME)), committer);
+
+        verify(mockAppendWriter, never()).append(any());
+        verify(mockUpsertWriter, never()).upsert(any());
+        verify(committer).markBatchFinished();
     }
 
     private void setupLogTableDescriptor(TablePath tablePath) throws Exception {
