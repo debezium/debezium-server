@@ -36,6 +36,7 @@
         <sink.instructlab.scope>compile</sink.instructlab.scope>
         <sink.fluss.scope>compile</sink.fluss.scope>
         <sink.jdbc.scope>compile</sink.jdbc.scope>
+        <sink.ydb.scope>compile</sink.ydb.scope>
     </properties>
 
     <dependencies>
@@ -146,6 +147,11 @@
             <artifactId>debezium-server-jdbc</artifactId>
             <scope>${sink.jdbc.scope}</scope>
         </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-ydb</artifactId>
+            <scope>${sink.ydb.scope}</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -196,6 +202,7 @@
                 <sink.instructlab.scope>test</sink.instructlab.scope>
                 <sink.fluss.scope>test</sink.fluss.scope>
                 <sink.jdbc.scope>test</sink.jdbc.scope>
+                <sink.ydb.scope>test</sink.ydb.scope>
             </properties>
         </profile>
 
@@ -337,6 +344,13 @@
             <id>sink-jdbc</id>
             <properties>
                 <sink.jdbc.scope>compile</sink.jdbc.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-ydb</id>
+            <properties>
+                <sink.ydb.scope>compile</sink.ydb.scope>
             </properties>
         </profile>
 
