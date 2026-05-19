@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
 import io.debezium.config.Field;
+import io.debezium.util.Strings;
 
 import tech.ydb.topic.description.Codec;
 
@@ -231,7 +232,7 @@ public class YdbChangeConsumerConfig {
     }
 
     static int parseProducerCodec(String value) {
-        if (value == null || value.isBlank()) {
+        if (Strings.isNullOrBlank(value)) {
             return Codec.GZIP;
         }
         return switch (value.trim().toUpperCase()) {
@@ -243,14 +244,14 @@ public class YdbChangeConsumerConfig {
     }
 
     static String resolveInstanceId(String configuredInstanceId, String connectorName) {
-        if (configuredInstanceId != null && !configuredInstanceId.isBlank()) {
+        if (!Strings.isNullOrBlank(configuredInstanceId)) {
             return configuredInstanceId.trim();
         }
         return connectorName + "::" + localHostname();
     }
 
     static String resolveInstanceId(String configuredInstanceId, String connectorName, String hostname) {
-        if (configuredInstanceId != null && !configuredInstanceId.isBlank()) {
+        if (!Strings.isNullOrBlank(configuredInstanceId)) {
             return configuredInstanceId.trim();
         }
         return connectorName + "::" + hostname;

@@ -38,6 +38,7 @@ import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.api.DebeziumServerSink;
+import io.debezium.util.Strings;
 
 import tech.ydb.core.Result;
 import tech.ydb.core.Status;
@@ -205,7 +206,7 @@ public class YdbChangeConsumer extends BaseChangeConsumer
     }
 
     static String resolveTopicPath(String topic, String prefix, String destination) {
-        if (topic != null && !topic.isBlank()) {
+        if (!Strings.isNullOrBlank(topic)) {
             return topic;
         }
         if (destination == null) {
@@ -351,7 +352,7 @@ public class YdbChangeConsumer extends BaseChangeConsumer
                 .setSupportedCodecs(codecs);
 
         String consumerName = config.getTopicAutoCreateInitialConsumer();
-        if (consumerName != null && !consumerName.isBlank()) {
+        if (!Strings.isNullOrBlank(consumerName)) {
             builder.addConsumer(Consumer.newBuilder().setName(consumerName.trim()).build());
         }
 
