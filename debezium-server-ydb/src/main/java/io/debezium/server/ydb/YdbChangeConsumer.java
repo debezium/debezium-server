@@ -212,7 +212,7 @@ public class YdbChangeConsumer extends BaseChangeConsumer
         if (destination == null) {
             throw new DebeziumException("YDB sink: record has no destination and 'topic' is not configured");
         }
-        if (prefix == null || prefix.isEmpty()) {
+        if (Strings.isNullOrBlank(prefix)) {
             return destination;
         }
         boolean prefixEndsSlash = prefix.endsWith("/");

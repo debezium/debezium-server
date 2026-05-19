@@ -23,6 +23,7 @@ import org.awaitility.Awaitility;
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
+import io.debezium.util.Strings;
 
 import tech.ydb.auth.NopAuthProvider;
 import tech.ydb.common.transaction.TxMode;
@@ -197,7 +198,7 @@ public final class TestUtils {
 
         public void createTopic(String topicPath, String consumerName) {
             if (topicExists(topicPath)) {
-                if (consumerName != null) {
+                if (!Strings.isNullOrBlank(consumerName)) {
                     ensureConsumer(topicPath, consumerName);
                 }
                 return;
@@ -214,12 +215,12 @@ public final class TestUtils {
             CreateTopicSettings.Builder builder = CreateTopicSettings.newBuilder()
                     .setPartitioningSettings(partitioning)
                     .setSupportedCodecs(codecs);
-            if (consumerName != null && !consumerName.isBlank()) {
+            if (!Strings.isNullOrBlank(consumerName)) {
                 builder.addConsumer(Consumer.newBuilder().setName(consumerName).build());
             }
             tech.ydb.core.Status status = topicClient.createTopic(topicPath, builder.build()).join();
             if (status.isSuccess() || status.getCode() == tech.ydb.core.StatusCode.ALREADY_EXISTS) {
-                if (consumerName != null) {
+                if (!Strings.isNullOrBlank(consumerName)) {
                     ensureConsumer(topicPath, consumerName);
                 }
                 return;

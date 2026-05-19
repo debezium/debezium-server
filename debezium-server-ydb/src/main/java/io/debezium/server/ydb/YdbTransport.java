@@ -5,6 +5,8 @@
  */
 package io.debezium.server.ydb;
 
+import io.debezium.util.Strings;
+
 import tech.ydb.auth.NopAuthProvider;
 import tech.ydb.core.auth.StaticCredentials;
 import tech.ydb.core.grpc.GrpcTransport;
@@ -32,8 +34,8 @@ final class YdbTransport {
 
     private static GrpcTransport openTransport(YdbChangeConsumerConfig cfg) {
         GrpcTransportBuilder builder = GrpcTransport.forEndpoint(cfg.getEndpoint(), cfg.getDatabase());
-        if (cfg.getAuthUser() != null && !cfg.getAuthUser().isBlank()) {
-            String pwd = cfg.getAuthPassword() == null ? "" : cfg.getAuthPassword();
+        if (!Strings.isNullOrBlank(cfg.getAuthUser())) {
+            String pwd = Strings.defaultIfBlank(cfg.getAuthPassword(), "");
             builder.withAuthProvider(new StaticCredentials(cfg.getAuthUser(), pwd));
         }
         else {
