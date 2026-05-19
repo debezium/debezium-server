@@ -43,8 +43,17 @@ fi
 RUNNER=$(ls debezium-server-*runner.jar)
 
 ENABLE_DEBEZIUM_SCRIPTING=${ENABLE_DEBEZIUM_SCRIPTING:-false}
-if [[ "${ENABLE_DEBEZIUM_SCRIPTING}" == "true" ]]; then
+ENABLE_CHRONICLE_QUEUE=${ENABLE_CHRONICLE_QUEUE:-false}
+if [[ "${ENABLE_DEBEZIUM_SCRIPTING}" == "true" ]] || [[ "${ENABLE_CHRONICLE_QUEUE}" == "true" ]]; then
   LIB_PATH=$LIB_PATH$PATH_SEP"lib_opt/*"
+fi
+
+if [[ "${ENABLE_CHRONICLE_QUEUE}" == "true" ]]; then
+  JAVA_OPTS="${JAVA_OPTS} --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+  JAVA_OPTS="${JAVA_OPTS} --add-opens=java.base/java.lang=ALL-UNNAMED"
+  JAVA_OPTS="${JAVA_OPTS} --add-opens=java.base/java.lang.reflect=ALL-UNNAMED"
+  JAVA_OPTS="${JAVA_OPTS} --add-opens=java.base/java.io=ALL-UNNAMED"
+  JAVA_OPTS="${JAVA_OPTS} --add-opens=java.base/java.util=ALL-UNNAMED"
 fi
 
 source ./jmx/enable_jmx.sh
