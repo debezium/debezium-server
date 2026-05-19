@@ -389,6 +389,10 @@
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>
+                    <artifactId>debezium-storage-chronicle-queue</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
                     <artifactId>debezium-server-core</artifactId>
                 </dependency>
                 <dependency>
@@ -476,6 +480,10 @@
                     <groupId>io.debezium</groupId>
                     <artifactId>debezium-scripting-languages</artifactId>
                     <type>pom</type>
+                </dependency>
+                <dependency>
+                    <groupId>io.debezium</groupId>
+                    <artifactId>debezium-storage-chronicle-queue</artifactId>
                 </dependency>
                 <dependency>
                     <groupId>io.debezium</groupId>

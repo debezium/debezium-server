@@ -25,6 +25,7 @@
             <exclude>ch.qos.reload4j:reload4j</exclude>
             <exclude>io.debezium:debezium-scripting</exclude>
             <exclude>io.debezium:debezium-scripting-languages</exclude>
+            <exclude>io.debezium:debezium-storage-chronicle-queue</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-3</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-4</exclude>
             <exclude>io.debezium:debezium-connector-cassandra-5</exclude>
@@ -78,6 +79,7 @@
           <includes>
             <include>io.debezium:debezium-scripting:*</include>
             <include>io.debezium:debezium-scripting-languages:*</include>
+            <include>io.debezium:debezium-storage-chronicle-queue:*</include>
           </includes>
       </dependencySet>
   </dependencySets>
