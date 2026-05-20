@@ -7,6 +7,8 @@ package io.debezium.server.redis;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
+import java.net.URL;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -14,8 +16,11 @@ import org.junit.jupiter.api.Test;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.junit.TestProfile;
 
+import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.SslOptions;
+import redis.clients.jedis.SslVerifyMode;
 
 /**
  * Integration tests for secured Redis
@@ -32,7 +37,23 @@ public class RedisSSLStreamIT {
     @Test
     public void testRedisStream() throws Exception {
         HostAndPort address = HostAndPort.from(RedisSSLTestResourceLifecycleManager.getRedisContainerAddress());
-        Jedis jedis = new Jedis(address.getHost(), address.getPort(), true);
+
+        // Configure SSL with both truststore and keystore for mutual TLS
+        URL keyStoreFile = RedisSSLStreamTestProfile.class.getClassLoader().getResource("ssl/client-keystore.p12");
+        URL trustStoreFile = RedisSSLStreamTestProfile.class.getClassLoader().getResource("ssl/client-truststore.p12");
+        SslOptions sslOptions = SslOptions.builder()
+                .truststore(new File(trustStoreFile.getPath()), "secret".toCharArray())
+                .trustStoreType("PKCS12")
+                .keystore(new File(keyStoreFile.getPath()), "secret".toCharArray())
+                .keyStoreType("PKCS12")
+                .sslVerifyMode(SslVerifyMode.CA)
+                .build();
+        DefaultJedisClientConfig config = DefaultJedisClientConfig.builder()
+                .ssl(true)
+                .sslOptions(sslOptions)
+                .build();
+
+        Jedis jedis = new Jedis(address, config);
         final int MESSAGE_COUNT = 4;
         final String STREAM_NAME = "testc.inventory.customers";
         final String HASH_NAME = "metadata:debezium:offsets";
