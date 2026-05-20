@@ -86,7 +86,7 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>qdrant</artifactId>
+            <artifactId>testcontainers-qdrant</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
