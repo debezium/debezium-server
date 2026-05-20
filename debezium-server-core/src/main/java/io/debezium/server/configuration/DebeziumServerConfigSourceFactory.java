@@ -55,7 +55,7 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             }
 
             if (name.startsWith(DEBEZIUM_FORMAT_PREFIX)) {
-                String suffix = name.substring(DEBEZIUM.length());
+                String suffix = name.substring(DEBEZIUM.length() + 1);
                 remapped.put(QUARKUS_DEBEZIUM_PREFIX + suffix, value.getValue());
             }
 
