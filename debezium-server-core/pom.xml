@@ -130,6 +130,7 @@
         <dependency>
             <groupId>io.apicurio</groupId>
             <artifactId>apicurio-registry-utils-converter</artifactId>
+            <version>${version.apicurio}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
