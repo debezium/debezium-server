@@ -39,6 +39,8 @@
         <maven.compiler.testRelease>${debezium.java.specific.target}</maven.compiler.testRelease>
 
         <mockito.argLine>-javaagent:${org.mockito:mockito-core:jar}</mockito.argLine>
+        <!-- this is a local override: the version should be the one defined in debezium-parent reference: https://github.com/debezium/debezium/pull/6753 -->
+        <version.apicurio>3.2.4</version.apicurio>
 
     </properties>
 
