@@ -12,10 +12,10 @@ import java.time.Duration;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import io.debezium.runtime.events.ConnectorStartedEvent;
 import io.debezium.runtime.events.DebeziumCompletionEvent;

@@ -195,7 +195,7 @@ public class RedisStreamChangeConsumer extends BaseChangeConsumer
                         for (BatchEvent record : clonedBatch) {
                             String destination = streamNameMapper.map(record.destination());
 
-                            // Check if this is a hear<ChangeEvent<Object, Object>>tbeat message that should be skipped
+                            // Check if this is a heartbeat message that should be skipped
                             if (config.isSkipHeartbeatMessages() && destination.startsWith(heartbeatPrefix)) {
                                 // Mark as processed and track for removal from clonedBatch
                                 record.commit();
