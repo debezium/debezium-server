@@ -22,23 +22,23 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
-import io.debezium.server.api.ChangeConsumerHandler;
+import io.debezium.server.api.ChangeConsumerHolder;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.Startup;
 
 /**
- * CDI producer that creates and validates the {@link ChangeConsumerHandler} based on configuration.
+ * CDI producer that creates and validates the {@link ChangeConsumerHolder} based on configuration.
  * <p>
  * This producer is responsible for discovering and instantiating the appropriate sink consumer
  * implementation at application startup. It reads the {@code debezium.sink.type} configuration
  * property and uses CDI bean discovery to locate a matching {@link DebeziumServerConsumer}
  * annotated with {@code @Named} using that sink type identifier.
  * <p>
- * The produced {@link ChangeConsumerHandler} provides access to the selected consumer instance
+ * The produced {@link ChangeConsumerHolder} provides access to the selected consumer instance
  * and its capabilities (e.g., tombstone support) to other components in the application.
  *
- * @see ChangeConsumerHandler
+ * @see ChangeConsumerHolder
  * @see DebeziumServerConsumer
  */
 @ApplicationScoped
@@ -58,7 +58,7 @@ public class ChangeConsumerProducer {
     @Produces
     @Unremovable
     @ApplicationScoped
-    public ChangeConsumerHandler produces() {
+    public ChangeConsumerHolder produces() {
         final String name = config.getValue(PROP_SINK_TYPE, String.class);
 
         if (instance.select(NamedLiteral.of(name)).isUnsatisfied()) {
@@ -74,7 +74,7 @@ public class ChangeConsumerProducer {
         DebeziumServerConsumer<CapturingEvents<BatchEvent>> consumer = instance.select(NamedLiteral.of(name)).get();
         LOGGER.info("Consumer '{}' instantiated", consumer.getClass().getName());
 
-        return new ChangeConsumerHandler() {
+        return new ChangeConsumerHolder() {
             @Override
             public DebeziumServerConsumer<CapturingEvents<BatchEvent>> get() {
                 return consumer;
