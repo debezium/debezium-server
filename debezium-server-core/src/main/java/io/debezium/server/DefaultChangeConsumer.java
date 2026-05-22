@@ -33,7 +33,7 @@ import io.debezium.openlineage.dataset.DatasetMetadata;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.Capturing;
 import io.debezium.runtime.CapturingEvents;
-import io.debezium.server.api.ChangeConsumerHandler;
+import io.debezium.server.api.ChangeConsumerHolder;
 import io.quarkus.runtime.Startup;
 
 @ApplicationScoped
@@ -42,13 +42,13 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultChangeConsumer.class);
 
-    private final ChangeConsumerHandler delegateConsumer;
+    private final ChangeConsumerHolder delegateConsumer;
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
     private final boolean isOpenLineageEnabled;
 
     @Inject
-    public DefaultChangeConsumer(ChangeConsumerHandler delegateConsumer, Config config) {
+    public DefaultChangeConsumer(ChangeConsumerHolder delegateConsumer, Config config) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();
