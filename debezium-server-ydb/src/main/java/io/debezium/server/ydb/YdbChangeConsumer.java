@@ -163,7 +163,7 @@ public class YdbChangeConsumer extends BaseChangeConsumer
 
             String destination = streamNameMapper.map(record.destination());
             String topicPath = resolveTopicPath(destination);
-            String group = destination == null ? DEFAULT_GROUP : destination;
+            String group = Strings.defaultIfBlank(destination, DEFAULT_GROUP);
 
             AsyncWriter writer = writerFor(topicPath, group);
 
