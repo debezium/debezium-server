@@ -18,6 +18,9 @@ import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
 import io.smallrye.config.common.MapBackedConfigSource;
 
+/**
+ * TODO: to refactor completely. seek and fix
+ */
 public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
     private static final String DEBEZIUM = "debezium";
     private static final String DEBEZIUM_SOURCE_PREFIX = DEBEZIUM + ".source.";
