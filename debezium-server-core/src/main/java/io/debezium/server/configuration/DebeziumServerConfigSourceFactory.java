@@ -10,16 +10,73 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
 
+import io.debezium.relational.history.SchemaHistory;
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
 import io.smallrye.config.common.MapBackedConfigSource;
 
 /**
- * TODO: to refactor completely. seek and fix
+ * TODO: to refactor completely. seek and fix but this file should address the same things:
+ * reference: https://github.com/debezium/debezium-server/blob/main/debezium-server-core/src/main/java/io/debezium/server/DebeziumServer.java
+ * ```java
+ *
+ *     private static final String PROP_PREFIX = "debezium.";
+ *     static final String PROP_SOURCE_PREFIX = PROP_PREFIX + "source.";
+ *     private static final String PROP_SINK_PREFIX = PROP_PREFIX + "sink.";
+ *     private static final String PROP_FORMAT_PREFIX = PROP_PREFIX + "format.";
+ *     private static final String PROP_PREDICATES_PREFIX = PROP_PREFIX + "predicates.";
+ *     private static final String PROP_TRANSFORMS_PREFIX = PROP_PREFIX + "transforms.";
+ *     private static final String PROP_HEADER_FORMAT_PREFIX = PROP_FORMAT_PREFIX + "header.";
+ *     private static final String PROP_KEY_FORMAT_PREFIX = PROP_FORMAT_PREFIX + "key.";
+ *     private static final String PROP_VALUE_FORMAT_PREFIX = PROP_FORMAT_PREFIX + "value.";
+ *     private static final String PROP_OFFSET_STORAGE_PREFIX = "offset.storage.";
+ *
+ *     private static final String PROP_PREDICATES = PROP_PREFIX + "predicates";
+ *     private static final String PROP_TRANSFORMS = PROP_PREFIX + "transforms";
+ *     static final String PROP_SINK_TYPE = PROP_SINK_PREFIX + "type";
+ *
+ *     private static final String PROP_HEADER_FORMAT = PROP_FORMAT_PREFIX + "header";
+ *     private static final String PROP_KEY_FORMAT = PROP_FORMAT_PREFIX + "key";
+ *     private static final String PROP_VALUE_FORMAT = PROP_FORMAT_PREFIX + "value";
+ *     private static final String PROP_TERMINATION_WAIT = PROP_PREFIX + "termination.wait";
+ *
+ *         configToProperties(config, props, PROP_SOURCE_PREFIX, "", true);
+ *         configToProperties(config, props, PROP_FORMAT_PREFIX, "key.converter.", true);
+ *         configToProperties(config, props, PROP_FORMAT_PREFIX, "value.converter.", true);
+ *         configToProperties(config, props, PROP_FORMAT_PREFIX, "header.converter.", true);
+ *         configToProperties(config, props, PROP_KEY_FORMAT_PREFIX, "key.converter.", true);
+ *         configToProperties(config, props, PROP_VALUE_FORMAT_PREFIX, "value.converter.", true);
+ *         configToProperties(config, props, PROP_HEADER_FORMAT_PREFIX, "header.converter.", true);
+ *         configToProperties(config, props, PROP_SINK_PREFIX + name + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", false);
+ *         configToProperties(config, props, PROP_SINK_PREFIX + name + ".", PROP_OFFSET_STORAGE_PREFIX + name + ".", false);
+ *
+ *
+ *   private void configToProperties(Config config, Properties props, String oldPrefix, String newPrefix, boolean overwrite) {
+ *       for (String name : config.getPropertyNames()) {
+ *           String updatedPropertyName = null;
+ *           if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
+ *               updatedPropertyName = name.replace("_", ".").toLowerCase();
+ *           }
+ *           if (updatedPropertyName != null && updatedPropertyName.startsWith(oldPrefix)) {
+ *               String finalPropertyName = newPrefix + updatedPropertyName.substring(oldPrefix.length());
+ *               if (overwrite || !props.containsKey(finalPropertyName)) {
+ *                   props.setProperty(finalPropertyName, config.getOptionalValue(name, String.class).orElse(""));
+ *               }
+ *           }
+ *           else if (name.startsWith(oldPrefix)) {
+ *               String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
+ *               if (overwrite || !props.containsKey(finalPropertyName)) {
+ *                   props.setProperty(finalPropertyName, config.getConfigValue(name).getValue());
+ *               }
+ *           }
+ *       }
+ *   }
+ * ```
  */
 public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
     private static final String DEBEZIUM = "debezium";
@@ -29,11 +86,56 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
     private static final String QUARKUS_DATASOURCE_PREFIX = "quarkus.datasource.";
     private static final String DEBEZIUM_DATASOURCE_PREFIX = DEBEZIUM_SOURCE_PREFIX + "datasource.";
 
+    private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
+
+    private static final String PROP_PREFIX = "debezium.";
+    static final String PROP_SOURCE_PREFIX = PROP_PREFIX + "source.";
+    private static final String PROP_SINK_PREFIX = PROP_PREFIX + "sink.";
+    private static final String PROP_FORMAT_PREFIX = PROP_PREFIX + "format.";
+    private static final String PROP_PREDICATES_PREFIX = PROP_PREFIX + "predicates.";
+    private static final String PROP_TRANSFORMS_PREFIX = PROP_PREFIX + "transforms.";
+    private static final String PROP_HEADER_FORMAT_PREFIX = PROP_FORMAT_PREFIX + "header.";
+    private static final String PROP_KEY_FORMAT_PREFIX = PROP_FORMAT_PREFIX + "key.";
+    private static final String PROP_VALUE_FORMAT_PREFIX = PROP_FORMAT_PREFIX + "value.";
+    private static final String PROP_OFFSET_STORAGE_PREFIX = "offset.storage.";
+
+    private static final String PROP_PREDICATES = PROP_PREFIX + "predicates";
+    private static final String PROP_TRANSFORMS = PROP_PREFIX + "transforms";
+    static final String PROP_SINK_TYPE = PROP_SINK_PREFIX + "type";
+
+    /**
+     * TODO: evaluate the impact
+     */
+    private static final String PROP_ENGINE_FACTORY = PROP_PREFIX + "engine.factory";
+
     static final int ORDINAL = 100;
 
     @Override
     public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
         Map<String, String> remapped = new HashMap<>();
+        ConfigValue sink = context.getValue(PROP_SINK_TYPE);
+
+        configToProperties(context, remapped, PROP_SOURCE_PREFIX, "", true);
+        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "key.converter.", true);
+        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "value.converter.", true);
+        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "header.converter.", true);
+        configToProperties(context, remapped, PROP_KEY_FORMAT_PREFIX, "key.converter.", true);
+        configToProperties(context, remapped, PROP_VALUE_FORMAT_PREFIX, "value.converter.", true);
+        configToProperties(context, remapped, PROP_HEADER_FORMAT_PREFIX, "header.converter.", true);
+        configToProperties(context, remapped, PROP_SINK_PREFIX + sink + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink + ".", false);
+        configToProperties(context, remapped, PROP_SINK_PREFIX + sink + ".", PROP_OFFSET_STORAGE_PREFIX + sink + ".", false);
+
+        var transforms = context.getValue(PROP_TRANSFORMS);
+        if (transforms != null) {
+            remapped.put("transforms", transforms.getValue());
+            configToProperties(context, remapped, PROP_TRANSFORMS_PREFIX, "transforms.", true);
+        }
+
+        var predicates = context.getValue(PROP_PREDICATES);
+        if (predicates != null) {
+            remapped.put("predicates", predicates.getValue());
+            configToProperties(context, remapped, PROP_PREDICATES_PREFIX, "predicates.", true);
+        }
 
         Iterator<String> names = context.iterateNames();
         while (names.hasNext()) {
@@ -73,6 +175,7 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
                 String dsSuffix = name.substring(QUARKUS_DATASOURCE_PREFIX.length());
                 remapped.put(DEBEZIUM_DATASOURCE_PREFIX + dsSuffix, value.getValue());
             }
+
         }
 
         if (remapped.isEmpty()) {
@@ -80,6 +183,29 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
         }
 
         return List.of(new DebeziumServerConfigSource(remapped));
+    }
+
+    private void configToProperties(ConfigSourceContext context, Map<String, String> mutableMap, String oldPrefix, String newPrefix, boolean overwrite) {
+        context.iterateNames().forEachRemaining(name -> {
+            String updatedPropertyName = null;
+
+            if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
+                updatedPropertyName = name.replace("_", ".").toLowerCase();
+            }
+
+            if (updatedPropertyName != null && updatedPropertyName.startsWith(oldPrefix)) {
+                String finalPropertyName = newPrefix + updatedPropertyName.substring(oldPrefix.length());
+                if (overwrite || !mutableMap.containsKey(finalPropertyName)) {
+                    mutableMap.put(finalPropertyName, context.getValue(name).getValueOrDefault(""));
+                }
+            }
+            else if (name.startsWith(oldPrefix)) {
+                String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
+                if (overwrite || !mutableMap.containsKey(finalPropertyName)) {
+                    mutableMap.put(finalPropertyName, context.getValue(name).getValue());
+                }
+            }
+        });
     }
 
     static class DebeziumServerConfigSource extends MapBackedConfigSource {
