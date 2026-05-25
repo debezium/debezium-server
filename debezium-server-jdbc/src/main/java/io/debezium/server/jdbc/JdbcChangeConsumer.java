@@ -33,12 +33,13 @@ import io.debezium.connector.jdbc.RecordWriter;
 import io.debezium.connector.jdbc.UnnestRecordWriter;
 import io.debezium.connector.jdbc.dialect.DatabaseDialect;
 import io.debezium.connector.jdbc.dialect.DatabaseDialectResolver;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.openlineage.ConnectorContext;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 
 /**
@@ -59,8 +60,7 @@ import io.debezium.server.api.DebeziumServerSink;
  */
 @Named("jdbc")
 @Dependent
-public class JdbcChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JdbcChangeConsumer.class);
     private static final String PROP_PREFIX = "debezium.sink.jdbc.";
@@ -139,30 +139,27 @@ public class JdbcChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(
-                            List<ChangeEvent<Object, Object>> records,
-                            DebeziumEngine.RecordCommitter<ChangeEvent<Object, Object>> committer) {
+    public void handle(CapturingEvents<BatchEvent> events)
+            throws InterruptedException {
 
-        LOGGER.debug("Processing batch of {} records", records.size());
+        LOGGER.debug("Processing batch of {} records", events.records().size());
 
         try {
-            Collection<SinkRecord> sinkRecords = records.stream()
+            Collection<SinkRecord> sinkRecords = events.records().stream()
                     .map(converter::convert)
                     .collect(Collectors.toList());
 
             changeEventSink.execute(sinkRecords);
 
-            for (ChangeEvent<Object, Object> record : records) {
-                committer.markProcessed(record);
+            for (BatchEvent record : events.records()) {
+                record.commit();
             }
 
-            committer.markBatchFinished();
-
-            LOGGER.debug("Successfully processed batch of {} records", records.size());
+            LOGGER.debug("Successfully processed batch of {} records", events.records().size());
 
         }
         catch (Exception e) {
-            LOGGER.error("Failed to process batch of {} records", records.size(), e);
+            LOGGER.error("Failed to process batch of {} records", events.records().size(), e);
             throw new DebeziumException("Failed to process batch", e);
         }
     }
