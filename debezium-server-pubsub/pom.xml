@@ -94,7 +94,6 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-gcloud</artifactId>
             <scope>test</scope>
-            <version>1.21.3</version>
         </dependency>
     </dependencies>
     <build>
