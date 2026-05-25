@@ -10,8 +10,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.debezium.embedded.EmbeddedEngineChangeEvent;
-import io.debezium.engine.ChangeEvent;
+import io.debezium.runtime.BatchEvent;
 
 /**
  * Converts Debezium Server's ChangeEvent (EmbeddedEngineChangeEvent) to Kafka Connect's SinkRecord
@@ -27,7 +26,7 @@ public class ChangeEventToSinkRecordConverter {
     private static final Logger LOGGER = LoggerFactory.getLogger(ChangeEventToSinkRecordConverter.class);
 
     /**
-     * Converts a ChangeEvent to a SinkRecord.
+     * Converts a BatchEvent to a SinkRecord.
      * <p>
      * The conversion extracts the underlying SourceRecord from EmbeddedEngineChangeEvent
      * and maps its fields to a SinkRecord.
@@ -36,17 +35,9 @@ public class ChangeEventToSinkRecordConverter {
      * @return the equivalent SinkRecord for JDBC connector
      * @throws IllegalArgumentException if the event is not an EmbeddedEngineChangeEvent
      */
-    public SinkRecord convert(ChangeEvent<Object, Object> event) {
-        if (!(event instanceof EmbeddedEngineChangeEvent)) {
-            throw new IllegalArgumentException(
-                    "Expected EmbeddedEngineChangeEvent but got: " + event.getClass().getName() +
-                            ". Ensure Debezium Server is using EmbeddedEngine.");
-        }
+    public SinkRecord convert(BatchEvent event) {
 
-        @SuppressWarnings("unchecked")
-        EmbeddedEngineChangeEvent<Object, Object, Object> embeddedEvent = (EmbeddedEngineChangeEvent<Object, Object, Object>) event;
-
-        SourceRecord sourceRecord = embeddedEvent.sourceRecord();
+        SourceRecord sourceRecord = event.record();
 
         if (sourceRecord == null) {
             throw new IllegalArgumentException("SourceRecord is null in EmbeddedEngineChangeEvent");
