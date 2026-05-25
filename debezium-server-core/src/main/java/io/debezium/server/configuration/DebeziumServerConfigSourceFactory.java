@@ -167,6 +167,25 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
                     remapped.put("quarkus.debezium.header.converter" + suffix, value.getValue());
                 }
 
+                if (name.startsWith("debezium.format.key.apicurio.registry.")) {
+                    String suffix = name.substring("debezium.format.key".length());
+                    remapped.put("quarkus.debezium.key.converter" + suffix, value.getValue());
+                }
+                else if (name.startsWith("debezium.format.value.apicurio.registry.")) {
+                    String suffix = name.substring("debezium.format.value".length());
+                    remapped.put("quarkus.debezium.value.converter" + suffix, value.getValue());
+                }
+                else if (name.startsWith("debezium.format.header.apicurio.registry.")) {
+                    String suffix = name.substring("debezium.format.header".length());
+                    remapped.put("quarkus.debezium.header.converter" + suffix, value.getValue());
+                }
+                else if (name.startsWith("debezium.format.apicurio.registry.")) {
+                    String suffix = name.substring("debezium.format".length());
+                    remapped.put("quarkus.debezium.key.converter" + suffix, value.getValue());
+                    remapped.put("quarkus.debezium.value.converter" + suffix, value.getValue());
+                    remapped.put("quarkus.debezium.header.converter" + suffix, value.getValue());
+                }
+
                 String suffix = name.substring(DEBEZIUM.length() + 1);
                 remapped.put(QUARKUS_DEBEZIUM_PREFIX + suffix, value.getValue());
             }
