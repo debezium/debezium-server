@@ -221,6 +221,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <argLine>--add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <skipTests>${skipITs}</skipTests>
                     <enableAssertions>true</enableAssertions>
                     <systemPropertyVariables>
@@ -246,7 +247,7 @@
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <version>${version.failsafe.plugin}</version>
                         <configuration>
-                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED</argLine>
+                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                             <skipTests>${skipITs}</skipTests>
                             <enableAssertions>true</enableAssertions>
                             <runOrder>${runOrder}</runOrder>
@@ -411,7 +412,7 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
-                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED</argLine>
+                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                             <skipTests>${skipITs}</skipTests>
                             <enableAssertions>true</enableAssertions>
                             <systemPropertyVariables>
