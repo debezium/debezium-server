@@ -117,6 +117,7 @@
                     <systemPropertyVariables>
                         <test.type>IT</test.type>
                     </systemPropertyVariables>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>
             <plugin>

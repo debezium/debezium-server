@@ -126,6 +126,7 @@
                         <test.type>IT</test.type>
                         <test.apicurio>false</test.apicurio>
                     </systemProperties>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <runOrder>${runOrder}</runOrder>
                 </configuration>
             </plugin>
@@ -146,6 +147,7 @@
                         <configuration>
                             <skipTests>${skipITs}</skipTests>
                             <enableAssertions>true</enableAssertions>
+                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                             <runOrder>${runOrder}</runOrder>
                         </configuration>
                         <executions>
