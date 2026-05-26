@@ -96,6 +96,7 @@
                         <test.type>IT</test.type>
                         <tag.infinispan>${version.infinispan}</tag.infinispan>
                     </systemProperties>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <runOrder>${runOrder}</runOrder>
                 </configuration>
             </plugin>
