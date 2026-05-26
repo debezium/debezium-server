@@ -126,6 +126,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <skipTests>${skipITs}</skipTests>
                     <enableAssertions>true</enableAssertions>
                     <systemProperties>
