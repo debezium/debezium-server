@@ -116,25 +116,25 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
         ConfigValue sink = context.getValue(PROP_SINK_TYPE);
 
         configToProperties(context, remapped, PROP_SOURCE_PREFIX, "", true);
-        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "key.converter.", true);
-        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "value.converter.", true);
-        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "header.converter.", true);
-        configToProperties(context, remapped, PROP_KEY_FORMAT_PREFIX, "key.converter.", true);
-        configToProperties(context, remapped, PROP_VALUE_FORMAT_PREFIX, "value.converter.", true);
-        configToProperties(context, remapped, PROP_HEADER_FORMAT_PREFIX, "header.converter.", true);
+        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "quarkus.debezium.key.converter.", true);
+        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "quarkus.debezium.value.converter.", true);
+        configToProperties(context, remapped, PROP_FORMAT_PREFIX, "quarkus.debezium.header.converter.", true);
+        configToProperties(context, remapped, PROP_KEY_FORMAT_PREFIX, "quarkus.debezium.key.converter.", true);
+        configToProperties(context, remapped, PROP_VALUE_FORMAT_PREFIX, "quarkus.debezium.value.converter.", true);
+        configToProperties(context, remapped, PROP_HEADER_FORMAT_PREFIX, "quarkus.debezium.header.converter.", true);
         configToProperties(context, remapped, PROP_SINK_PREFIX + sink + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink + ".", false);
         configToProperties(context, remapped, PROP_SINK_PREFIX + sink + ".", PROP_OFFSET_STORAGE_PREFIX + sink + ".", false);
 
         var transforms = context.getValue(PROP_TRANSFORMS);
-        if (transforms != null) {
-            remapped.put("transforms", transforms.getValue());
-            configToProperties(context, remapped, PROP_TRANSFORMS_PREFIX, "transforms.", true);
+        if (transforms != null && transforms.getValue() != null) {
+            remapped.put("quarkus.debezium.transforms", transforms.getValue());
+            configToProperties(context, remapped, PROP_TRANSFORMS_PREFIX, "quarkus.debezium.transforms.", true);
         }
 
         var predicates = context.getValue(PROP_PREDICATES);
-        if (predicates != null) {
-            remapped.put("predicates", predicates.getValue());
-            configToProperties(context, remapped, PROP_PREDICATES_PREFIX, "predicates.", true);
+        if (predicates != null && predicates.getValue() != null) {
+            remapped.put("quarkus.debezium.predicates", predicates.getValue());
+            configToProperties(context, remapped, PROP_PREDICATES_PREFIX, "quarkus.debezium.predicates.", true);
         }
 
         Iterator<String> names = context.iterateNames();
