@@ -166,7 +166,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
 
         for (final BatchEvent record : events.records()) {
             LOGGER.trace("Received event '{}'", record);
-            final String topicName = streamNameMapper.map(events.destination());
+            final String topicName = streamNameMapper.map(record.destination());
             final Producer<?> producer = producers.computeIfAbsent(topicName, (topic) -> createProducer(topic, record.value()));
             batchProducers.put(topicName, producer);
 
@@ -192,7 +192,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                             record.commit();
                         }
                         else {
-                            LOGGER.error("Failed to send record to " + events.destination() + " destination", exception);
+                            LOGGER.error("Failed to send record to " + record.destination() + " destination", exception);
                         }
                     });
         }
