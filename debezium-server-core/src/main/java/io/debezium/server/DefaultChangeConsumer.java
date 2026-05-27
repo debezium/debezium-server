@@ -83,7 +83,7 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
 
             convertHeaders(record).forEach(headers::addString);
             ConnectorContext connectorContext = ConnectorContext.from(record.record().headers());
-            String datasetName = streamNameMapper.map(events.destination());
+            String datasetName = streamNameMapper.map(record.destination());
 
             List<DatasetMetadata.FieldDefinition> fieldDefinitions = datasetDataExtractor
                     .extract(record.record());
