@@ -113,7 +113,6 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
     @Override
     public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
         Map<String, String> remapped = new HashMap<>();
-        ConfigValue sink = context.getValue(PROP_SINK_TYPE);
 
         configToProperties(context, remapped, PROP_SOURCE_PREFIX, "", true);
         configToProperties(context, remapped, PROP_FORMAT_PREFIX, "quarkus.debezium.key.converter.", true);
@@ -122,8 +121,12 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
         configToProperties(context, remapped, PROP_KEY_FORMAT_PREFIX, "quarkus.debezium.key.converter.", true);
         configToProperties(context, remapped, PROP_VALUE_FORMAT_PREFIX, "quarkus.debezium.value.converter.", true);
         configToProperties(context, remapped, PROP_HEADER_FORMAT_PREFIX, "quarkus.debezium.header.converter.", true);
-        configToProperties(context, remapped, PROP_SINK_PREFIX + sink + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink + ".", false);
-        configToProperties(context, remapped, PROP_SINK_PREFIX + sink + ".", PROP_OFFSET_STORAGE_PREFIX + sink + ".", false);
+        ConfigValue sink = context.getValue(PROP_SINK_TYPE);
+        if (sink != null && sink.getValue() != null) {
+            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink.getValue() + ".",
+                    false);
+            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".", PROP_OFFSET_STORAGE_PREFIX + sink.getValue() + ".", false);
+        }
 
         var transforms = context.getValue(PROP_TRANSFORMS);
         if (transforms != null && transforms.getValue() != null) {
