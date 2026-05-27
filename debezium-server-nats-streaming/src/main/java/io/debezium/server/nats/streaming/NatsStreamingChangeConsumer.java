@@ -119,7 +119,7 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
 
         for (BatchEvent record : events.records()) {
             if (record.value() != null) {
-                String subject = streamNameMapper.map(events.destination());
+                String subject = streamNameMapper.map(record.destination());
                 byte[] recordBytes = getBytes(record.value());
                 LOGGER.trace("Received event @ {} = '{}'", subject, record.value());
 
