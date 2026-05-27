@@ -176,18 +176,18 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
     public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
         if (!config.isAsyncEnabled() || events.records().isEmpty()) {
-            handleBatchSync(events.records(), events.destination());
+            handleBatchSync(events.records());
             return;
         }
-        handleBatchAsync(events.records(), events.destination());
+        handleBatchAsync(events.records());
     }
 
-    private void handleBatchSync(List<BatchEvent> records, String destination)
+    private void handleBatchSync(List<BatchEvent> records)
             throws InterruptedException {
 
         for (BatchEvent rec : records) {
             if (rec.value() != null) {
-                String subject = streamNameMapper.map(destination);
+                String subject = streamNameMapper.map(rec.destination());
                 LOGGER.trace("Received event @ {} = '{}'", subject, rec.value());
                 byte[] recordBytes = getBytes(rec.value());
 
@@ -208,12 +208,12 @@ public class NatsJetStreamChangeConsumer extends BaseChangeConsumer
         }
     }
 
-    private void handleBatchAsync(List<BatchEvent> records, String destination) throws InterruptedException {
+    private void handleBatchAsync(List<BatchEvent> records) throws InterruptedException {
 
         List<CompletableFuture<PublishAck>> futures = records.stream()
                 .filter(rec -> rec.value() != null)
                 .map(rec -> {
-                    String subject = streamNameMapper.map(destination);
+                    String subject = streamNameMapper.map(rec.destination());
                     LOGGER.trace("Received event for async processing @ {} = '{}'", subject, rec.value());
                     byte[] recordBytes = getBytes(rec.value());
 
