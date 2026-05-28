@@ -86,6 +86,7 @@ public class KinesisUnitTest {
             BatchEvent result = mock(BatchEvent.class);
             when(result.key()).thenReturn(key);
             when(result.value()).thenReturn(Integer.toString(i));
+            when(result.destination()).thenReturn(destination);
             Header header = mock(Header.class);
             when(header.getKey()).thenReturn(key);
             when(header.getValue()).thenReturn(Integer.toString(i));
@@ -152,7 +153,7 @@ public class KinesisUnitTest {
 
     // 2. Test that continous return of exception yields Debezium exception after 5 attempts
     @Test
-    public void testExceptionWhileWritingData() {
+    public void testExceptionWhileWritingData() throws Exception {
         // Arrange
         doAnswer(invocation -> {
             counter.incrementAndGet();
@@ -237,8 +238,13 @@ public class KinesisUnitTest {
     @Test
     public void testBatchesAreCorrect() throws Exception {
         // Arrange
+        CapturingEvents<BatchEvent> changeEvents;
         String destinationOne = "dest1";
         String destinationTwo = "dest2";
+
+        // call createEvents with 600 records for destination 1 and 600 records for destination 2
+        changeEvents = createChangeEvents(600, destinationOne, destinationOne);
+        changeEvents.records().addAll(createChangeEvents(600, destinationTwo, destinationTwo).records());
 
         AtomicInteger numRecordsDestinationOne = new AtomicInteger(0);
         AtomicInteger numRrecordsDestinationTwo = new AtomicInteger(0);
@@ -265,8 +271,7 @@ public class KinesisUnitTest {
         // Act
         try {
             kinesisChangeConsumer.connect();
-            kinesisChangeConsumer.handle(createChangeEvents(600, destinationOne, destinationOne));
-            kinesisChangeConsumer.handle(createChangeEvents(600, destinationTwo, destinationTwo));
+            kinesisChangeConsumer.handle(changeEvents);
         }
         catch (Exception e) {
             threwException.getAndSet(true);
@@ -322,7 +327,7 @@ public class KinesisUnitTest {
     @Test
     public void testBatchSplitting() throws Exception {
         // Arrange
-        var changeEvents = createChangeEvents(1000, "key", "destination");
+        CapturingEvents<BatchEvent> changeEvents = createChangeEvents(1000, "key", "destination");
 
         AtomicInteger numBatches = new AtomicInteger(0);
         AtomicInteger numRecordsBatchOne = new AtomicInteger(0);
