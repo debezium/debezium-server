@@ -27,6 +27,21 @@ jobs:
           repository: debezium/debezium
           ref: ${{ github.ref }}
           path: core
+      - name: Checkout db2 repository with default base branch
+        uses: actions/checkout@v6
+        with:
+          repository: debezium/debezium-connector-db2
+          path: db2
+      - name: Checkout informix repository with default base branch
+        uses: actions/checkout@v6
+        with:
+          repository: debezium/debezium-connector-informix
+          path: informix
+      - name: Checkout Quarkus Extensions repository
+        uses: actions/checkout@v6
+        with:
+          repository: debezium/debezium-quarkus
+          path: debezium-quarkus
       - name: Checkout Debezium Server
         uses: actions/checkout@v7
         with:
@@ -44,5 +59,11 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       - name: Maven build core
         run: ./server/mvnw clean install -f core/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+      - name: Maven build db2
+        run: ./server/mvnw clean install -f db2/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+      - name: Maven build informix
+        run: ./server/mvnw clean install -f informix/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+      - name: Maven build extensions
+        run: ./server/mvnw clean install -f debezium-quarkus/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build Debezium Server
         run: ./server/mvnw clean install -fae -f server/pom.xml -Passembly -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore
