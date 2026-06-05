@@ -41,9 +41,8 @@ import org.junit.jupiter.api.Test;
 import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
 import io.debezium.data.Envelope;
-import io.debezium.embedded.EmbeddedEngineChangeEvent;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.util.RetryExecutor;
 
 /**
@@ -90,7 +89,6 @@ public class FlussUnitTest {
     private Admin mockAdmin;
     private AppendWriter mockAppendWriter;
     private UpsertWriter mockUpsertWriter;
-    private RecordCommitter<ChangeEvent<Object, Object>> committer;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -111,8 +109,6 @@ public class FlussUnitTest {
         when(mockTable.newUpsert()).thenReturn(mockUpsert);
         when(mockAppend.createWriter()).thenReturn(mockAppendWriter);
         when(mockUpsert.createWriter()).thenReturn(mockUpsertWriter);
-
-        committer = mock(RecordCommitter.class);
 
         initConsumer(Map.of());
     }
@@ -135,130 +131,120 @@ public class FlussUnitTest {
     }
 
     @Test
-    public void testEmptyBatchIsHandledGracefully() throws Exception {
-        consumer.handleBatch(List.of(), committer);
-        verify(committer).markBatchFinished();
-        verify(committer, never()).markProcessed(any());
-    }
-
-    @Test
     public void testInsertEventWrittenToLogTable() throws Exception {
         setupLogTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter).append(any(InternalRow.class));
         verify(mockAppendWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
     public void testReadEventWrittenToLogTable() throws Exception {
         setupLogTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.READ));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter).append(any(InternalRow.class));
         verify(mockAppendWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
+        verify(events.getFirst()).commit();
     }
 
     @Test
     public void testDeleteEventSkippedForLogTable() throws Exception {
         setupLogTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, rowStruct(1, "Alice"), null, Envelope.Operation.DELETE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter, never()).append(any());
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
     public void testTombstoneSkippedForLogTable() throws Exception {
         setupLogTableDescriptor(TABLE_PATH);
 
-        consumer.handleBatch(List.of(createTombstone(TABLE_NAME)), committer);
+        consumer.handle(from(List.of(createTombstone(TABLE_NAME))));
 
         verify(mockAppendWriter, never()).append(any());
-        verify(committer).markBatchFinished();
     }
 
     @Test
     public void testCreateEventWrittenToPrimaryKeyTable() throws Exception {
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockUpsertWriter).upsert(any(InternalRow.class));
         verify(mockUpsertWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
+        verify(events.getFirst()).commit();
     }
 
     @Test
     public void testReadEventWrittenToPrimaryKeyTable() throws Exception {
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.READ));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockUpsertWriter).upsert(any(InternalRow.class));
         verify(mockUpsertWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
+        verify(events.getFirst()).commit();
     }
 
     @Test
     public void testUpdateEventWrittenToPrimaryKeyTable() throws Exception {
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, rowStruct(1, "Alice"), rowStruct(1, "Bob"), Envelope.Operation.UPDATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockUpsertWriter).upsert(any(InternalRow.class));
         verify(mockUpsertWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
+        verify(events.getFirst()).commit();
     }
 
     @Test
     public void testDeleteEventWrittenToPrimaryKeyTable() throws Exception {
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, rowStruct(1, "Alice"), null, Envelope.Operation.DELETE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockUpsertWriter).delete(any(InternalRow.class));
         verify(mockUpsertWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
+        verify(events.getFirst()).commit();
     }
 
     @Test
     public void testTombstoneSkippedForPrimaryKeyTable() throws Exception {
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        consumer.handleBatch(List.of(createTombstone(TABLE_NAME)), committer);
+        consumer.handle(from(List.of(createTombstone(TABLE_NAME))));
 
         verify(mockUpsertWriter, never()).upsert(any());
         verify(mockUpsertWriter, never()).delete(any());
-        verify(committer).markBatchFinished();
+
     }
 
     @Test
@@ -271,14 +257,13 @@ public class FlussUnitTest {
         setupDescriptor(TABLE_PATH, schema);
 
         final Struct flatValue = new Struct(FLAT_SCHEMA).put("id", 1).put("name", "Alice");
-        final List<ChangeEvent<Object, Object>> events = List.of(createFlatEvent(TABLE_NAME, flatValue));
+        final List<BatchEvent> events = List.of(createFlatEvent(TABLE_NAME, flatValue));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter).append(any(InternalRow.class));
         verify(mockAppendWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
@@ -303,12 +288,12 @@ public class FlussUnitTest {
                 .put(Envelope.FieldName.OPERATION, Envelope.Operation.CREATE.code());
         SourceRecord sr = new SourceRecord(null, null, TABLE_NAME, 0, null, null, envelopeWithNullable, value);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(createEventFromSourceRecord(TABLE_NAME, value, sr));
+        final List<BatchEvent> events = List.of(createEventFromSourceRecord(TABLE_NAME, value, sr));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter).append(any(InternalRow.class));
-        verify(committer).markProcessed(events.getFirst());
+        verify(events.getFirst()).commit();
     }
 
     @Test
@@ -316,33 +301,33 @@ public class FlussUnitTest {
         setupLogTableDescriptor(TABLE_PATH);
         setupLogTableDescriptor(TABLE_PATH_2);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE),
                 createEnvelopeEvent(TABLE_NAME_2, null, rowStruct(2, "Order"), Envelope.Operation.CREATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter, times(2)).append(any(InternalRow.class));
         verify(mockAppendWriter, times(2)).flush(); // once per destination group
-        verify(committer, times(2)).markProcessed(any());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
+        verify(events.getLast()).commit();
     }
 
     @Test
     public void testMultipleRecordsForSameTable() throws Exception {
         setupLogTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = new ArrayList<>();
+        final List<BatchEvent> events = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             events.add(createEnvelopeEvent(TABLE_NAME, null, rowStruct(i, "User" + i), Envelope.Operation.CREATE));
         }
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter, times(5)).append(any(InternalRow.class));
         verify(mockAppendWriter, times(1)).flush();
-        verify(committer, times(5)).markProcessed(any());
-        verify(committer).markBatchFinished();
+
+        events.forEach(event -> verify(event).commit());
     }
 
     @Test
@@ -350,15 +335,14 @@ public class FlussUnitTest {
         initConsumer(Map.of("primary.key.mode", "upsert"));
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockUpsertWriter).upsert(any(InternalRow.class));
         verify(mockUpsertWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
@@ -366,15 +350,14 @@ public class FlussUnitTest {
         initConsumer(Map.of("primary.key.mode", "append"));
         setupLogTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter).append(any(InternalRow.class));
         verify(mockAppendWriter).flush();
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
@@ -382,10 +365,10 @@ public class FlussUnitTest {
         initConsumer(Map.of("primary.key.mode", "upsert"));
         setupLogTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
 
-        assertThatThrownBy(() -> consumer.handleBatch(events, committer))
+        assertThatThrownBy(() -> consumer.handle(from(events)))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("primary.key.mode=upsert");
     }
@@ -395,16 +378,15 @@ public class FlussUnitTest {
         initConsumer(Map.of("primary.key.mode", "append"));
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, null, rowStruct(1, "Alice"), Envelope.Operation.CREATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter).append(any(InternalRow.class));
         verify(mockAppendWriter).flush();
         verify(mockUpsertWriter, never()).upsert(any());
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
@@ -412,16 +394,15 @@ public class FlussUnitTest {
         initConsumer(Map.of("primary.key.mode", "append"));
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, rowStruct(1, "Alice"), null, Envelope.Operation.DELETE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter, never()).append(any());
         verify(mockUpsertWriter, never()).upsert(any());
         verify(mockUpsertWriter, never()).delete(any());
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
@@ -429,16 +410,15 @@ public class FlussUnitTest {
         initConsumer(Map.of("primary.key.mode", "append"));
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        final List<ChangeEvent<Object, Object>> events = List.of(
+        final List<BatchEvent> events = List.of(
                 createEnvelopeEvent(TABLE_NAME, rowStruct(1, "Alice"), rowStruct(1, "Bob"), Envelope.Operation.UPDATE));
 
-        consumer.handleBatch(events, committer);
+        consumer.handle(from(events));
 
         verify(mockAppendWriter).append(any(InternalRow.class));
         verify(mockAppendWriter).flush();
         verify(mockUpsertWriter, never()).upsert(any());
-        verify(committer).markProcessed(events.getFirst());
-        verify(committer).markBatchFinished();
+        verify(events.getFirst()).commit();
     }
 
     @Test
@@ -446,11 +426,10 @@ public class FlussUnitTest {
         initConsumer(Map.of("primary.key.mode", "append"));
         setupPrimaryKeyTableDescriptor(TABLE_PATH);
 
-        consumer.handleBatch(List.of(createTombstone(TABLE_NAME)), committer);
+        consumer.handle(from(List.of(createTombstone(TABLE_NAME))));
 
         verify(mockAppendWriter, never()).append(any());
         verify(mockUpsertWriter, never()).upsert(any());
-        verify(committer).markBatchFinished();
     }
 
     private void setupLogTableDescriptor(TablePath tablePath) throws Exception {
@@ -483,9 +462,9 @@ public class FlussUnitTest {
         return new Struct(ROW_SCHEMA).put("id", id).put("name", name);
     }
 
-    private static ChangeEvent<Object, Object> createEnvelopeEvent(String destination,
-                                                                   Struct before, Struct after,
-                                                                   Envelope.Operation op) {
+    private static BatchEvent createEnvelopeEvent(String destination,
+                                                  Struct before, Struct after,
+                                                  Envelope.Operation op) {
         final Struct value = new Struct(ENVELOPE_SCHEMA)
                 .put(Envelope.FieldName.BEFORE, before)
                 .put(Envelope.FieldName.AFTER, after)
@@ -497,7 +476,7 @@ public class FlussUnitTest {
     }
 
     @SuppressWarnings("SameParameterValue")
-    private static ChangeEvent<Object, Object> createFlatEvent(String destination, Struct value) {
+    private static BatchEvent createFlatEvent(String destination, Struct value) {
         final SourceRecord sourceRecord = new SourceRecord(null, null, destination, 0,
                 null, null, FLAT_SCHEMA, value);
 
@@ -505,29 +484,57 @@ public class FlussUnitTest {
     }
 
     @SuppressWarnings({ "unchecked", "SameParameterValue" })
-    private static ChangeEvent<Object, Object> createTombstone(String destination) {
+    private static BatchEvent createTombstone(String destination) {
         final SourceRecord sourceRecord = new SourceRecord(null, null, destination, 0,
                 null, null, null, null);
 
-        final EmbeddedEngineChangeEvent<Object, Object, SourceRecord> event = mock(EmbeddedEngineChangeEvent.class);
+        final BatchEvent event = mock(BatchEvent.class);
 
         when(event.destination()).thenReturn(destination);
         when(event.value()).thenReturn(null);
-        when(event.sourceRecord()).thenReturn(sourceRecord);
+        when(event.record()).thenReturn(sourceRecord);
 
         return event;
     }
 
     @SuppressWarnings("unchecked")
-    private static ChangeEvent<Object, Object> createEventFromSourceRecord(String destination,
-                                                                           Object value,
-                                                                           SourceRecord sourceRecord) {
-        final EmbeddedEngineChangeEvent<Object, Object, SourceRecord> event = mock(EmbeddedEngineChangeEvent.class);
+    private static BatchEvent createEventFromSourceRecord(String destination,
+                                                          Object value,
+                                                          SourceRecord sourceRecord) {
+        final BatchEvent event = mock(BatchEvent.class);
 
         when(event.destination()).thenReturn(destination);
         when(event.value()).thenReturn(value);
-        when(event.sourceRecord()).thenReturn(sourceRecord);
+        when(event.record()).thenReturn(sourceRecord);
 
         return event;
+    }
+
+    private static CapturingEvents<BatchEvent> emptyEvents() {
+        return from(List.of());
+    }
+
+    private static CapturingEvents<BatchEvent> from(List<BatchEvent> events) {
+        return new CapturingEvents<>() {
+            @Override
+            public List<BatchEvent> records() {
+                return events;
+            }
+
+            @Override
+            public String destination() {
+                return "";
+            }
+
+            @Override
+            public String source() {
+                return "";
+            }
+
+            @Override
+            public String engine() {
+                return "";
+            }
+        };
     }
 }
