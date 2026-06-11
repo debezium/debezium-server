@@ -114,7 +114,7 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
     public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
         Map<String, String> remapped = new HashMap<>();
 
-        configToProperties(context, remapped, PROP_SOURCE_PREFIX, "", true);
+        configToProperties(context, remapped, PROP_SOURCE_PREFIX, "quarkus.debezium.", true);
         configToProperties(context, remapped, PROP_FORMAT_PREFIX, "quarkus.debezium.key.converter.", true);
         configToProperties(context, remapped, PROP_FORMAT_PREFIX, "quarkus.debezium.value.converter.", true);
         configToProperties(context, remapped, PROP_FORMAT_PREFIX, "quarkus.debezium.header.converter.", true);
@@ -124,9 +124,11 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
         ConfigValue sink = context.getValue(PROP_SINK_TYPE);
         if (sink != null && sink.getValue() != null) {
             remapped.put("quarkus.debezium.name", sink.getValue());
-            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink.getValue() + ".",
+            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".",
+                    "quarkus.debezium." + SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink.getValue() + ".",
                     false);
-            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".", PROP_OFFSET_STORAGE_PREFIX + sink.getValue() + ".", false);
+            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".", "quarkus.debezium." + PROP_OFFSET_STORAGE_PREFIX + sink.getValue() + ".",
+                    false);
         }
 
         var transforms = context.getValue(PROP_TRANSFORMS);
@@ -225,6 +227,10 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             else if (name.startsWith(oldPrefix)) {
                 String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
                 if (overwrite || !mutableMap.containsKey(finalPropertyName)) {
+                    if (context.getValue(name).getValue().isEmpty()) {
+                        mutableMap.put(finalPropertyName, "aaa");
+                        return;
+                    }
                     mutableMap.put(finalPropertyName, context.getValue(name).getValue());
                 }
             }
