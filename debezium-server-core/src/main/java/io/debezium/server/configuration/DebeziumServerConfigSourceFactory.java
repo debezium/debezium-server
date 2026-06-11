@@ -108,6 +108,8 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
      */
     private static final String PROP_ENGINE_FACTORY = PROP_PREFIX + "engine.factory";
 
+    static final String EMPTY_VALUE_SENTINEL = "__DBZ_EMPTY__";
+
     static final int ORDINAL = 100;
 
     @Override
@@ -207,6 +209,8 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             return Collections.emptyList();
         }
 
+        remapped.replaceAll((k, v) -> v != null && v.isEmpty() ? EMPTY_VALUE_SENTINEL : v);
+
         return List.of(new DebeziumServerConfigSource(remapped));
     }
 
@@ -227,10 +231,6 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             else if (name.startsWith(oldPrefix)) {
                 String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
                 if (overwrite || !mutableMap.containsKey(finalPropertyName)) {
-                    if (context.getValue(name).getValue().isEmpty()) {
-                        mutableMap.put(finalPropertyName, "aaa");
-                        return;
-                    }
                     mutableMap.put(finalPropertyName, context.getValue(name).getValue());
                 }
             }
