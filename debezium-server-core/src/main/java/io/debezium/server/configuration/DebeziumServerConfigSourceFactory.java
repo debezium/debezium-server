@@ -46,6 +46,30 @@ import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
 import io.smallrye.config.common.MapBackedConfigSource;
 
+/**
+ * A {@link ConfigSourceFactory} that bridges Debezium Server's {@code debezium.*} configuration
+ * namespace to the Quarkus {@code quarkus.debezium.*} namespace consumed by the Debezium engine
+ * extension.
+ *
+ * <p>This factory performs three main tasks:
+ * <ul>
+ *   <li><b>Property remapping</b> &mdash; translates {@code debezium.source.*}, {@code debezium.sink.*},
+ *       {@code debezium.format.*}, {@code debezium.transforms.*}, and {@code debezium.predicates.*}
+ *       properties into their {@code quarkus.debezium.*} equivalents (including converter, schema
+ *       history, offset storage, and Apicurio/Schema Registry sub-properties).</li>
+ *   <li><b>Datasource bridging</b> &mdash; mirrors {@code debezium.source.datasource.*} properties
+ *       to {@code quarkus.datasource.*} and vice versa, so that Debezium Server datasource
+ *       configuration is available to Agroal.</li>
+ *   <li><b>Empty value preservation</b> &mdash; replaces empty string values with a sentinel
+ *       ({@link DebeziumProperties#EMPTY_VALUE_SENTINEL}) so they survive the MicroProfile Config
+ *       pipeline, which otherwise treats empty strings as missing. The companion
+ *       {@link EmptyStringConverter} converts the sentinel back to an empty string when individual
+ *       properties are read.</li>
+ * </ul>
+ *
+ * <p>Shell-style environment variables (e.g. {@code DEBEZIUM_SOURCE_FOO}) are also recognized and
+ * normalized to dotted lowercase form before remapping.
+ */
 public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
 
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
