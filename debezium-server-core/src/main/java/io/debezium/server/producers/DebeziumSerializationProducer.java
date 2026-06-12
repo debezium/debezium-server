@@ -90,11 +90,11 @@ public class DebeziumSerializationProducer {
                 return (Class<? extends SerializationFormat<Object>>) getHeader(config);
             }
 
+            /**
+             * Returns the default engine identifier since multi-engine serialization is not currently supported.
+             */
             @Override
             public String getEngineId() {
-                /**
-                 * TODO: we don't support for now multi-engine serialization
-                 */
                 return "default";
             }
         };
