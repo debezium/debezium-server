@@ -18,7 +18,7 @@ public class EmptyStringConverter implements Converter<String> {
 
     @Override
     public String convert(String value) {
-        if (DebeziumServerConfigSourceFactory.EMPTY_VALUE_SENTINEL.equals(value)) {
+        if (DebeziumProperties.EMPTY_VALUE_SENTINEL.equals(value)) {
             return "";
         }
         if (value.isEmpty()) {
