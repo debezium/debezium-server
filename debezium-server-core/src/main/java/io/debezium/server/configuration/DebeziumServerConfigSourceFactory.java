@@ -7,18 +7,12 @@ package io.debezium.server.configuration;
 
 import static io.debezium.server.configuration.DebeziumProperties.DEBEZIUM_DATASOURCE_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.EMPTY_VALUE_SENTINEL;
-import static io.debezium.server.configuration.DebeziumProperties.PROP_FORMAT_APICURIO_PREFIX;
-import static io.debezium.server.configuration.DebeziumProperties.PROP_FORMAT_HEADER_APICURIO_PREFIX;
-import static io.debezium.server.configuration.DebeziumProperties.PROP_FORMAT_KEY_APICURIO_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_FORMAT_PREFIX;
-import static io.debezium.server.configuration.DebeziumProperties.PROP_FORMAT_VALUE_APICURIO_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_HEADER_FORMAT_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_KEY_FORMAT_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_OFFSET_STORAGE_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_PREDICATES;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_PREDICATES_PREFIX;
-import static io.debezium.server.configuration.DebeziumProperties.PROP_PREFIX;
-import static io.debezium.server.configuration.DebeziumProperties.PROP_SCHEMA_REGISTRY_URL;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_TYPE;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SOURCE_PREFIX;
@@ -130,37 +124,6 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             else if (name.startsWith(QUARKUS_DEBEZIUM_PREFIX)) {
                 String suffix = name.substring(QUARKUS_DEBEZIUM_PREFIX.length());
                 remapped.put(PROP_SOURCE_PREFIX + suffix, value.getValue());
-            }
-
-            if (name.startsWith(PROP_FORMAT_PREFIX)) {
-                if (name.startsWith(PROP_SCHEMA_REGISTRY_URL)) {
-                    String suffix = name.substring(PROP_FORMAT_PREFIX.length());
-                    remapped.put(QUARKUS_KEY_CONVERTER_PREFIX + suffix, value.getValue());
-                    remapped.put(QUARKUS_VALUE_CONVERTER_PREFIX + suffix, value.getValue());
-                    remapped.put(QUARKUS_HEADER_CONVERTER_PREFIX + suffix, value.getValue());
-                }
-
-                if (name.startsWith(PROP_FORMAT_KEY_APICURIO_PREFIX)) {
-                    String suffix = name.substring(PROP_KEY_FORMAT_PREFIX.length());
-                    remapped.put(QUARKUS_KEY_CONVERTER_PREFIX + suffix, value.getValue());
-                }
-                else if (name.startsWith(PROP_FORMAT_VALUE_APICURIO_PREFIX)) {
-                    String suffix = name.substring(PROP_VALUE_FORMAT_PREFIX.length());
-                    remapped.put(QUARKUS_VALUE_CONVERTER_PREFIX + suffix, value.getValue());
-                }
-                else if (name.startsWith(PROP_FORMAT_HEADER_APICURIO_PREFIX)) {
-                    String suffix = name.substring(PROP_HEADER_FORMAT_PREFIX.length());
-                    remapped.put(QUARKUS_HEADER_CONVERTER_PREFIX + suffix, value.getValue());
-                }
-                else if (name.startsWith(PROP_FORMAT_APICURIO_PREFIX)) {
-                    String suffix = name.substring(PROP_FORMAT_PREFIX.length());
-                    remapped.put(QUARKUS_KEY_CONVERTER_PREFIX + suffix, value.getValue());
-                    remapped.put(QUARKUS_VALUE_CONVERTER_PREFIX + suffix, value.getValue());
-                    remapped.put(QUARKUS_HEADER_CONVERTER_PREFIX + suffix, value.getValue());
-                }
-
-                String suffix = name.substring(PROP_PREFIX.length());
-                remapped.put(QUARKUS_DEBEZIUM_PREFIX + suffix, value.getValue());
             }
 
             if (name.startsWith(QUARKUS_DATASOURCE_PREFIX)) {
