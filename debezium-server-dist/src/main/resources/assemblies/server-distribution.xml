@@ -52,6 +52,9 @@
               debezium-connector-dse exclusion.
               -->
               <include>org.yaml:snakeyaml:*:*</include>
+
+
+              <include>io.debezium:debezium-connector-common:*:*</include>
           </includes>
       </dependencySet>
       <dependencySet>
