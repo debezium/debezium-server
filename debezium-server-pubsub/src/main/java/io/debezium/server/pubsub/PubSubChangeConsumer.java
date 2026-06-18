@@ -242,6 +242,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
             messageIds = ApiFutures.allAsList(deliveries).get(config.getWaitMessageDeliveryTimeout(), TimeUnit.MILLISECONDS);
         }
         catch (ExecutionException | TimeoutException | InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new DebeziumException(e);
         }
         LOGGER.trace("Sent messages with ids: {}", messageIds);
