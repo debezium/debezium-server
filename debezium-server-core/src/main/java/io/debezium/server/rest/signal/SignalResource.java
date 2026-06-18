@@ -5,6 +5,7 @@
  */
 package io.debezium.server.rest.signal;
 
+import io.debezium.DebeziumException;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.validation.constraints.NotNull;
@@ -26,7 +27,7 @@ public class SignalResource {
     @Inject
     public SignalResource(DebeziumServerConfig config, Instance<DebeziumConnectorRegistry> instance) {
         this.config = config;
-        this.registry = instance.stream().findFirst().get();
+        this.registry = instance.stream().findFirst().orElseThrow(() -> new DebeziumException("No DebeziumConnectorRegistry available"));
     }
 
     @POST
