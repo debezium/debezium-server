@@ -61,17 +61,19 @@ public class ChangeConsumerProducer {
     public ChangeConsumerHolder produces() {
         final String name = config.getValue(PROP_SINK_TYPE, String.class);
 
-        if (instance.select(NamedLiteral.of(name)).isUnsatisfied()) {
+        Instance<DebeziumServerConsumer<CapturingEvents<BatchEvent>>> consumerInstance = instance.select(NamedLiteral.of(name));
+
+        if (consumerInstance.isUnsatisfied()) {
             throw new DebeziumException("No Debezium consumer named '" + name + "' is available");
         }
 
-        if (instance.select(NamedLiteral.of(name)).isAmbiguous()) {
-            LOGGER.debug("Found {} candidate consumer(DebeziumServerConsumers)", instance.select(NamedLiteral.of(name)).stream().count());
+        if (consumerInstance.isAmbiguous()) {
+            LOGGER.debug("Found {} candidate consumer(DebeziumServerConsumers)", consumerInstance.stream().count());
 
             throw new DebeziumException("Multiple Debezium consumers named '" + name + "' were found");
         }
 
-        DebeziumServerConsumer<CapturingEvents<BatchEvent>> consumer = instance.select(NamedLiteral.of(name)).get();
+        DebeziumServerConsumer<CapturingEvents<BatchEvent>> consumer = consumerInstance.get();
         LOGGER.info("Consumer '{}' instantiated", consumer.getClass().getName());
 
         return new ChangeConsumerHolder() {
