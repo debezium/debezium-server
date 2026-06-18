@@ -16,9 +16,9 @@ import java.util.Properties;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import io.debezium.DebeziumException;
 import io.debezium.relational.RelationalDatabaseConnectorConfig;
