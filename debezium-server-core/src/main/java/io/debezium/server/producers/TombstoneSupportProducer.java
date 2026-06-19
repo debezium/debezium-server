@@ -41,8 +41,6 @@ public class TombstoneSupportProducer {
         return changeConsumerHolder
                 .tombstoneSupport()
                 .map(isSupported -> (CapturingTombstoneEvents) () -> isSupported)
-                .orElse(() -> ((DebeziumEngine.ChangeConsumer<Object>) (records, committer) -> {
-                    /* ignore */
-                }).supportsTombstoneEvents());
+                .orElseGet(() -> () -> false);
     }
 }
