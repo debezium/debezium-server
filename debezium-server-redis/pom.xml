@@ -14,7 +14,18 @@
     <dependencies>
         <dependency>
             <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
             <artifactId>debezium-server-core</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.debezium</groupId>
