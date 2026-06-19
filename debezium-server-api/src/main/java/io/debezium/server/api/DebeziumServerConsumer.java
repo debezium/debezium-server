@@ -7,8 +7,6 @@ package io.debezium.server.api;
 
 import java.util.Optional;
 
-import io.debezium.server.BaseChangeConsumer;
-
 /**
  * Core interface for sink-specific consumers that process change events from Debezium.
  * <p>
