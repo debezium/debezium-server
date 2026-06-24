@@ -71,6 +71,7 @@
         <module>debezium-server-eventhubs</module>
         <module>debezium-server-http</module>
         <module>debezium-server-jdbc</module>
+        <module>debezium-server-zerobus</module>
         <module>debezium-server-redis</module>
         <module>debezium-server-dist</module>
         <module>debezium-server-kafka</module>

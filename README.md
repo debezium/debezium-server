@@ -83,8 +83,79 @@ mvn clean package -DskipITs -DskipTests -Passembly -Pcustom-distribution,sink-ka
 - `sink-milvus` - Milvus
 - `sink-qdrant` - Qdrant
 - `sink-instructlab` - InstructLab
+- `sink-zerobus` - ZeroBus
 
 This approach allows you to create smaller, more focused distributions that only include the sink modules you actually need.
+
+#### ZeroBus Sink
+
+The ZeroBus sink is a native Debezium Server sink. It is selected with `debezium.sink.type=zerobus`
+and writes Debezium Server change events through the Databricks ZeroBus Java SDK's JSON, protobuf,
+or Arrow stream APIs.
+It does not use the Kafka Connect runtime, Kafka brokers, Kafka producer APIs, or Kafka Connect SMTs.
+
+Example configuration:
+
+```properties
+debezium.sink.type=zerobus
+debezium.sink.zerobus.endpoint=https://zerobus.example
+debezium.sink.zerobus.workspace.url=https://dbc-a1b2c3d4-e5f6.cloud.databricks.com
+debezium.sink.zerobus.authentication.type=oauth2
+debezium.sink.zerobus.authentication.oauth2.client-id=${ZEROBUS_CLIENT_ID}
+debezium.sink.zerobus.authentication.oauth2.client-secret=${ZEROBUS_CLIENT_SECRET}
+debezium.sink.zerobus.record.format=json
+debezium.sink.zerobus.max.inflight.batches=1000
+debezium.sink.zerobus.idempotency.mode=source
+debezium.sink.zerobus.tombstone.handling.mode=event
+debezium.sink.zerobus.table.mapping.mode=source
+debezium.sink.zerobus.table.mapping.default.catalog=main
+debezium.sink.zerobus.table.mapping.default.schema=bronze
+```
+
+For a custom distribution that includes only the ZeroBus sink:
+
+```bash
+mvn clean package -DskipITs -DskipTests -Passembly -Pcustom-distribution,sink-zerobus
+```
+
+For local ZeroBus module work, Java 25 can be selected explicitly:
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home \
+  mvn -pl debezium-server-zerobus test -DskipITs -Dquick -DskipTests=false -Dformat.skip=true
+```
+
+The native sink routes records to Unity Catalog table identifiers using source, explicit, or regex
+mapping modes implemented inside the sink. Regex mapping is not Kafka Connect `RegexRouter`; it is
+native sink routing for teams migrating from topic-oriented deployments.
+
+The ZeroBus envelope contains `target_table`, `destination`, `partition`, `operation`,
+`idempotency_key`, `key`, `value`, `source_position`, and `headers` in JSON, protobuf, or Arrow
+mode. With
+`idempotency.mode=source`, the envelope-level key is derived from Debezium destination, partition,
+key, and the underlying `SourceRecord` source partition/offset when available, so LSN/transaction
+ordering metadata is carried into the ZeroBus payload. Header fingerprints are used only as a
+fallback for non-embedded events. Protobuf and Arrow modes use the same stable envelope shape; typed
+source-table protobuf or source-table-shaped Arrow rows remain a future schema-evolution track.
+Delete events are inferred from Debezium envelope `op=d`; null-value tombstones are distinct and can
+be emitted as `operation=tombstone` or dropped. The sink writes a batch, waits for the returned
+ZeroBus SDK offset with `waitForOffset(...)`, and only then marks Debezium records processed.
+
+The first upstream contribution packet is documented in
+`debezium-server-zerobus/UPSTREAM_CONTRIBUTION_PACKET.md`.
+
+The ZeroBus Kafka-compatible API recipe is a separate compatibility path for deployments that still
+run Kafka Connect. That recipe uses Kafka producer-compatible settings such as:
+
+```properties
+producer.override.bootstrap.servers=<zerobus-kafka-compatible-endpoint>
+producer.override.sasl.login.callback.handler.class=<zerobus-oauth-handler>
+transforms=<RegexRouter mapping>
+tombstones.on.delete=false
+```
+
+This removes Kafka broker from the CDC data path, but still runs Kafka Connect and still uses Kafka
+producer-compatible APIs. It is not the native Debezium Server ZeroBus sink.
 
 ### Building just the artifacts, without running tests, CheckStyle, etc.
 
