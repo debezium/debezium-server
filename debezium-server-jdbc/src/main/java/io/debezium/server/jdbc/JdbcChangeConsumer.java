@@ -120,8 +120,6 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
                     UUID.randomUUID(),
                     new java.util.HashMap<>());
 
-            metrics.connected(true);
-
             this.changeEventSink = new JdbcChangeEventSink(
                     jdbcConfig, session, dialect, recordWriter, connectorContext, metrics);
 
