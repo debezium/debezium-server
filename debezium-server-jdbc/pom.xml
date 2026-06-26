@@ -24,12 +24,6 @@
             <artifactId>debezium-connector-jdbc</artifactId>
         </dependency>
 
-        <!-- Debezium Embedded - for EmbeddedEngineChangeEvent -->
-        <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-embedded</artifactId>
-        </dependency>
-
         <!-- Kafka Connect API - for SinkRecord -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
