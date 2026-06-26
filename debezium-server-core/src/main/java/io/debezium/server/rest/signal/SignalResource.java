@@ -5,7 +5,6 @@
  */
 package io.debezium.server.rest.signal;
 
-import io.debezium.DebeziumException;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.validation.constraints.NotNull;
@@ -13,6 +12,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Response;
 
+import io.debezium.DebeziumException;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.runtime.DebeziumConnectorRegistry;
 import io.debezium.runtime.EngineManifest;
