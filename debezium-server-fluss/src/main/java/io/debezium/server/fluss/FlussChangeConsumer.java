@@ -40,8 +40,6 @@ import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
 import io.debezium.data.Envelope;
-import io.debezium.embedded.EmbeddedEngineChangeEvent;
-import io.debezium.engine.ChangeEvent;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.runtime.BatchEvent;
@@ -155,12 +153,6 @@ public class FlussChangeConsumer extends BaseChangeConsumer implements DebeziumS
             flushWriters(tablePath, hasPrimaryKey);
         }
 
-    }
-
-    // Not part of the public Debezium Engine API; Debezium Server may rely on this internal detail.
-    @SuppressWarnings("rawtypes")
-    protected SourceRecord toSourceRecord(ChangeEvent<Object, Object> record) {
-        return ((EmbeddedEngineChangeEvent) record).sourceRecord();
     }
 
     private void writeRecordWithRetry(BatchEvent record, TablePath tablePath,
