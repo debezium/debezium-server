@@ -8,7 +8,6 @@ package io.debezium.server.producers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
-import io.debezium.engine.DebeziumEngine;
 import io.debezium.server.api.ChangeConsumerHolder;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.debezium.engine.capture.CapturingTombstoneEvents;
@@ -24,11 +23,9 @@ import io.quarkus.runtime.Startup;
  * <p>
  * If the consumer explicitly declares tombstone support via {@link ChangeConsumerHolder#tombstoneSupport()},
  * that value is used. Otherwise, it falls back to the default behavior defined by
- * {@link DebeziumEngine.ChangeConsumer#supportsTombstoneEvents()}.
  *
  * @see CapturingTombstoneEvents
  * @see ChangeConsumerHolder#tombstoneSupport()
- * @see DebeziumEngine.ChangeConsumer#supportsTombstoneEvents()
  */
 @ApplicationScoped
 public class TombstoneSupportProducer {
