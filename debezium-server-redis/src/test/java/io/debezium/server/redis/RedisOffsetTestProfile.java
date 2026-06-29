@@ -24,7 +24,7 @@ public class RedisOffsetTestProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = new HashMap<String, String>();
         config.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
-        config.put("debezium.source.offset.storage", "io.debezium.server.redis.RedisOffsetBackingStore");
+        config.put("debezium.source.offset.storage", "redis");
         config.put("debezium.source.offset.flush.interval.ms", "0");
         return config;
     }

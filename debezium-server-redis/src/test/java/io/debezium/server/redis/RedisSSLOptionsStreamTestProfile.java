@@ -36,7 +36,7 @@ public class RedisSSLOptionsStreamTestProfile implements QuarkusTestProfile {
         config.put("debezium.sink.redis.ssl.keystore.password", "secret");
         config.put("debezium.sink.redis.ssl.keystore.type", "PKCS12");
 
-        config.put("debezium.source.offset.storage", "io.debezium.server.redis.RedisOffsetBackingStore");
+        config.put("debezium.source.offset.storage", "redis");
         config.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         return config;
     }
