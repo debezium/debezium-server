@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -218,6 +219,11 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
     @VisibleForTesting
     void setStreamNameMapper(StreamNameMapper streamNameMapper) {
         this.streamNameMapper = streamNameMapper;
+    }
+
+    @Override
+    public Optional<Boolean> tombstoneSupport() {
+        return Optional.of(true);
     }
 
     @Override
