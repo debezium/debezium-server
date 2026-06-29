@@ -22,6 +22,7 @@ import io.debezium.doc.FixFor;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.history.SchemaHistory;
 import io.debezium.relational.history.SchemaHistoryMetrics;
+import io.debezium.storage.redis.history.RedisSchemaHistory;
 import io.debezium.testing.testcontainers.MySqlTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
