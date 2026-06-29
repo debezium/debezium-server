@@ -28,6 +28,7 @@ import io.debezium.relational.history.SchemaHistoryMetrics;
 import io.debezium.runtime.Connector;
 import io.debezium.runtime.Debezium;
 import io.debezium.runtime.DebeziumEngineFilterStrategy;
+import io.debezium.storage.redis.history.RedisSchemaHistory;
 import io.debezium.testing.testcontainers.MySqlTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.junit.QuarkusTest;

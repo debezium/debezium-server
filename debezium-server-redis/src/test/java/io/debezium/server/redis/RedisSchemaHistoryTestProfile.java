@@ -32,9 +32,8 @@ public class RedisSchemaHistoryTestProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = new HashMap<String, String>();
         config.put("debezium.source." + OFFSET_STORAGE_FILE_FILENAME_CONFIG, OFFSET_STORE_PATH.toAbsolutePath().toString());
-        config.put("debezium.source.schema.history.internal", "io.debezium.server.redis.RedisSchemaHistory");
+        config.put("debezium.source.schema.history.internal", "io.debezium.storage.redis.history.RedisSchemaHistory");
         config.put("debezium.source.snapshot.locking.mode", "none");
-
         return config;
     }
 
