@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -309,6 +310,11 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
         else {
             throw new DebeziumException("Batch processing was incomplete due to record processing errors.");
         }
+    }
+
+    @Override
+    public Optional<Boolean> tombstoneSupport() {
+        return Optional.of(true);
     }
 
     @Override
