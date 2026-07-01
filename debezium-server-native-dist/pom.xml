@@ -21,6 +21,27 @@
         <sink.http.scope>test</sink.http.scope>
         <sink.redis.scope>test</sink.redis.scope>
         <sink.jdbc.scope>test</sink.jdbc.scope>
+        <sink.http.scope>test</sink.http.scope>
+        <sink.redis.scope>test</sink.redis.scope>
+        <sink.kafka.scope>test</sink.kafka.scope>
+        <sink.infinispan.scope>test</sink.infinispan.scope>
+        <sink.jdbc.scope>test</sink.jdbc.scope>
+
+        <sink.kinesis.scope>test</sink.kinesis.scope>
+        <sink.sqs.scope>test</sink.sqs.scope>
+        <sink.sns.scope>test</sink.sns.scope>
+        <sink.pubsub.scope>test</sink.pubsub.scope>
+        <sink.pulsar.scope>test</sink.pulsar.scope>
+        <sink.eventhubs.scope>test</sink.eventhubs.scope>
+        <sink.pravega.scope>test</sink.pravega.scope>
+        <sink.nats-streaming.scope>test</sink.nats-streaming.scope>
+        <sink.nats-jetstream.scope>test</sink.nats-jetstream.scope>
+        <sink.rabbitmq.scope>test</sink.rabbitmq.scope>
+        <sink.rocketmq.scope>test</sink.rocketmq.scope>
+        <sink.milvus.scope>test</sink.milvus.scope>
+        <sink.qdrant.scope>test</sink.qdrant.scope>
+        <sink.instructlab.scope>test</sink.instructlab.scope>
+        <sink.fluss.scope>test</sink.fluss.scope>
 
         <!-- Connector dependency scopes - default to test -->
         <connector.mariadb.scope>test</connector.mariadb.scope>
