@@ -174,11 +174,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.apicurio</groupId>
-            <artifactId>apicurio-registry-utils-converter</artifactId>
-            <version>${version.apicurio}</version>
-        </dependency>
-        <dependency>
             <groupId>io.confluent</groupId>
             <artifactId>kafka-connect-protobuf-converter</artifactId>
             <scope>test</scope>
