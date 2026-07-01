@@ -85,6 +85,7 @@
         <module>debezium-server-fluss</module>
         <module>debezium-server-instructlab</module>
         <module>debezium-system-tests</module>
+        <module>debezium-server-native-dist</module>
     </modules>
 
     <dependencyManagement>
