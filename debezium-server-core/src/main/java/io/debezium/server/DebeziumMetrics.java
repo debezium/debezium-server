@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.quarkus.arc.properties.IfBuildProperty;
 
 /**
  * Reads debezium source pipeline metrics.
@@ -28,6 +29,7 @@ import io.debezium.DebeziumException;
  */
 
 @Dependent
+@IfBuildProperty(name = "quarkus.native.enabled", stringValue = "false")
 public class DebeziumMetrics {
     protected static final Logger LOGGER = LoggerFactory.getLogger(DebeziumMetrics.class);
     public static final MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
