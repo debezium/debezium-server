@@ -7,7 +7,6 @@ package io.debezium.server.rest.signal;
 
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Response;
@@ -31,7 +30,7 @@ public class SignalResource {
     }
 
     @POST
-    public Response post(@NotNull DSSignal dsSignal) {
+    public Response post(DSSignal dsSignal) {
         var signaler = registry.get(new EngineManifest("default")).signaler();
 
         if (signaler == null || !config.api().enabled()) {
