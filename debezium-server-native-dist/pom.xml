@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.debezium</groupId>
+        <artifactId>debezium-server</artifactId>
+        <version>3.7.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>debezium-server-native-dist</artifactId>
+    <packaging>jar</packaging>
+
+
+    <properties>
+        <assembly.descriptor>native-server-distribution</assembly.descriptor>
+
+        <!-- Sink dependency scopes - default to test -->
+        <sink.http.scope>test</sink.http.scope>
+        <sink.redis.scope>test</sink.redis.scope>
+        <sink.jdbc.scope>test</sink.jdbc.scope>
+
+        <!-- Connector dependency scopes - default to test -->
+        <connector.mariadb.scope>test</connector.mariadb.scope>
+        <connector.mysql.scope>test</connector.mysql.scope>
+        <connector.postgres.scope>test</connector.postgres.scope>
+        <connector.mongodb.scope>test</connector.mongodb.scope>
+        <connector.sqlserver.scope>test</connector.sqlserver.scope>
+        <connector.oracle.scope>test</connector.oracle.scope>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-logging-json</artifactId>
+        </dependency>
+
+        <!-- Connector dependencies with property-controlled scopes -->
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
+            <version>${project.version}</version>
+            <scope>${connector.postgres.scope}</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-mariadb</artifactId>
+            <version>${project.version}</version>
+            <scope>${connector.mariadb.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-mysql</artifactId>
+            <version>${project.version}</version>
+            <scope>${connector.mysql.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-mongodb</artifactId>
+            <version>${project.version}</version>
+            <scope>${connector.mongodb.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-sqlserver</artifactId>
+            <version>${project.version}</version>
+            <scope>${connector.sqlserver.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-oracle</artifactId>
+            <version>${project.version}</version>
+            <scope>${connector.oracle.scope}</scope>
+        </dependency>
+
+        <!-- Sink dependencies with property-controlled scopes -->
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-redis</artifactId>
+            <scope>${sink.redis.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-http</artifactId>
+            <scope>${sink.http.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-jdbc</artifactId>
+            <scope>${sink.jdbc.scope}</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.oracle.database.jdbc</groupId>
+                    <artifactId>ojdbc11</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.microsoft.sqlserver</groupId>
+                    <artifactId>mssql-jdbc</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.hibernate.orm</groupId>
+                    <artifactId>hibernate-core</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-hibernate-orm</artifactId>
+            <scope>${sink.jdbc.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-agroal</artifactId>
+            <scope>${sink.jdbc.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+            <scope>${sink.jdbc.scope}</scope>
+        </dependency>
+
+    </dependencies>
+
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus.version.runtime}</version>
+
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Individual sink profiles - override scope to compile -->
+        <profile>
+            <id>sink-http</id>
+            <properties>
+                <sink.http.scope>compile</sink.http.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-redis</id>
+            <properties>
+                <sink.redis.scope>compile</sink.redis.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-jdbc</id>
+            <properties>
+                <sink.jdbc.scope>compile</sink.jdbc.scope>
+                <connector.mysql.scope>compile</connector.mysql.scope>
+                <connector.postgres.scope>compile</connector.postgres.scope>
+                <connector.mariadb.scope>compile</connector.mariadb.scope>
+                <connector.sqlserver.scope>compile</connector.sqlserver.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>connector-mariadb</id>
+            <properties>
+                <connector.mariadb.scope>compile</connector.mariadb.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>connector-mysql</id>
+            <properties>
+                <connector.mysql.scope>compile</connector.mysql.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>connector-postgres</id>
+            <properties>
+                <connector.postgres.scope>compile</connector.postgres.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>connector-mongodb</id>
+            <properties>
+                <connector.mongodb.scope>compile</connector.mongodb.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>connector-sqlserver</id>
+            <properties>
+                <connector.sqlserver.scope>compile</connector.sqlserver.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>connector-oracle</id>
+            <properties>
+                <connector.oracle.scope>compile</connector.oracle.scope>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>oracle/sql/json/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>native</id>
+            <activation>
+                <property>
+                    <name>native</name>
+                </property>
+            </activation>
+            <properties>
+                <skipITs>false</skipITs>
+                <quarkus.native.enabled>true</quarkus.native.enabled>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>custom-distribution</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>${version.assembly.plugin}</version>
+                        <executions>
+                            <execution>
+                                <id>default</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <configuration>
+                                    <appendAssemblyId>false</appendAssemblyId>
+                                    <attach>true</attach>  <!-- we want attach & deploy these to Maven -->
+                                    <descriptors>
+                                        <descriptor>src/main/resources/assemblies/${assembly.descriptor}.xml
+                                        </descriptor>
+                                    </descriptors>
+                                    <tarLongFileMode>posix</tarLongFileMode>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>assembly</id>
+            <properties>
+                <quarkus.native.enabled>true</quarkus.native.enabled>
+
+                <connector.mariadb.scope>compile</connector.mariadb.scope>
+                <connector.mysql.scope>compile</connector.mysql.scope>
+                <connector.postgres.scope>compile</connector.postgres.scope>
+                <connector.mongodb.scope>compile</connector.mongodb.scope>
+                <connector.sqlserver.scope>compile</connector.sqlserver.scope>
+                <connector.oracle.scope>compile</connector.oracle.scope>
+
+                <sink.http.scope>compile</sink.http.scope>
+                <sink.redis.scope>compile</sink.redis.scope>
+                <sink.jdbc.scope>compile</sink.jdbc.scope>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>oracle/sql/json/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>${version.assembly.plugin}</version>
+                        <executions>
+                            <execution>
+                                <id>default</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <configuration>
+                                    <appendAssemblyId>false</appendAssemblyId>
+                                    <attach>true</attach>  <!-- we want attach & deploy these to Maven -->
+                                    <descriptors>
+                                        <descriptor>src/main/resources/assemblies/${assembly.descriptor}.xml
+                                        </descriptor>
+                                    </descriptors>
+                                    <tarLongFileMode>posix</tarLongFileMode>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+    </profiles>
+
+</project>
