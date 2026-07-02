@@ -24,6 +24,9 @@
         <version.nats>2.21.2</version.nats>
         <version.stan>2.2.3</version.stan>
         <version.fluss>0.9.0-incubating</version.fluss>
+        <version.ydb.sdk>2.4.3</version.ydb.sdk>
+        <version.ydb.grpc>1.68.3</version.ydb.grpc>
+        <version.ydb.jdbc>2.3.10</version.ydb.jdbc>
         <version.commons.logging>1.2</version.commons.logging>
         <version.jmx.exporter>1.0.1</version.jmx.exporter>
         <version.otel.agent>2.27.0</version.otel.agent>
@@ -230,6 +233,11 @@
             </dependency>
             <dependency>
                 <groupId>io.debezium</groupId>
+                <artifactId>debezium-server-ydb</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.debezium</groupId>
                 <artifactId>debezium-server-core</artifactId>
                 <type>test-jar</type>
                 <version>${project.version}</version>
@@ -337,6 +345,59 @@
                         <artifactId>commons-cli</artifactId>
                     </exclusion>
                 </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>tech.ydb</groupId>
+                <artifactId>ydb-sdk-bom</artifactId>
+                <version>${version.ydb.sdk}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Align grpc-* (Kafka pulls older 1.56.x, YDB SDK needs 1.68.x). -->
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-api</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-core</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-stub</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-context</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-protobuf</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-protobuf-lite</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-util</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty-shaded</artifactId>
+                <version>${version.ydb.grpc}</version>
+            </dependency>
+            <dependency>
+                <groupId>tech.ydb.jdbc</groupId>
+                <artifactId>ydb-jdbc-driver</artifactId>
+                <version>${version.ydb.jdbc}</version>
             </dependency>
 
             <!-- Testing -->
