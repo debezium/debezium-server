@@ -15,4 +15,8 @@ if [ -z "$RUNNER" ]; then
     exit 1
 fi
 
-exec "$RUNNER" -Ddebezium.deployment.server=true "$@"
+NATIVE_JAVA_PROPS=(
+    "-Ddebezium.deployment.server=true"
+)
+
+exec "$RUNNER" "${NATIVE_JAVA_PROPS[@]}" "$@"
