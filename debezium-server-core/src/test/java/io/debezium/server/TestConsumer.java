@@ -11,18 +11,17 @@ import java.util.List;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 
-import io.debezium.DebeziumException;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.util.Testing;
 
-@Dependent
+@Singleton
 @Named("test")
-public class TestConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>> {
+public class TestConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>> {
 
     final List<Object> values = Collections.synchronizedList(new ArrayList<>());
 
@@ -37,17 +36,11 @@ public class TestConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<O
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
-        records.forEach(record -> {
+    public void handle(CapturingEvents<BatchEvent> events) throws InterruptedException {
+        events.records().forEach(record -> {
             Testing.print(record);
             values.add(record.value());
-            try {
-                committer.markProcessed(record);
-            }
-            catch (InterruptedException e) {
-                throw new DebeziumException(e);
-            }
+            record.commit();
         });
     }
 

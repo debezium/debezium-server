@@ -25,9 +25,9 @@ import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.jdbc.JdbcConfiguration;
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.server.TestConfigSource;
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -78,9 +78,9 @@ public class PulsarIT {
 
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw new RuntimeException(event.getError().get());
+            throw new RuntimeException(event.getError());
         }
     }
 

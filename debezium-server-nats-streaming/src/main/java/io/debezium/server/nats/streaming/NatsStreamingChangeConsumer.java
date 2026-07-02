@@ -22,13 +22,13 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
@@ -43,7 +43,7 @@ import io.nats.streaming.StreamingConnection;
 @Named("nats-streaming")
 @Dependent
 public class NatsStreamingChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NatsStreamingChangeConsumer.class);
 
@@ -115,11 +115,9 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records,
-                            RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    public void handle(CapturingEvents<BatchEvent> events) {
 
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             if (record.value() != null) {
                 String subject = streamNameMapper.map(record.destination());
                 byte[] recordBytes = getBytes(record.value());
@@ -132,9 +130,8 @@ public class NatsStreamingChangeConsumer extends BaseChangeConsumer
                     throw new DebeziumException(e);
                 }
             }
-            committer.markProcessed(record);
+            record.commit();
         }
-        committer.markBatchFinished();
     }
 
     @Override

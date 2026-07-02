@@ -45,33 +45,39 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-oracle</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-oracle</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-postgres</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-mysql</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-mysql</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-sqlserver</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-sqlserver</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-mongodb</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-mongodb</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-db2</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-db2</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -126,6 +132,7 @@
                         <test.type>IT</test.type>
                         <test.apicurio>false</test.apicurio>
                     </systemProperties>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <runOrder>${runOrder}</runOrder>
                 </configuration>
             </plugin>
@@ -146,6 +153,7 @@
                         <configuration>
                             <skipTests>${skipITs}</skipTests>
                             <enableAssertions>true</enableAssertions>
+                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                             <runOrder>${runOrder}</runOrder>
                         </configuration>
                         <executions>

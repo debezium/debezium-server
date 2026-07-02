@@ -18,7 +18,8 @@ public class DebeziumServerFileConfigProviderProfile implements QuarkusTestProfi
         Map<String, String> config = new HashMap<String, String>();
         URL secretFile = DebeziumServerFileConfigProviderProfile.class.getClassLoader().getResource("secrets_test.txt");
 
-        config.put("debezium.source.database.user", "\\${file:" + secretFile.getPath() + ":user}");
+        config.put("smallrye.config.expression.enabled", "false");
+        config.put("debezium.source.database.user", "$\\$${file:" + secretFile.getPath() + ":user}");
 
         config.put("debezium.source.config.providers", "file");
         config.put("debezium.source.config.providers.file.class", "org.apache.kafka.common.config.provider.FileConfigProvider");

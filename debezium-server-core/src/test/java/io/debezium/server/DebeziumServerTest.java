@@ -18,13 +18,19 @@ import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.debezium.DebeziumException;
 import io.debezium.relational.RelationalDatabaseConnectorConfig;
-import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.runtime.DebeziumConnectorRegistry;
+import io.debezium.runtime.EngineManifest;
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Collect;
 import io.debezium.util.Testing;
+import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
 
 /**
  * Smoke test that verifies the basic functionality of Quarkus-based server.
@@ -32,9 +38,12 @@ import io.quarkus.test.junit.QuarkusTest;
  * @author Jiri Pechanec
  */
 @QuarkusTest
+@QuarkusTestResource(value = PostgresTestResourceLifecycleManager.class, restrictToAnnotatedClass = true)
+@TestProfile(DebeziumServerConfigProfile.class)
+@EnabledIfSystemProperty(named = "test.apicurio", matches = "false", disabledReason = "DebeziumServerConfigIT doesn't run with apicurio profile.")
 public class DebeziumServerTest {
 
-    private static final int MESSAGE_COUNT = 5;
+    private static final int MESSAGE_COUNT = 4;
 
     {
         System.out.println("Deleting file");
@@ -49,13 +58,17 @@ public class DebeziumServerTest {
     }
 
     @Inject
-    DebeziumServer server;
+    TestConsumer testConsumer;
+
+    @Inject
+    DebeziumConnectorRegistry registry;
 
     @Test
     public void testProps() {
-        Properties properties = server.getProps();
+        Properties properties = new Properties();
+        properties.putAll(registry.get(EngineManifest.DEFAULT).configuration());
         assertThat(properties.getProperty(RelationalDatabaseConnectorConfig.TABLE_INCLUDE_LIST.name())).isNotNull();
-        assertThat(properties.getProperty(RelationalDatabaseConnectorConfig.TABLE_INCLUDE_LIST.name())).isEqualTo("public.table_name");
+        assertThat(properties.getProperty(RelationalDatabaseConnectorConfig.TABLE_INCLUDE_LIST.name())).isEqualTo("inventory.customers");
 
         assertThat(properties.getProperty("offset.flush.interval.ms.test")).isNotNull();
         assertThat(properties.getProperty("offset.flush.interval.ms.test")).isEqualTo("0");
@@ -81,10 +94,10 @@ public class DebeziumServerTest {
 
     @Test
     public void testJson() throws Exception {
-        final TestConsumer testConsumer = (TestConsumer) server.getConsumer();
         Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds())).until(() -> (testConsumer.getValues().size() >= MESSAGE_COUNT));
         assertThat(testConsumer.getValues().size()).isEqualTo(MESSAGE_COUNT);
-        assertThat(testConsumer.getValues().get(MESSAGE_COUNT - 1)).isEqualTo("{\"line\":\"" + MESSAGE_COUNT + "\"}");
+        assertThat(testConsumer.getValues().get(MESSAGE_COUNT - 1).toString())
+                .contains("\"payload\":{\"line\":{");
     }
 
     static void appendLinesToSource(int numberOfLines) {

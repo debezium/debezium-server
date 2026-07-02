@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import io.debezium.testing.testcontainers.MySqlTestResourceLifecycleManager;
 import io.debezium.util.Testing;
@@ -22,15 +23,23 @@ public class RedisSchemaHistoryTestProfile implements QuarkusTestProfile {
 
     @Override
     public List<TestResourceEntry> testResources() {
-        return Arrays.asList(new TestResourceEntry(MySqlTestResourceLifecycleManager.class));
+        return Arrays.asList(new TestResourceEntry(MySqlTestResourceLifecycleManager.class),
+                new TestResourceEntry(RedisTestResourceLifecycleManager.class, Map.of(
+                        "debezium.source.schema.history.internal.redis.address", "address",
+                        "debezium.source.database.server.id", "12345")));
     }
 
     public Map<String, String> getConfigOverrides() {
         Map<String, String> config = new HashMap<String, String>();
         config.put("debezium.source." + OFFSET_STORAGE_FILE_FILENAME_CONFIG, OFFSET_STORE_PATH.toAbsolutePath().toString());
         config.put("debezium.source.schema.history.internal", "io.debezium.server.redis.RedisSchemaHistory");
-        config.put("debezium.source.database.server.id", "12345");
+        config.put("debezium.source.snapshot.locking.mode", "none");
+
         return config;
     }
 
+    @Override
+    public Set<Class<?>> getEnabledAlternatives() {
+        return Set.of(RedisSchemaHistoryIT.TestDebeziumEngineFilterStrategy.class);
+    }
 }

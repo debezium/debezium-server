@@ -5,28 +5,35 @@
  */
 package io.debezium.server.rest.signal;
 
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Response;
 
+import io.debezium.DebeziumException;
 import io.debezium.engine.DebeziumEngine;
-import io.debezium.server.DebeziumServer;
-import io.debezium.server.DebeziumServerConfig;
+import io.debezium.runtime.DebeziumConnectorRegistry;
+import io.debezium.runtime.EngineManifest;
+import io.debezium.server.configuration.DebeziumServerConfig;
 
 @Path("/signals")
 public class SignalResource {
 
-    @Inject
-    DebeziumServerConfig config;
+    private final DebeziumServerConfig config;
+    private final DebeziumConnectorRegistry registry;
 
     @Inject
-    DebeziumServer server;
+    public SignalResource(DebeziumServerConfig config, Instance<DebeziumConnectorRegistry> instance) {
+        this.config = config;
+        this.registry = instance.stream().findFirst().orElseThrow(() -> new DebeziumException("No DebeziumConnectorRegistry available"));
+    }
 
     @POST
     public Response post(@NotNull DSSignal dsSignal) {
-        var signaler = server.getSignaler();
+        var signaler = registry.get(new EngineManifest("default")).signaler();
+
         if (signaler == null || !config.api().enabled()) {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
         }

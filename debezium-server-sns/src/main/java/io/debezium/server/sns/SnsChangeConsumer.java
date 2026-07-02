@@ -31,14 +31,14 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.embedded.EmbeddedEngineChangeEvent;
 import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 import io.debezium.util.Clock;
 import io.debezium.util.Metronome;
@@ -61,7 +61,7 @@ import software.amazon.awssdk.services.sns.model.SnsException;
  */
 @Named("sns")
 @Dependent
-public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SnsChangeConsumer.class);
 
@@ -123,21 +123,20 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
 
-        if (records.isEmpty()) {
-            committer.markBatchFinished();
+        if (events.records().isEmpty()) {
             return;
         }
 
         // Group by destination (mapped topic ARN)
-        Map<String, List<ChangeEvent<Object, Object>>> groupedByDestination = records.stream()
+        Map<String, List<BatchEvent>> groupedByDestination = events.records().stream()
                 .collect(Collectors.groupingBy(record -> resolveTopicArn(record.destination())));
 
-        for (List<ChangeEvent<Object, Object>> destinationBatch : groupedByDestination.values()) {
+        for (List<BatchEvent> destinationBatch : groupedByDestination.values()) {
             for (int i = 0; i < destinationBatch.size(); i += SnsChangeConsumerConfig.MAX_BATCH_SIZE) {
-                List<ChangeEvent<Object, Object>> batch = destinationBatch.subList(i, Math.min(i + SnsChangeConsumerConfig.MAX_BATCH_SIZE, destinationBatch.size()));
+                List<BatchEvent> batch = destinationBatch.subList(i, Math.min(i + SnsChangeConsumerConfig.MAX_BATCH_SIZE, destinationBatch.size()));
                 String topicArn = resolveTopicArn(batch.getFirst().destination());
                 boolean isFifo = topicArn.endsWith(".fifo");
 
@@ -148,13 +147,11 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
 
                 sendBatchWithRetry(entries, topicArn);
 
-                for (ChangeEvent<Object, Object> record : batch) {
-                    committer.markProcessed(record);
+                for (BatchEvent record : batch) {
+                    record.commit();
                 }
             }
         }
-
-        committer.markBatchFinished();
     }
 
     private void sendBatchWithRetry(List<PublishBatchRequestEntry> entries, String topicArn) throws InterruptedException {
@@ -200,7 +197,7 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
         }
     }
 
-    private PublishBatchRequestEntry buildEntry(ChangeEvent<Object, Object> event, String batchEntryId, boolean isFifo) {
+    private PublishBatchRequestEntry buildEntry(BatchEvent event, String batchEntryId, boolean isFifo) {
         String messageBody = getMessageBody(event);
         validatePayloadSize(messageBody, event.destination());
 
@@ -225,7 +222,7 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
             // MessageGroupId: use header value if present, fallback to raw event key, then default
             String groupId = headers.getOrDefault(config.getMessageGroupIdHeader(), null);
             if (groupId == null) {
-                Object rawKey = toSourceRecord(event).key();
+                Object rawKey = event.record().key();
                 groupId = rawKey != null ? asString(rawKey) : config.getFifoDefaultGroupId();
             }
             builder.messageGroupId(groupId);
@@ -252,9 +249,8 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
      * <p>For non-string Connect types (e.g., Struct from CDC without the outbox SMT),
      * falls back to the converter-serialized output.
      */
-    private String getMessageBody(ChangeEvent<Object, Object> event) {
-        SourceRecord sourceRecord = toSourceRecord(event);
-        Object rawValue = sourceRecord.value();
+    private String getMessageBody(BatchEvent event) {
+        Object rawValue = event.record().value();
         if (rawValue == null) {
             return "";
         }
@@ -274,25 +270,13 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumEng
      * {@link SourceRecord}, where header values are still plain Java objects
      * (typically Strings for the Outbox Event Router).
      */
-    private Map<String, String> extractRawHeaders(ChangeEvent<Object, Object> record) {
-        SourceRecord sourceRecord = toSourceRecord(record);
+    private Map<String, String> extractRawHeaders(BatchEvent record) {
         Map<String, String> result = new HashMap<>();
-        for (Header header : sourceRecord.headers()) {
+        for (Header header : record.record().headers()) {
             Object value = header.value();
             result.put(header.key(), value != null ? value.toString() : "");
         }
         return result;
-    }
-
-    /**
-     * Accesses the Kafka Connect {@link SourceRecord} from the engine's change event.
-     *
-     * <p>This is not part of the public Debezium Engine API but is an implementation detail
-     * on which Debezium Server can rely (same pattern used by the Qdrant sink).
-     */
-    @SuppressWarnings("rawtypes")
-    private SourceRecord toSourceRecord(ChangeEvent<Object, Object> record) {
-        return ((EmbeddedEngineChangeEvent) record).sourceRecord();
     }
 
     private void validatePayloadSize(String messageBody, String destination) {

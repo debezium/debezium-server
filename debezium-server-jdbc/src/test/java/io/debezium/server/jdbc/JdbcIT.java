@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
@@ -23,9 +22,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.debezium.server.DebeziumServer;
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -50,9 +48,6 @@ public class JdbcIT {
     private static final Logger LOGGER = LoggerFactory.getLogger(JdbcIT.class);
     private static final int INITIAL_RECORD_COUNT = 4;
 
-    @Inject
-    DebeziumServer server;
-
     @BeforeAll
     static void setupOffsetFile() {
         LOGGER.info("Setting up offset file before all tests");
@@ -60,9 +55,9 @@ public class JdbcIT {
         Testing.Files.createTestingFile(JdbcTestConfigSource.OFFSET_STORE_PATH);
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 

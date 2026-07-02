@@ -40,13 +40,12 @@ import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
 import io.debezium.data.Envelope;
-import io.debezium.embedded.EmbeddedEngineChangeEvent;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 import io.debezium.server.util.RetryExecutor;
 
@@ -61,8 +60,7 @@ import io.debezium.server.util.RetryExecutor;
  */
 @Named("fluss")
 @Dependent
-public class FlussChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class FlussChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FlussChangeConsumer.class);
 
@@ -129,43 +127,35 @@ public class FlussChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
 
-        if (records.isEmpty()) {
-            committer.markBatchFinished();
+        if (events.records().isEmpty()) {
             return;
         }
 
-        final Map<String, List<ChangeEvent<Object, Object>>> groupedByDestination = records.stream()
+        final Map<String, List<BatchEvent>> groupedByDestination = events.records().stream()
                 .collect(Collectors.groupingBy(r -> streamNameMapper.map(r.destination())));
 
-        for (Map.Entry<String, List<ChangeEvent<Object, Object>>> entry : groupedByDestination.entrySet()) {
+        for (Map.Entry<String, List<BatchEvent>> entry : groupedByDestination.entrySet()) {
             final String destination = entry.getKey();
             final TablePath tablePath = resolveTablePath(destination);
-            final SourceRecord firstSourceRecord = toSourceRecord(entry.getValue().getFirst());
+            final SourceRecord firstSourceRecord = entry.getValue().getFirst().record();
             final TableDescriptor descriptor = getOrFetchDescriptor(tablePath, firstSourceRecord);
             final boolean hasPrimaryKey = descriptor.hasPrimaryKey();
             validatePrimaryKeyMode(tablePath, hasPrimaryKey);
 
-            for (ChangeEvent<Object, Object> record : entry.getValue()) {
+            for (BatchEvent record : entry.getValue()) {
                 writeRecordWithRetry(record, tablePath, descriptor, hasPrimaryKey);
-                committer.markProcessed(record);
+                record.commit();
             }
 
             flushWriters(tablePath, hasPrimaryKey);
         }
 
-        committer.markBatchFinished();
     }
 
-    // Not part of the public Debezium Engine API; Debezium Server may rely on this internal detail.
-    @SuppressWarnings("rawtypes")
-    protected SourceRecord toSourceRecord(ChangeEvent<Object, Object> record) {
-        return ((EmbeddedEngineChangeEvent) record).sourceRecord();
-    }
-
-    private void writeRecordWithRetry(ChangeEvent<Object, Object> record, TablePath tablePath,
+    private void writeRecordWithRetry(BatchEvent record, TablePath tablePath,
                                       TableDescriptor descriptor, boolean hasPrimaryKey)
             throws InterruptedException {
         retryExecutor.executeWithRetry(
@@ -177,19 +167,18 @@ public class FlussChangeConsumer extends BaseChangeConsumer
                 "Writing to Fluss " + tablePath);
     }
 
-    private void writeRecord(ChangeEvent<Object, Object> record, TablePath tablePath,
+    private void writeRecord(BatchEvent record, TablePath tablePath,
                              TableDescriptor descriptor, boolean hasPrimaryKey) {
 
-        final SourceRecord sourceRecord = toSourceRecord(record);
-        if (sourceRecord.value() == null) {
+        if (record.record().value() == null) {
             if (hasPrimaryKey) {
                 LOGGER.debug("Received tombstone for {}, skipping (no before data available)", tablePath);
             }
             return;
         }
 
-        final Schema valueSchema = sourceRecord.valueSchema();
-        final Struct valueStruct = (Struct) sourceRecord.value();
+        final Schema valueSchema = record.record().valueSchema();
+        final Struct valueStruct = (Struct) record.record().value();
 
         final String op;
         final Struct after;

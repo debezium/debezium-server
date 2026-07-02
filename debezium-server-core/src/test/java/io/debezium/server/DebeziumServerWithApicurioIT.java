@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.debezium.DebeziumException;
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -33,7 +33,7 @@ public class DebeziumServerWithApicurioIT {
 
     private static final int MESSAGE_COUNT = 4;
     @Inject
-    DebeziumServer server;
+    TestConsumer testConsumer;
 
     {
         Testing.Files.delete(TestConfigSource.OFFSET_STORE_PATH);
@@ -45,17 +45,17 @@ public class DebeziumServerWithApicurioIT {
         }
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) {
         if (!event.isSuccess()) {
-            throw new DebeziumException(event.getError().get());
+            throw new DebeziumException(event.getError());
         }
     }
 
     @Test
     @EnabledIfSystemProperty(named = "test.apicurio.converter.format", matches = "avro")
-    public void testPostgresWithApicurioAvro() throws Exception {
+    public void testPostgresWithApicurioAvro() {
         Testing.Print.enable();
-        final TestConsumer testConsumer = (TestConsumer) server.getConsumer();
+
         Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
                 .until(() -> (testConsumer.getValues().size() >= MESSAGE_COUNT));
         assertThat(testConsumer.getValues().size()).isEqualTo(MESSAGE_COUNT);
@@ -66,9 +66,9 @@ public class DebeziumServerWithApicurioIT {
 
     @Test
     @EnabledIfSystemProperty(named = "test.apicurio.converter.format", matches = "json")
-    public void testPostgresWithApicurioExtJson() throws Exception {
+    public void testPostgresWithApicurioExtJson() {
         Testing.Print.enable();
-        final TestConsumer testConsumer = (TestConsumer) server.getConsumer();
+
         Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
                 .until(() -> (testConsumer.getValues().size() >= MESSAGE_COUNT));
         assertThat(testConsumer.getValues().size()).isEqualTo(MESSAGE_COUNT);

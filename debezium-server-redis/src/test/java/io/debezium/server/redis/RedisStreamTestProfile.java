@@ -31,6 +31,10 @@ public class RedisStreamTestProfile implements QuarkusTestProfile {
         config.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         config.put("debezium.source." + OFFSET_STORAGE_FILE_FILENAME_CONFIG, OFFSET_STORE_PATH.toAbsolutePath().toString());
         config.put("debezium.sink.redis.memory.threshold.percentage", "0");
+        config.put("debezium.format.schemas.enable", "true");
+        config.put("debezium.format.key.schemas.enable", "true");
+        config.put("debezium.format.value.schemas.enable", "true");
+
         return config;
     }
 

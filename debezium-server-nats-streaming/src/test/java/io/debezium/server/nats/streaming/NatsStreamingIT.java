@@ -18,8 +18,8 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.nats.streaming.Message;
@@ -83,9 +83,9 @@ public class NatsStreamingIT {
         }
     }
 
-    void connectorCompleted(@Observes final ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes final DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 

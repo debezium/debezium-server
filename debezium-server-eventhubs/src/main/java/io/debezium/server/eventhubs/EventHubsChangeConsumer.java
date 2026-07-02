@@ -28,13 +28,13 @@ import com.azure.messaging.eventhubs.EventHubProducerClient;
 import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.engine.ChangeEvent;
-import io.debezium.engine.DebeziumEngine;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 
 /**
@@ -45,7 +45,7 @@ import io.debezium.server.api.DebeziumServerSink;
 @Named("eventhubs")
 @Dependent
 public class EventHubsChangeConsumer extends BaseChangeConsumer
-        implements DebeziumEngine.ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EventHubsChangeConsumer.class);
 
@@ -127,14 +127,14 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
     }
 
-    private String getPartitionKey(ChangeEvent<Object, Object> record) {
+    private String getPartitionKey(BatchEvent record) {
         String initialPartitionKey = getString(record.key());
         return hashMessageFunction
                 .map(hasher -> hasher.hash().apply(initialPartitionKey))
                 .orElse(initialPartitionKey);
     }
 
-    private Integer getPartitionId(ChangeEvent<Object, Object> record) {
+    private Integer getPartitionId(BatchEvent record) {
         if (record.partition() == null) {
             return BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID;
         }
@@ -144,20 +144,18 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records,
-                            RecordCommitter<ChangeEvent<Object, Object>> committer)
-            throws InterruptedException {
+    public void handle(CapturingEvents<BatchEvent> events) {
         LOGGER.trace("Event Hubs sink adapter processing change events");
 
         batchManager.initializeBatch();
 
-        for (int recordIndex = 0; recordIndex < records.size();) {
+        for (int recordIndex = 0; recordIndex < events.records().size();) {
             int start = recordIndex;
             LOGGER.trace("Emitting events starting from index {}", start);
 
             // The inner loop adds as many records to the batch as possible, keeping track of the batch size
-            for (; recordIndex < records.size(); recordIndex++) {
-                ChangeEvent<Object, Object> record = records.get(recordIndex);
+            for (; recordIndex < events.records().size(); recordIndex++) {
+                BatchEvent record = events.records().get(recordIndex);
 
                 if (null == record.value()) {
                     continue;
@@ -198,7 +196,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                             }
                             break;
                         case PARTITIONID:
-                            targetPartitionId = getPartitionId(record);
+                            targetPartitionId = record.partition();
                             break;
                         default:
                             if (record.key() != null) {
@@ -241,11 +239,10 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
         batchManager.closeAndEmitBatches();
 
-        LOGGER.trace("Marking {} records as processed.", records.size());
-        for (ChangeEvent<Object, Object> record : records) {
-            committer.markProcessed(record);
+        LOGGER.trace("Marking {} records as processed.", events.records().size());
+        for (BatchEvent record : events.records()) {
+            record.commit();
         }
-        committer.markBatchFinished();
         LOGGER.trace("Batch marked finished");
     }
 

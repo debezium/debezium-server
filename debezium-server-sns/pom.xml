@@ -63,9 +63,10 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-postgres</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
             <scope>test</scope>
+            <version>${project.version}</version>
         </dependency>
         <!-- SQS client for test verification (subscribe SQS to SNS topic) -->
         <dependency>
@@ -133,6 +134,7 @@
                         <AWS_ACCESS_KEY_ID>localstack</AWS_ACCESS_KEY_ID>
                         <AWS_SECRET_ACCESS_KEY>localstack</AWS_SECRET_ACCESS_KEY>
                     </environmentVariables>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <runOrder>${runOrder}</runOrder>
                 </configuration>
             </plugin>

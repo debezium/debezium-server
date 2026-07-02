@@ -20,8 +20,8 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.server.TestConfigSource;
-import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
 import io.debezium.util.Testing;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -48,9 +48,9 @@ public class RocketMqIT {
         }
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) {
         if (!event.isSuccess()) {
-            throw new RuntimeException(event.getError().get());
+            throw new RuntimeException(event.getError());
         }
     }
 

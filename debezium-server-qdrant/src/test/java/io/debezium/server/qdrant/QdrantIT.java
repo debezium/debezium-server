@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 
 import io.debezium.connector.postgresql.connection.PostgresConnection;
 import io.debezium.jdbc.JdbcConfiguration;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.server.TestConfigSource;
-import io.debezium.server.events.ConnectorCompletedEvent;
 import io.debezium.util.Testing;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
@@ -98,9 +98,9 @@ public class QdrantIT {
         }
     }
 
-    void connectorCompleted(@Observes ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw new RuntimeException(event.getError().get());
+            throw new RuntimeException(event.getError());
         }
     }
 

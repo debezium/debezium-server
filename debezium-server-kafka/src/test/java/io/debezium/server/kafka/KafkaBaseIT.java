@@ -26,8 +26,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 
-import io.debezium.server.events.ConnectorCompletedEvent;
-import io.debezium.server.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.ConnectorStartedEvent;
+import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.util.Testing;
 
 public abstract class KafkaBaseIT {
@@ -52,9 +52,9 @@ public abstract class KafkaBaseIT {
         consumer = new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer());
     }
 
-    void connectorCompleted(@Observes final ConnectorCompletedEvent event) throws Exception {
+    void connectorCompleted(@Observes final DebeziumCompletionEvent event) throws Exception {
         if (!event.isSuccess()) {
-            throw (Exception) event.getError().get();
+            throw (Exception) event.getError();
         }
     }
 

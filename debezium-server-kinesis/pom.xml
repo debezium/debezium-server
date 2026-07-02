@@ -77,9 +77,10 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-postgres</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
             <scope>test</scope>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
     <build>
@@ -110,6 +111,13 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <executions>
                     <execution>
@@ -126,6 +134,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <skipTests>${skipITs}</skipTests>
                     <enableAssertions>true</enableAssertions>
                     <systemProperties>

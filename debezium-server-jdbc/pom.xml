@@ -24,12 +24,6 @@
             <artifactId>debezium-connector-jdbc</artifactId>
         </dependency>
 
-        <!-- Debezium Embedded - for EmbeddedEngineChangeEvent -->
-        <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-embedded</artifactId>
-        </dependency>
-
         <!-- Kafka Connect API - for SinkRecord -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -73,9 +67,10 @@
 
         <!-- Source Connectors for Testing -->
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-postgres</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
             <scope>test</scope>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 
@@ -116,6 +111,7 @@
                     <systemPropertyVariables>
                         <test.type>IT</test.type>
                     </systemPropertyVariables>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>
             <plugin>

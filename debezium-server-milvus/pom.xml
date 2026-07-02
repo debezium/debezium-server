@@ -78,9 +78,10 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-postgres</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
             <scope>test</scope>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
     <build>
@@ -132,6 +133,7 @@
                     <systemProperties>
                         <test.type>IT</test.type>
                     </systemProperties>
+                    <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <runOrder>${runOrder}</runOrder>
                 </configuration>
             </plugin>

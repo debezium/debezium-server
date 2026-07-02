@@ -24,7 +24,6 @@ import jakarta.inject.Named;
 
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.Header;
-import org.apache.kafka.connect.source.SourceRecord;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.slf4j.Logger;
@@ -36,13 +35,13 @@ import io.debezium.annotation.Immutable;
 import io.debezium.annotation.VisibleForTesting;
 import io.debezium.config.Field;
 import io.debezium.data.Envelope;
-import io.debezium.embedded.EmbeddedEngineChangeEvent;
-import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine.ChangeConsumer;
-import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 import io.debezium.util.Strings;
 
@@ -54,8 +53,7 @@ import io.debezium.util.Strings;
  */
 @Named("instructlab")
 @Dependent
-public class InstructLabSinkConsumer extends BaseChangeConsumer
-        implements ChangeConsumer<ChangeEvent<Object, Object>>, DebeziumServerSink {
+public class InstructLabSinkConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(InstructLabSinkConsumer.class);
 
@@ -106,12 +104,12 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public void handleBatch(List<ChangeEvent<Object, Object>> records, RecordCommitter<ChangeEvent<Object, Object>> committer)
+    public void handle(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
-        LOGGER.trace("Processing batch of {} events.", records.size());
+        LOGGER.trace("Processing batch of {} events.", events.records().size());
         // Read each event and build file batch data
         final Map<String, QnaFile> batchFiles = new HashMap<>();
-        for (ChangeEvent<Object, Object> record : records) {
+        for (BatchEvent record : events.records()) {
             if (record.value() != null) {
                 for (TaxonomyMapping mapping : mappings) {
                     // Filter by topic
@@ -136,7 +134,7 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
                     }
                 }
             }
-            committer.markProcessed(record);
+            record.commit();
         }
 
         // Flush files
@@ -148,9 +146,6 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
                 throw new DebeziumException("Failed to flush file: " + file.getFileName(), e);
             }
         }
-
-        // Mark finished
-        committer.markBatchFinished();
     }
 
     /**
@@ -160,27 +155,26 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
      * @param mappingValue the mapping value, may be {@code null}
      * @return the mapping value reference or {@code null} if not found
      */
-    private String getChangeMappingValue(ChangeEvent<Object, Object> changeEvent, MappingValue mappingValue) {
+    private String getChangeMappingValue(BatchEvent changeEvent, MappingValue mappingValue) {
         if (mappingValue != null) {
-            final SourceRecord record = getSourceRecord(changeEvent);
             if (mappingValue.isHeader()) {
-                for (Header header : record.headers()) {
+                for (Header header : changeEvent.record().headers()) {
                     if (header.key().equals(mappingValue.getValue())) {
                         return String.valueOf(header.value());
                     }
                 }
             }
             else if (mappingValue.isField()) {
-                if (record.valueSchema() != null && Envelope.isEnvelopeSchema(record.valueSchema())) {
+                if (changeEvent.record().valueSchema() != null && Envelope.isEnvelopeSchema(changeEvent.record().valueSchema())) {
                     // Debezium event
-                    final Struct after = ((Struct) record.value()).getStruct(Envelope.FieldName.AFTER);
+                    final Struct after = ((Struct) changeEvent.record().value()).getStruct(Envelope.FieldName.AFTER);
                     if (after != null && after.schema().field(mappingValue.getValue()) != null) {
                         return String.valueOf(after.get(mappingValue.getValue()));
                     }
                 }
-                else if (record.valueSchema() != null) {
+                else if (changeEvent.record().valueSchema() != null) {
                     // Flattened event
-                    final Struct struct = (Struct) record.value();
+                    final Struct struct = (Struct) changeEvent.record().value();
                     if (struct != null && struct.schema().field(mappingValue.getValue()) != null) {
                         return String.valueOf(struct.get(mappingValue.getValue()));
                     }
@@ -191,10 +185,6 @@ public class InstructLabSinkConsumer extends BaseChangeConsumer
             }
         }
         return null;
-    }
-
-    private SourceRecord getSourceRecord(ChangeEvent<Object, Object> record) {
-        return ((EmbeddedEngineChangeEvent<Object, Object, Object>) record).sourceRecord();
     }
 
     private String createTaxonomyQnAPath(String basePath, String domain) {

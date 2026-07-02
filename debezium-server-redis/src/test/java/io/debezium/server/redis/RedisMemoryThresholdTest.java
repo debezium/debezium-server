@@ -15,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.connect.source.SourceRecord;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,8 @@ import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.engine.Header;
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.storage.redis.RedisClient;
 import io.debezium.util.Collect;
 
@@ -55,20 +58,38 @@ public class RedisMemoryThresholdTest {
         setField(consumer, RedisStreamChangeConsumer.class, "redisMemoryThreshold",
                 new RedisMemoryThreshold(new RedisClientImpl(_10MB, _20MB), consumerConfig));
 
-        List<ChangeEvent<Object, Object>> batch = List.of(new HeartbeatChangeEvent(HEARTBEAT_PREFIX + ".testc"));
-        RecordCommitter<ChangeEvent<Object, Object>> committer = new NoOpRecordCommitter();
+        CapturingEvents<BatchEvent> batch = new CapturingEvents<>() {
+            @Override
+            public List<BatchEvent> records() {
+                return List.of(new HeartbeatBatchEvent());
+            }
+
+            @Override
+            public String destination() {
+                return HEARTBEAT_PREFIX + ".testc";
+            }
+
+            @Override
+            public String source() {
+                return "";
+            }
+
+            @Override
+            public String engine() {
+                return "";
+            }
+        };
 
         Awaitility.await()
                 .atMost(3, TimeUnit.SECONDS)
-                .until(consume(consumer, batch, committer)::isDone);
+                .until(consume(consumer, batch)::isDone);
     }
 
     private Future<?> consume(RedisStreamChangeConsumer consumer,
-                              List<ChangeEvent<Object, Object>> changeEvents,
-                              RecordCommitter<ChangeEvent<Object, Object>> committer) {
+                              CapturingEvents<BatchEvent> changeEvents) {
         return executor.submit(() -> {
             try {
-                consumer.handleBatch(changeEvents, committer);
+                consumer.handle(changeEvents);
             }
             catch (InterruptedException e) {
                 throw new RuntimeException(e);
@@ -160,11 +181,9 @@ public class RedisMemoryThresholdTest {
         }
     }
 
-    private static class HeartbeatChangeEvent implements ChangeEvent<Object, Object> {
-        private final String destination;
+    private static class HeartbeatBatchEvent implements BatchEvent {
 
-        HeartbeatChangeEvent(String destination) {
-            this.destination = destination;
+        HeartbeatBatchEvent() {
         }
 
         @Override
@@ -178,13 +197,23 @@ public class RedisMemoryThresholdTest {
         }
 
         @Override
-        public String destination() {
-            return destination;
+        public Integer partition() {
+            return null;
         }
 
         @Override
-        public Integer partition() {
+        public SourceRecord record() {
             return null;
+        }
+
+        @Override
+        public String destination() {
+            return HEARTBEAT_PREFIX + ".testc";
+        }
+
+        @Override
+        public void commit() {
+
         }
 
         @Override

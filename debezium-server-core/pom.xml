@@ -12,11 +12,6 @@
     <packaging>jar</packaging>
 
     <dependencies>
-        <!-- Quarkus extensions -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-core</artifactId>
-        </dependency>
 
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -34,21 +29,17 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-config-yaml</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-core</artifactId>
+        </dependency>
 
-        <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-embedded</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-log4j12</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+
         <dependency>
             <groupId>io.debezium</groupId>
             <artifactId>debezium-storage-configmap</artifactId>
@@ -150,9 +141,10 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-connector-postgres</artifactId>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-postgres</artifactId>
             <scope>test</scope>
+            <version>${project.version}</version>
         </dependency>
         <!-- Vitess/grpc dependency conflicts with version required by schema registry.
              We thus change the version just for the sake of compatibility testing.
@@ -229,6 +221,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <argLine>--add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                     <skipTests>${skipITs}</skipTests>
                     <enableAssertions>true</enableAssertions>
                     <systemPropertyVariables>
@@ -254,6 +247,7 @@
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <version>${version.failsafe.plugin}</version>
                         <configuration>
+                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                             <skipTests>${skipITs}</skipTests>
                             <enableAssertions>true</enableAssertions>
                             <runOrder>${runOrder}</runOrder>
@@ -418,6 +412,7 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
+                            <argLine>${mockito.argLine} --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED</argLine>
                             <skipTests>${skipITs}</skipTests>
                             <enableAssertions>true</enableAssertions>
                             <systemPropertyVariables>
