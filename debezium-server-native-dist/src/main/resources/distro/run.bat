@@ -13,4 +13,6 @@ if "%RUNNER%"=="" (
     exit /b 1
 )
 
-"%RUNNER%" %*
+set "NATIVE_JAVA_PROPS=-Ddebezium.deployment.server=true"
+
+"%RUNNER%" %NATIVE_JAVA_PROPS% %*
