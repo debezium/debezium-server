@@ -6,9 +6,15 @@
 package io.debezium.server;
 
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -46,12 +52,22 @@ import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.Startup;
 
 /**
- * <p>The entry point of the Quarkus-based standalone server. The server is configured via Quarkus/Microprofile Configuration sources
- * and provides few out-of-the-box target implementations.</p>
- * <p>The implementation uses CDI to find all classes that implements {@link DebeziumEngine.ChangeConsumer} interface.
- * The candidate classes should be annotated with {@code @Named} annotation and should be {@code Dependent}.</p>
- * <p>The configuration option {@code debezium.consumer} provides a name of the consumer that should be used and the value
- * must match to exactly one of the implementation classes.</p>
+ * <p>
+ * The entry point of the Quarkus-based standalone server. The server is
+ * configured via Quarkus/Microprofile Configuration sources
+ * and provides few out-of-the-box target implementations.
+ * </p>
+ * <p>
+ * The implementation uses CDI to find all classes that implements
+ * {@link DebeziumEngine.ChangeConsumer} interface.
+ * The candidate classes should be annotated with {@code @Named} annotation and
+ * should be {@code Dependent}.
+ * </p>
+ * <p>
+ * The configuration option {@code debezium.consumer} provides a name of the
+ * consumer that should be used and the value
+ * must match to exactly one of the implementation classes.
+ * </p>
  *
  * @author Jiri Pechanec
  *
@@ -86,17 +102,41 @@ public class DebeziumServer {
 
     private static final String PROP_ENGINE_FACTORY = PROP_PREFIX + "engine.factory";
 
-    private static final String FORMAT_JSON = Json.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_JSON_BYTE_ARRAY = JsonByteArray.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_CLOUDEVENT = CloudEvents.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_AVRO = Avro.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_PROTOBUF = Protobuf.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_BINARY = Binary.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_STRING = SimpleString.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_CONNECT = Connect.class.getSimpleName().toLowerCase();
-    private static final String FORMAT_CLIENT_PROVIDED = ClientProvided.class.getSimpleName().toLowerCase();
+    private static final String FORMAT_JSON = Json.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_JSON_BYTE_ARRAY = JsonByteArray.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_CLOUDEVENT = CloudEvents.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_AVRO = Avro.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_PROTOBUF = Protobuf.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_BINARY = Binary.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_STRING = SimpleString.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_CONNECT = Connect.class.getSimpleName().toLowerCase(Locale.ROOT);
+    private static final String FORMAT_CLIENT_PROVIDED = ClientProvided.class.getSimpleName().toLowerCase(Locale.ROOT);
 
     private static final Pattern SHELL_PROPERTY_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+_+[a-zA-Z0-9_]+$");
+
+    /**
+     * Encapsulates property mapping configuration with mutable state (property names and normalized names cache).
+     * This is not a pure value object since it holds mutable collections that are modified during iteration.
+     */
+    private static final class ConfigToPropertiesMapping {
+        final String oldPrefix;
+        final String newPrefix;
+        final Set<String> propertyNames;
+        final Map<String, String> normalizedNames;
+        final boolean overwrite;
+        final boolean removeProcessedPropertyNames;
+
+        private ConfigToPropertiesMapping(String oldPrefix, String newPrefix, Set<String> propertyNames,
+                                          Map<String, String> normalizedNames, boolean overwrite, boolean removeProcessedPropertyNames) {
+            this.oldPrefix = oldPrefix;
+            this.newPrefix = newPrefix;
+            this.propertyNames = propertyNames;
+            this.normalizedNames = normalizedNames;
+            this.overwrite = overwrite;
+            this.removeProcessedPropertyNames = removeProcessedPropertyNames;
+        }
+
+    }
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private int returnCode = 0;
@@ -128,33 +168,14 @@ public class DebeziumServer {
         final Class<Any> valueFormat = (Class<Any>) getFormat(config, PROP_VALUE_FORMAT);
         final Class<Any> headerFormat = (Class<Any>) getHeaderFormat(config);
 
-        configToProperties(config, props, PROP_SOURCE_PREFIX, "", true);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "key.converter.", true);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "value.converter.", true);
-        configToProperties(config, props, PROP_FORMAT_PREFIX, "header.converter.", true);
-        configToProperties(config, props, PROP_KEY_FORMAT_PREFIX, "key.converter.", true);
-        configToProperties(config, props, PROP_VALUE_FORMAT_PREFIX, "value.converter.", true);
-        configToProperties(config, props, PROP_HEADER_FORMAT_PREFIX, "header.converter.", true);
-        configToProperties(config, props, PROP_SINK_PREFIX + name + ".", SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", false);
-        configToProperties(config, props, PROP_SINK_PREFIX + name + ".", PROP_OFFSET_STORAGE_PREFIX + name + ".", false);
+        populateEngineProperties(config, name, props);
 
-        final Optional<String> transforms = config.getOptionalValue(PROP_TRANSFORMS, String.class);
-        if (transforms.isPresent()) {
-            props.setProperty("transforms", transforms.get());
-            configToProperties(config, props, PROP_TRANSFORMS_PREFIX, "transforms.", true);
-        }
-
-        final Optional<String> predicates = config.getOptionalValue(PROP_PREDICATES, String.class);
-        if (predicates.isPresent()) {
-            props.setProperty("predicates", predicates.get());
-            configToProperties(config, props, PROP_PREDICATES_PREFIX, "predicates.", true);
-        }
-
-        props.setProperty("name", name);
         LOGGER.debug("Configuration for DebeziumEngine: {}", props);
 
         final Optional<String> engineFactory = config.getOptionalValue(PROP_ENGINE_FACTORY, String.class);
-        engine = DebeziumEngine.create(keyFormat, valueFormat, headerFormat, engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
+        engine = DebeziumEngine
+                .create(keyFormat, valueFormat, headerFormat,
+                        engineFactory.orElse(ConvertingAsyncEngineBuilderFactory.class.getName()))
                 .using(props)
                 .using((DebeziumEngine.ConnectorCallback) health)
                 .using((DebeziumEngine.CompletionCallback) health)
@@ -172,25 +193,157 @@ public class DebeziumServer {
         LOGGER.info("Engine executor started");
     }
 
-    private void configToProperties(Config config, Properties props, String oldPrefix, String newPrefix, boolean overwrite) {
-        for (String name : config.getPropertyNames()) {
-            String updatedPropertyName = null;
-            if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
-                updatedPropertyName = name.replace("_", ".").toLowerCase();
-            }
-            if (updatedPropertyName != null && updatedPropertyName.startsWith(oldPrefix)) {
-                String finalPropertyName = newPrefix + updatedPropertyName.substring(oldPrefix.length());
-                if (overwrite || !props.containsKey(finalPropertyName)) {
-                    props.setProperty(finalPropertyName, config.getOptionalValue(name, String.class).orElse(""));
+    /**
+     * Internal helper for mapping configuration to Debezium Engine properties.
+     * <p>
+     * This method is not part of the public API and is intended for internal use
+     * within the io.debezium.server package and for testing only.
+     */
+    void populateEngineProperties(Config config, String name, Properties props) {
+
+        // Get property names as a mutable set to remove properties as they get processed, avoiding duplication
+        Set<String> remainingPropertyNames = new LinkedHashSet<>();
+        Map<String, String> normalizedNames = new HashMap<>();
+        for (String propName : config.getPropertyNames()) {
+            remainingPropertyNames.add(propName);
+            normalizedNames.put(propName, normalizePropertyName(propName));
+        }
+
+        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SOURCE_PREFIX, "", remainingPropertyNames, normalizedNames, true, true));
+        // Simple smart prefix handling - works for any prefix
+
+        // Handle granular (debezium.format.key|value|header.*) props first and remove from the potential names
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_KEY_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, normalizedNames, true, true));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_VALUE_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, normalizedNames, true, true));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_HEADER_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, normalizedNames, true, true));
+
+        // Remove the format-selector properties (debezium.format.key/value/header = avro|json|...) so that
+        // the generic debezium.format.* pass below does not propagate them as nonsensical converter
+        // sub-properties (e.g. key.converter.key = avro, header.converter.value = avro).
+        // Their values have already been consumed above via getFormat() / getHeaderFormat().
+        removePropertyName(remainingPropertyNames, normalizedNames, PROP_KEY_FORMAT);
+        removePropertyName(remainingPropertyNames, normalizedNames, PROP_VALUE_FORMAT);
+        removePropertyName(remainingPropertyNames, normalizedNames, PROP_HEADER_FORMAT);
+
+        // Handle the remaining generic (debezium.format.*) props. Don't remove them so that they can apply to key, value and header
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "key.converter.", remainingPropertyNames, normalizedNames, false, false));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "value.converter.", remainingPropertyNames, normalizedNames, false, false));
+        configToProperties(config, props,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, "header.converter.", remainingPropertyNames, normalizedNames, false, false));
+
+        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
+                SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + name + ".", remainingPropertyNames, normalizedNames, false, false));
+        configToProperties(config, props, new ConfigToPropertiesMapping(PROP_SINK_PREFIX + name + ".",
+                PROP_OFFSET_STORAGE_PREFIX + name + ".", remainingPropertyNames, normalizedNames, false, true));
+
+        final Optional<String> transforms = config.getOptionalValue(PROP_TRANSFORMS, String.class);
+        if (transforms.isPresent()) {
+            props.setProperty("transforms", transforms.get());
+            configToProperties(config, props,
+                    new ConfigToPropertiesMapping(PROP_TRANSFORMS_PREFIX, "transforms.", remainingPropertyNames, normalizedNames, true, true));
+        }
+
+        final Optional<String> predicates = config.getOptionalValue(PROP_PREDICATES, String.class);
+        if (predicates.isPresent()) {
+            props.setProperty("predicates", predicates.get());
+            configToProperties(config, props,
+                    new ConfigToPropertiesMapping(PROP_PREDICATES_PREFIX, "predicates.", remainingPropertyNames, normalizedNames, true, true));
+        }
+
+        props.setProperty("name", name);
+    }
+
+    private void configToProperties(Config config, Properties props, ConfigToPropertiesMapping mapping) {
+
+        // Use iterator to safely remove items while iterating
+        Iterator<String> iterator = mapping.propertyNames.iterator();
+        while (iterator.hasNext()) {
+            String name = iterator.next();
+            boolean processed = false;
+
+            String normalizedName = mapping.normalizedNames.get(name);
+            if (normalizedName.startsWith(mapping.oldPrefix)) {
+                String finalPropertyName = mapping.newPrefix + normalizedName.substring(mapping.oldPrefix.length());
+                if (mapping.overwrite || !props.containsKey(finalPropertyName)) {
+                    props.setProperty(finalPropertyName, resolvePropertyValue(config, name, normalizedName));
                 }
+                processed = true;
             }
-            else if (name.startsWith(oldPrefix)) {
-                String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
-                if (overwrite || !props.containsKey(finalPropertyName)) {
-                    props.setProperty(finalPropertyName, config.getConfigValue(name).getValue());
+            else if (name.startsWith(mapping.oldPrefix)) {
+                String finalPropertyName = mapping.newPrefix + name.substring(mapping.oldPrefix.length());
+                if (mapping.overwrite || !props.containsKey(finalPropertyName)) {
+                    props.setProperty(finalPropertyName, resolvePropertyValue(config, name, normalizedName));
                 }
+                processed = true;
+            }
+
+            // Remove processed properties to avoid duplicate processing
+            if (processed && mapping.removeProcessedPropertyNames) {
+                iterator.remove();
             }
         }
+    }
+
+    private void removePropertyName(Set<String> propertyNames, Map<String, String> normalizedNames, String propertyName) {
+        propertyNames.removeIf(name -> propertyName.equals(normalizedNames.get(name)));
+    }
+
+    private String resolvePropertyValue(Config config, String originalName, String normalizedName) {
+        // Prefer canonical normalized lookup so source precedence is handled by config resolution.
+        if (normalizedName != null) {
+            Optional<String> normalizedValue = config.getOptionalValue(normalizedName, String.class);
+            if (normalizedValue.isPresent()) {
+                return normalizedValue.get();
+            }
+        }
+
+        Optional<String> originalValue = config.getOptionalValue(originalName, String.class);
+        if (originalValue.isPresent()) {
+            return originalValue.get();
+        }
+
+        // Fall back to ConfigValue-based lookup so missing values fail loudly rather than defaulting to "".
+        if (normalizedName != null) {
+            try {
+                return config.getConfigValue(normalizedName).getValue();
+            }
+            catch (NoSuchElementException e) {
+                // ignore and fall through to originalName lookup
+            }
+        }
+
+        return config.getConfigValue(originalName).getValue();
+    }
+
+    private String normalizePropertyName(String name) {
+        if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
+            // Handle MicroProfile escaping: __ encodes a literal underscore, _ encodes a dot
+            StringBuilder normalized = new StringBuilder(name.length());
+            int i = 0;
+            while (i < name.length()) {
+                if (i + 1 < name.length() && name.charAt(i) == '_' && name.charAt(i + 1) == '_') {
+                    // Double underscore → literal underscore
+                    normalized.append('_');
+                    i += 2;
+                }
+                else if (name.charAt(i) == '_') {
+                    // Single underscore → dot
+                    normalized.append('.');
+                    i++;
+                }
+                else {
+                    normalized.append(name.charAt(i));
+                    i++;
+                }
+            }
+            return normalized.toString().toLowerCase(Locale.ROOT);
+        }
+        return name;
     }
 
     private Class<?> getFormat(Config config, String property) {
