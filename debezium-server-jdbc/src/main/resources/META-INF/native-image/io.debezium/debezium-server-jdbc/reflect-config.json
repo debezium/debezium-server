@@ -1,0 +1,338 @@
+[
+  {
+    "name": "io.debezium.sink.naming.CollectionNamingStrategy",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.debezium.sink.naming.DefaultCollectionNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "io.debezium.sink.naming.PassthroughCollectionNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "io.debezium.connector.jdbc.naming.DefaultTableNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "io.debezium.connector.jdbc.naming.ColumnNamingStrategy",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.debezium.connector.jdbc.naming.DefaultColumnNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.boot.model.relational.ColumnOrderingStrategyStandard",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.agroal.internal.AgroalConnectionProvider",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.agroal.internal.StrategyRegistrationProviderImpl",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.dialect.MySQLDialect",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorBuilderImpl",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.engine.transaction.jta.platform.internal.NoJtaPlatform",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.cache.internal.NoCachingRegionFactory",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.type.format.jackson.JacksonJsonFormatMapper",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.id.enhanced.StandardNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.cache.internal.DefaultCacheKeysFactory",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "org.hibernate.cache.internal.SimpleCacheKeysFactory",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.jdbc.Driver",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.jdbc.NonRegisteringDriver",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.protocol.a.authentication.CachingSha2PasswordPlugin",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.protocol.a.authentication.MysqlNativePasswordPlugin",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.protocol.a.authentication.MysqlClearPasswordPlugin",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.protocol.a.authentication.Sha256PasswordPlugin",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.protocol.a.authentication.MysqlOldPasswordPlugin",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.jdbc.AbandonedConnectionCleanupThread",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.exceptions.CJException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.WrongArgumentException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.CJCommunicationsException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.CJConnectionFeatureNotAvailableException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.CJOperationNotSupportedException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.CJPacketTooBigException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.CJTimeoutException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.ClosedOnExpiredPasswordException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.ConnectionIsClosedException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.DataConversionException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.DataReadException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.DataTruncationException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.FeatureNotAvailableException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.InvalidConnectionAttributeException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.NumberOutOfRange",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.OperationCancelledException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.PasswordExpiredException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.PropertyNotModifiableException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.RSAException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.SSLParamsException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.StatementIsClosedException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.UnableToConnectException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.UnsupportedConnectionStringException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.exceptions.AssertionFailedException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.CommunicationsException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.ConnectionFeatureNotAvailableException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.MysqlDataTruncation",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.MySQLQueryInterruptedException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.MySQLStatementCancelledException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.MySQLTimeoutException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.MySQLTransactionRollbackException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.NotUpdatable",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.OperationNotSupportedException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.jdbc.exceptions.PacketTooBigException",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.log.StandardLogger",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.log.Jdk14Logger",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.log.Slf4JLogger",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.log.NullLogger",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.protocol.StandardSocketFactory",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.PerConnectionLRUFactory",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.util.PerVmServerConfigCacheFactory",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "com.mysql.cj.conf.url.SingleConnectionUrl",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.conf.url.FailoverConnectionUrl",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.conf.url.FailoverDnsSrvConnectionUrl",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.conf.url.LoadBalanceConnectionUrl",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.conf.url.LoadBalanceDnsSrvConnectionUrl",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.conf.url.ReplicationConnectionUrl",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.mysql.cj.conf.url.ReplicationDnsSrvConnectionUrl",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "io.agroal.pool.ConnectionHandler",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.agroal.pool.ConnectionPool",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.agroal.pool.DataSource",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.agroal.pool.ConnectionFactory",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.agroal.pool.wrapper.ConnectionWrapper",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "org.hibernate.event.spi.AutoFlushEventListener[]",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.agroal.pool.ConnectionHandler[]",
+    "allDeclaredConstructors": true,
+    "queryAllDeclaredMethods": true
+  }
+]

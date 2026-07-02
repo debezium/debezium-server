@@ -15,4 +15,4 @@ if [ -z "$RUNNER" ]; then
     exit 1
 fi
 
-exec "$RUNNER" "$@"
+exec "$RUNNER" -Ddebezium.deployment.server=true "$@"
