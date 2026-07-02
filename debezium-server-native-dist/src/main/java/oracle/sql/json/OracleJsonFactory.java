@@ -12,7 +12,7 @@ package oracle.sql.json;
  * reachable during GraalVM native-image linking ({@code --link-at-build-time}). When the Oracle
  * JDBC driver is excluded from the build, the linker fails to resolve the type. This minimal
  * stub satisfies the linker; the Oracle dialect code paths are never executed at runtime when
- * using a non-Oracle database.
+ * using a non-Oracle database for the debezium-server-jdbc
  */
 public class OracleJsonFactory {
     public OracleJsonFactory() {
