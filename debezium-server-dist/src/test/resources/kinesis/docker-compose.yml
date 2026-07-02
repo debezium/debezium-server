@@ -1,0 +1,21 @@
+# Docker file used by GitHub actions to verify the debezium-server-dist works.
+services:
+  postgres:
+    image: quay.io/debezium/example-postgres:3.0
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    networks:
+      - backend
+  localstack:
+    image: localstack/localstack:4.0
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # external services port range
+    networks:
+      - backend
+networks:
+  backend:
+    name: debezium-backend
