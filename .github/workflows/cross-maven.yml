@@ -83,7 +83,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: 21
+          java-version: 25
       - name: Cache Maven packages
         uses: actions/cache@v6
         with:
@@ -119,7 +119,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: 21
+          java-version: 25
       - name: Checkout Debezium Server repository
         uses: actions/checkout@v7
         with:
@@ -144,7 +144,7 @@ jobs:
           cp $CONFIG_FOLDER/application.properties $DISTRIBUTION_FOLDER/config/application.properties
           
           # Run debezium server at background
-          docker run --name server-$SINK -d -v $DISTRIBUTION_FOLDER:/opt:z -p 8080:8080 --network debezium-backend -w /opt registry.access.redhat.com/ubi8/openjdk-21 ./run.sh
+          docker run --name server-$SINK -d -v $DISTRIBUTION_FOLDER:/opt:z -p 8080:8080 --network debezium-backend -w /opt registry.access.redhat.com/ubi9/openjdk-25 ./run.sh
           
           # Verify
           timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://localhost:8080/q/health)" != "200" ]]; do sleep 5; done' || false
@@ -160,3 +160,26 @@ jobs:
         run: |
           docker rm -f server-${{matrix.sink}}
           docker compose -f ./server/debezium-server-dist/src/test/resources/${{matrix.sink}}/docker-compose.yml down
+
+  native-build:
+    name: Verify native build
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: 25
+      - name: Checkout Debezium Server repository
+        uses: actions/checkout@v7
+        with:
+          path: server
+      - name: Cache Maven packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      - name: Maven build Debezium Server Native
+        run: ./server/mvnw clean install -fae -f server/debezium-server-native-dist/pom.xml -Passembly,native -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore

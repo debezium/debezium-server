@@ -275,8 +275,6 @@
         <profile>
             <id>assembly</id>
             <properties>
-                <quarkus.native.enabled>true</quarkus.native.enabled>
-
                 <connector.mariadb.scope>compile</connector.mariadb.scope>
                 <connector.mysql.scope>compile</connector.mysql.scope>
                 <connector.postgres.scope>compile</connector.postgres.scope>
