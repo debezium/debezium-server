@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.debezium.quarkus</groupId>
         <artifactId>debezium-quarkus-bridge-parent</artifactId>
-        <version>3.6.0-SNAPSHOT</version>
+        <version>3.7.0-SNAPSHOT</version>
     </parent>
     <artifactId>debezium-quarkus-bridge-deployment</artifactId>
     <name>Debezium Quarkus Bridge - Deployment</name>
