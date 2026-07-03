@@ -1,9 +1,12 @@
-name: Debezium Quarkus Bridge
-#description: Do something useful.
+name: "Debezium Bridge Extension for Debezium Server Sinks"
+description: "The Debezium Bridge connects a Debezium Runtime Extension with a Debezium Server Sink to create CDC Pipelines with Quarkus"
 metadata:
-#  keywords:
-#    - debezium-quarkus-bridge
-#  guide: https://docs.quarkiverse.io/debezium-quarkus-bridge/dev/ # To create and publish this guide, see https://github.com/quarkiverse/quarkiverse/wiki#documenting-your-extension
-#  categories:
-#    - "miscellaneous"
-#  status: "preview"
+  keywords:
+    - "debezium"
+    - "cdc"
+    - "sink"
+  categories:
+    - "integration"
+    - "cdc"
+    - "sink"
+  status: "stable"
