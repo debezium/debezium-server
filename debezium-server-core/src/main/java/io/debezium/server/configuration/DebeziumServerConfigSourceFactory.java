@@ -84,12 +84,24 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
         ConfigValue sink = context.getValue(PROP_SINK_TYPE);
         if (sink != null && sink.getValue() != null) {
             remapped.put(QUARKUS_DEBEZIUM_PREFIX + "name", sink.getValue());
-            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".",
-                    QUARKUS_DEBEZIUM_PREFIX + SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink.getValue() + ".",
-                    false);
-            configToProperties(context, remapped, PROP_SINK_PREFIX + sink.getValue() + ".",
-                    QUARKUS_DEBEZIUM_PREFIX + PROP_OFFSET_STORAGE_PREFIX + sink.getValue() + ".",
-                    false);
+            String sinkPrefix = PROP_SINK_PREFIX + sink.getValue() + ".";
+
+            // The sink connection properties are reused for the schema history and offset storage
+            // namespaces as a convenience when the same technology is used for both the sink and the
+            // storage. This is only done when the corresponding storage namespace has not been
+            // configured explicitly; otherwise the copied sink properties could silently override the
+            // user's explicit storage configuration (e.g. when the sink and storage use different
+            // property names for the same concept) or leak sink-specific properties into the storage
+            // namespaces where they have no meaning.
+            String schemaHistoryPrefix = QUARKUS_DEBEZIUM_PREFIX + SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink.getValue() + ".";
+            if (!hasPropertyWithPrefix(context, remapped, schemaHistoryPrefix)) {
+                configToProperties(context, remapped, sinkPrefix, schemaHistoryPrefix, false);
+            }
+
+            String offsetStoragePrefix = QUARKUS_DEBEZIUM_PREFIX + PROP_OFFSET_STORAGE_PREFIX + sink.getValue() + ".";
+            if (!hasPropertyWithPrefix(context, remapped, offsetStoragePrefix)) {
+                configToProperties(context, remapped, sinkPrefix, offsetStoragePrefix, false);
+            }
         }
 
         var transforms = context.getValue(PROP_TRANSFORMS);
@@ -163,6 +175,23 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
                 }
             }
         });
+    }
+
+    private static boolean hasPropertyWithPrefix(ConfigSourceContext context, Map<String, String> properties, String prefix) {
+        if (properties.keySet().stream().anyMatch(name -> name.startsWith(prefix))) {
+            return true;
+        }
+
+        Iterator<String> names = context.iterateNames();
+        while (names.hasNext()) {
+            String name = names.next();
+            ConfigValue value = context.getValue(name);
+            if (value != null && value.getValue() != null && name.startsWith(prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     static class DebeziumServerConfigSource extends MapBackedConfigSource {
