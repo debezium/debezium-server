@@ -65,17 +65,17 @@ jobs:
           ref: ${{ github.base_ref }}
           path: core
       - name: Checkout quarkus extensions repository with default base branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: debezium/debezium-quarkus
           path: debezium-quarkus
       - name: Checkout db2 repository with default base branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: debezium/debezium-connector-db2
           path: db2
       - name: Checkout informix repository with default base branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: debezium/debezium-connector-informix
           path: informix
