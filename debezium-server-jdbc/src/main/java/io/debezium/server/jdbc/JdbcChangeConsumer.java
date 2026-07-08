@@ -33,6 +33,7 @@ import io.debezium.connector.jdbc.RecordWriter;
 import io.debezium.connector.jdbc.UnnestRecordWriter;
 import io.debezium.connector.jdbc.dialect.DatabaseDialect;
 import io.debezium.connector.jdbc.dialect.DatabaseDialectResolver;
+import io.debezium.connector.jdbc.metrics.JdbcSinkConnectorMetrics;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.openlineage.ConnectorContext;
@@ -64,9 +65,13 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JdbcChangeConsumer.class);
     private static final String PROP_PREFIX = "debezium.sink.jdbc.";
+    private static final String CONNECTOR_LOGICAL_NAME = "debezium-server-jdbc";
+    private static final String CONNECTOR_NAME = "jdbc";
+    private static final String TASK_ID = "0";
 
     private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
     private final ChangeEventToSinkRecordConverter converter = new ChangeEventToSinkRecordConverter();
+    private final JdbcSinkConnectorMetrics metrics = new JdbcSinkConnectorMetrics(CONNECTOR_NAME, TASK_ID);
 
     // Lifecycle managed components
     private SessionFactory sessionFactory;
@@ -87,6 +92,8 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
 
             jdbcConfig.validate();
 
+            metrics.register();
+
             org.hibernate.cfg.Configuration hibernateConfig = jdbcConfig.getHibernateConfiguration();
             String connectionUrl = hibernateConfig.getProperty(org.hibernate.cfg.AvailableSettings.JAKARTA_JDBC_URL);
             LOGGER.info("JDBC connection URL: {}", connectionUrl);
@@ -106,15 +113,17 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
                     session, queryBinderResolver, jdbcConfig, dialect);
 
             ConnectorContext connectorContext = new ConnectorContext(
-                    "debezium-server-jdbc",
-                    "jdbc",
-                    "0",
+                    CONNECTOR_LOGICAL_NAME,
+                    CONNECTOR_NAME,
+                    TASK_ID,
                     Module.version(),
                     UUID.randomUUID(),
                     new java.util.HashMap<>());
 
+            metrics.connected(true);
+
             this.changeEventSink = new JdbcChangeEventSink(
-                    jdbcConfig, session, dialect, recordWriter, connectorContext);
+                    jdbcConfig, session, dialect, recordWriter, connectorContext, metrics);
 
             LOGGER.info("JDBC sink initialized successfully");
             LOGGER.info("Insert mode: {}", jdbcConfig.getInsertMode());
@@ -135,7 +144,7 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
                                             JdbcSinkConnectorConfig config,
                                             DatabaseDialect dialect) {
 
-        return new UnnestRecordWriter(session, queryBinderResolver, config, dialect);
+        return new UnnestRecordWriter(session, queryBinderResolver, config, dialect, metrics);
     }
 
     @Override
