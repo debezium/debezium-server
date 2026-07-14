@@ -218,15 +218,20 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumSer
             builder.messageAttributes(attributes);
         }
 
-        if (isFifo) {
-            // MessageGroupId: use header value if present, fallback to raw event key, then default
+        // MessageGroupId: set for FIFO topics (message ordering) or, when explicitly enabled, for standard
+        // topics as well (Amazon SQS fair-queue tenant identifier — no ordering on standard topics).
+        if (isFifo || config.isMessageGroupIdEnabled()) {
+            // use header value if present, fallback to raw event key, then default
             String groupId = headers.getOrDefault(config.getMessageGroupIdHeader(), null);
             if (groupId == null) {
                 Object rawKey = event.record().key();
-                groupId = rawKey != null ? asString(rawKey) : config.getFifoDefaultGroupId();
+                groupId = rawKey != null ? asString(rawKey) : config.getDefaultMessageGroupId();
             }
             builder.messageGroupId(groupId);
+        }
 
+        // MessageDeduplicationId applies only to FIFO topics
+        if (isFifo) {
             // MessageDeduplicationId: use header if configured and present
             if (config.getMessageDeduplicationIdHeader() != null) {
                 String dedupId = headers.get(config.getMessageDeduplicationIdHeader());
@@ -315,9 +320,10 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumSer
                 SnsChangeConsumerConfig.TOPIC_ARN,
                 SnsChangeConsumerConfig.TOPIC_ARN_PREFIX,
                 SnsChangeConsumerConfig.DEFAULT_RETRIES,
-                SnsChangeConsumerConfig.FIFO_MESSAGE_GROUP_ID_HEADER,
-                SnsChangeConsumerConfig.FIFO_MESSAGE_DEDUP_ID_HEADER,
-                SnsChangeConsumerConfig.FIFO_DEFAULT_GROUP_ID);
+                SnsChangeConsumerConfig.MESSAGE_GROUP_ID_HEADER,
+                SnsChangeConsumerConfig.MESSAGE_GROUP_ID_DEFAULT,
+                SnsChangeConsumerConfig.MESSAGE_GROUP_ID_ENABLED,
+                SnsChangeConsumerConfig.FIFO_MESSAGE_DEDUP_ID_HEADER);
     }
 
     @Override
