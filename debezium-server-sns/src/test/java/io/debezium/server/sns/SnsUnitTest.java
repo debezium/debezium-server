@@ -7,6 +7,7 @@ package io.debezium.server.sns;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.debezium.config.Configuration;
 import io.debezium.engine.Header;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
@@ -837,5 +839,190 @@ public class SnsUnitTest {
         assertFalse(threwException.get());
         assertEquals(1, capturedEntries.size());
         assertEquals("order-42", capturedEntries.get(0).messageGroupId());
+    }
+
+    private static CapturingEvents<BatchEvent> capturingEvents(List<BatchEvent> events, String destination) {
+        return new CapturingEvents<>() {
+            @Override
+            public List<BatchEvent> records() {
+                return events;
+            }
+
+            @Override
+            public String destination() {
+                return destination;
+            }
+
+            @Override
+            public String source() {
+                return "";
+            }
+
+            @Override
+            public String engine() {
+                return "";
+            }
+        };
+    }
+
+    // 13. Test that on a STANDARD topic, MessageGroupId is set from the header when message.group.id.enabled=true
+    @Test
+    public void testStandardTopicMessageGroupIdFromHeaderWhenEnabled() throws Exception {
+        // Arrange
+        String standardArn = TEST_DEFAULT_TOPIC_ARN; // no .fifo suffix
+        List<BatchEvent> events = createFifoChangeEvents(1, "some-key", "some-key", standardArn, Map.of("aggregateId", "tenant-7"));
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act — connect() wires the mocked client; inject config explicitly so the test is
+        // deterministic and independent of global System properties
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.config = new SnsChangeConsumerConfig(
+                    Configuration.from(Map.of(SnsChangeConsumerConfig.MESSAGE_GROUP_ID_ENABLED.name(), "true")));
+            snsChangeConsumer.handle(capturingEvents(events, standardArn));
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertEquals("tenant-7", capturedEntries.get(0).messageGroupId());
+    }
+
+    // 14. Test that on a STANDARD topic with the flag enabled, MessageGroupId falls back to the raw key when no header
+    @Test
+    public void testStandardTopicMessageGroupIdFallsBackToKeyWhenEnabled() throws Exception {
+        // Arrange
+        String standardArn = TEST_DEFAULT_TOPIC_ARN;
+        List<BatchEvent> events = createFifoChangeEvents(1, "tenant-key", "tenant-key", standardArn, Map.of());
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act — inject config with the flag enabled (see note above re: explicit config injection)
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.config = new SnsChangeConsumerConfig(
+                    Configuration.from(Map.of(SnsChangeConsumerConfig.MESSAGE_GROUP_ID_ENABLED.name(), "true")));
+            snsChangeConsumer.handle(capturingEvents(events, standardArn));
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertEquals("tenant-key", capturedEntries.get(0).messageGroupId());
+    }
+
+    // 15. Test backward compatibility: on a STANDARD topic with the flag OFF (default), no MessageGroupId is set
+    @Test
+    public void testStandardTopicNoMessageGroupIdByDefault() throws Exception {
+        // Arrange
+        String standardArn = TEST_DEFAULT_TOPIC_ARN;
+        List<BatchEvent> events = createFifoChangeEvents(1, "tenant-key", "tenant-key", standardArn, Map.of("aggregateId", "tenant-7"));
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act — inject an explicit empty config so the flag defaults to false
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.config = new SnsChangeConsumerConfig(Configuration.from(Map.<String, String> of()));
+            snsChangeConsumer.handle(capturingEvents(events, standardArn));
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertNull(capturedEntries.get(0).messageGroupId());
+    }
+
+    // 16. Regression: with message.group.id.enabled=true, a FIFO topic still sets BOTH MessageGroupId and
+    // MessageDeduplicationId (the flag must not change FIFO behavior — it only adds the standard-topic path)
+    @Test
+    public void testFifoUnaffectedWhenStandardFlagEnabled() throws Exception {
+        // Arrange
+        String fifoArn = "arn:aws:sns:us-east-1:000000000000:test-topic.fifo";
+        List<BatchEvent> events = createFifoChangeEvents(1, "some-key", "some-key", fifoArn,
+                Map.of("aggregateId", "order-77", "dedupId", "dd-1"));
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act — topic is FIFO; inject config with the dedup-id header (flag on too, to prove it
+        // doesn't disturb FIFO)
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.config = new SnsChangeConsumerConfig(Configuration.from(Map.of(
+                    SnsChangeConsumerConfig.MESSAGE_GROUP_ID_ENABLED.name(), "true",
+                    SnsChangeConsumerConfig.FIFO_MESSAGE_DEDUP_ID_HEADER.name(), "dedupId")));
+            snsChangeConsumer.handle(capturingEvents(events, fifoArn));
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert — FIFO behavior intact: both group id and dedup id set
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertEquals("order-77", capturedEntries.get(0).messageGroupId());
+        assertEquals("dd-1", capturedEntries.get(0).messageDeduplicationId());
+    }
+
+    // 17. Test that on a STANDARD topic with the flag enabled, MessageGroupId falls back to the default
+    // group id when there is no header and no record key (non-FIFO equivalent of test 11)
+    @Test
+    public void testStandardTopicMessageGroupIdFallsBackToDefaultWhenEnabled() throws Exception {
+        // Arrange
+        String standardArn = TEST_DEFAULT_TOPIC_ARN;
+        List<BatchEvent> events = createFifoChangeEvents(1, null, null, standardArn, Map.of());
+
+        List<PublishBatchRequestEntry> capturedEntries = new ArrayList<>();
+        doAnswer(invocation -> {
+            PublishBatchRequest request = invocation.getArgument(0);
+            capturedEntries.addAll(request.publishBatchRequestEntries());
+            return successResponse(request);
+        }).when(spyClient).publishBatch(any(PublishBatchRequest.class));
+
+        // Act — inject config with the flag enabled (see note above re: explicit config injection)
+        try {
+            snsChangeConsumer.connect();
+            snsChangeConsumer.config = new SnsChangeConsumerConfig(
+                    Configuration.from(Map.of(SnsChangeConsumerConfig.MESSAGE_GROUP_ID_ENABLED.name(), "true")));
+            snsChangeConsumer.handle(capturingEvents(events, standardArn));
+        }
+        catch (Exception e) {
+            threwException.getAndSet(true);
+        }
+
+        // Assert
+        assertFalse(threwException.get());
+        assertEquals(1, capturedEntries.size());
+        assertEquals("default", capturedEntries.get(0).messageGroupId());
     }
 }
