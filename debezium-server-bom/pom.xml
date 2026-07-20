@@ -60,6 +60,12 @@
                 <version>${version.kafka}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>connect-runtime</artifactId>
+                <version>${version.kafka}</version>
+            </dependency>
+
             <!-- This needs to be defined before Quarkus to guarantee that the
                  right Infinispan dependencies are imported -->
             <dependency>

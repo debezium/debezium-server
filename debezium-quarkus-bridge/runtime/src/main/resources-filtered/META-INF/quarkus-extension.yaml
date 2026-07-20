@@ -1,0 +1,12 @@
+name: "Debezium Bridge Extension for Debezium Server Sinks"
+description: "The Debezium Bridge connects a Debezium Runtime Extension with a Debezium Server Sink to create CDC Pipelines with Quarkus"
+metadata:
+  keywords:
+    - "debezium"
+    - "cdc"
+    - "sink"
+  categories:
+    - "integration"
+    - "cdc"
+    - "sink"
+  status: "stable"

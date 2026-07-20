@@ -11,7 +11,6 @@ import io.debezium.common.annotation.Incubating;
 import io.debezium.metadata.ComponentMetadataProvider;
 import io.debezium.metadata.ConfigDescriptor;
 import io.debezium.server.ConnectionValidationResult;
-import io.debezium.server.DefaultChangeConsumer;
 
 /**
  * Common interface for all Debezium Server sink implementations.

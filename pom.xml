@@ -42,6 +42,7 @@
         <!-- this is a local override: the version should be the one defined in debezium-parent reference: https://github.com/debezium/debezium/pull/6753 -->
         <version.apicurio>3.2.4</version.apicurio>
 
+        <quarkus.platform.version>${quarkus.version.runtime}</quarkus.platform.version>
     </properties>
 
     <repositories>
@@ -62,6 +63,9 @@
 
     <modules>
         <module>debezium-server-bom</module>
+        <module>debezium-server-api</module>
+        <module>debezium-server-common</module>
+        <module>debezium-quarkus-bridge</module>
         <module>debezium-server-core</module>
         <module>debezium-server-kinesis</module>
         <module>debezium-server-pubsub</module>
