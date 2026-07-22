@@ -24,6 +24,11 @@
             <artifactId>debezium-connector-jdbc</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-sink</artifactId>
+        </dependency>
+
         <!-- Kafka Connect API - for SinkRecord -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -64,11 +69,22 @@
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- Source Connectors for Testing -->
         <dependency>
             <groupId>io.debezium.quarkus</groupId>
             <artifactId>debezium-quarkus-postgres</artifactId>
+            <scope>test</scope>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium.quarkus</groupId>
+            <artifactId>debezium-quarkus-mysql</artifactId>
             <scope>test</scope>
             <version>${project.version}</version>
         </dependency>

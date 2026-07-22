@@ -34,4 +34,5 @@ public class Images {
     public static final String FLUSS_IMAGE = "apache/fluss:0.9.0-incubating";
     public static final String FLUSS_ZOOKEEPER_IMAGE = "zookeeper:3.9";
     public static final String POSTGRES_IMAGE = "mirror.gcr.io/library/postgres:16-alpine";
+    public static final String MYSQL_IMAGE = "container-registry.oracle.com/mysql/community-server:8.0";
 }
