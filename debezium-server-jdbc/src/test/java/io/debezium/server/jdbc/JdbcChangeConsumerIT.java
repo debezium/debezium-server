@@ -15,19 +15,15 @@ import jakarta.enterprise.event.Observes;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.runtime.events.ConnectorStartedEvent;
 import io.debezium.runtime.events.DebeziumCompletionEvent;
-import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
+import io.debezium.server.TestConfigSource;
 import io.debezium.util.Testing;
-import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.QuarkusTest;
 
 /**
  * Integration tests for JDBC sink with PostgreSQL source and target.
@@ -39,20 +35,18 @@ import io.quarkus.test.junit.QuarkusTest;
  * - DELETE operations
  * - Schema evolution
  */
-@QuarkusTest
-@QuarkusTestResource(PostgresTestResourceLifecycleManager.class)
-@QuarkusTestResource(JdbcTestResourceLifecycleManager.class)
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class JdbcIT {
+public abstract class JdbcChangeConsumerIT {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcIT.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcChangeConsumerIT.class);
     private static final int INITIAL_RECORD_COUNT = 4;
+
+    protected abstract JdbcTestUtils testUtils();
 
     @BeforeAll
     static void setupOffsetFile() {
         LOGGER.info("Setting up offset file before all tests");
-        Testing.Files.delete(JdbcTestConfigSource.OFFSET_STORE_PATH);
-        Testing.Files.createTestingFile(JdbcTestConfigSource.OFFSET_STORE_PATH);
+        Testing.Files.delete(TestConfigSource.OFFSET_STORE_PATH);
+        Testing.Files.createTestingFile(TestConfigSource.OFFSET_STORE_PATH);
     }
 
     void connectorCompleted(@Observes DebeziumCompletionEvent event) throws Exception {
@@ -78,12 +72,12 @@ public class JdbcIT {
                 .pollInterval(Duration.ofSeconds(1))
                 .until(() -> {
                     try {
-                        if (!JdbcTestUtils.targetTableExists()) {
+                        if (!testUtils().targetTableExists()) {
                             LOGGER.debug("Target table does not exist yet");
                             return false;
                         }
 
-                        int count = JdbcTestUtils.getTargetRecordCount();
+                        int count = testUtils().getTargetRecordCount();
                         LOGGER.debug("Target table has {} records", count);
                         return count >= INITIAL_RECORD_COUNT;
                     }
@@ -94,7 +88,7 @@ public class JdbcIT {
                 });
 
         // Verify the actual data
-        List<Map<String, Object>> records = JdbcTestUtils.getTargetRecords();
+        List<Map<String, Object>> records = testUtils().getTargetRecords();
         assertThat(records).hasSize(INITIAL_RECORD_COUNT);
 
         // Verify first record (Sally Thomas from PostgresTestResourceLifecycleManager)
@@ -115,7 +109,7 @@ public class JdbcIT {
         LOGGER.info("Inserting new record into source database...");
 
         // Insert a new record in the source
-        JdbcTestUtils.insertSourceRecord(
+        testUtils().insertSourceRecord(
                 2001,
                 "John",
                 "Doe",
@@ -127,7 +121,7 @@ public class JdbcIT {
                 .pollInterval(Duration.ofSeconds(1))
                 .until(() -> {
                     try {
-                        int count = JdbcTestUtils.getTargetRecordCount();
+                        int count = testUtils().getTargetRecordCount();
                         LOGGER.debug("Target has {} records (expecting {})", count, INITIAL_RECORD_COUNT + 1);
                         return count == INITIAL_RECORD_COUNT + 1;
                     }
@@ -138,7 +132,7 @@ public class JdbcIT {
                 });
 
         // Verify the new record
-        Map<String, Object> newRecord = JdbcTestUtils.getTargetRecordById(2001);
+        Map<String, Object> newRecord = testUtils().getTargetRecordById(2001);
         assertThat(newRecord).isNotNull();
         assertThat(newRecord.get("first_name")).isEqualTo("John");
         assertThat(newRecord.get("last_name")).isEqualTo("Doe");
@@ -155,7 +149,7 @@ public class JdbcIT {
         LOGGER.info("Updating existing record in source database...");
 
         // Update an existing record
-        JdbcTestUtils.updateSourceRecord(
+        testUtils().updateSourceRecord(
                 1001,
                 "Sally Updated",
                 "Thomas Updated",
@@ -167,7 +161,7 @@ public class JdbcIT {
                 .pollInterval(Duration.ofSeconds(1))
                 .until(() -> {
                     try {
-                        Map<String, Object> record = JdbcTestUtils.getTargetRecordById(1001);
+                        Map<String, Object> record = testUtils().getTargetRecordById(1001);
                         if (record == null) {
                             return false;
                         }
@@ -183,7 +177,7 @@ public class JdbcIT {
                 });
 
         // Verify the updated record
-        Map<String, Object> updatedRecord = JdbcTestUtils.getTargetRecordById(1001);
+        Map<String, Object> updatedRecord = testUtils().getTargetRecordById(1001);
         assertThat(updatedRecord).isNotNull();
         assertThat(updatedRecord.get("first_name")).isEqualTo("Sally Updated");
         assertThat(updatedRecord.get("last_name")).isEqualTo("Thomas Updated");
@@ -199,12 +193,12 @@ public class JdbcIT {
 
         LOGGER.info("Deleting product from source database...");
 
-        int initialCount = JdbcTestUtils.getTargetProductsCount();
+        int initialCount = testUtils().getTargetProductsCount();
         LOGGER.info("Initial products count: {}", initialCount);
 
         // Delete a product (ID 101 exists in the example-postgres image)
         // Products table has no foreign key constraints
-        JdbcTestUtils.deleteSourceProduct(101);
+        testUtils().deleteSourceProduct(101);
 
         // Wait for the delete to be replicated
         Awaitility.await()
@@ -212,7 +206,7 @@ public class JdbcIT {
                 .pollInterval(Duration.ofSeconds(1))
                 .until(() -> {
                     try {
-                        int count = JdbcTestUtils.getTargetProductsCount();
+                        int count = testUtils().getTargetProductsCount();
                         LOGGER.debug("Target has {} products (expecting {})", count, initialCount - 1);
                         return count == initialCount - 1;
                     }
@@ -223,11 +217,11 @@ public class JdbcIT {
                 });
 
         // Verify the product is gone
-        boolean productExists = JdbcTestUtils.targetProductExists(101);
+        boolean productExists = testUtils().targetProductExists(101);
         assertThat(productExists).isFalse();
 
         // Verify total count
-        assertThat(JdbcTestUtils.getTargetProductsCount()).isEqualTo(initialCount - 1);
+        assertThat(testUtils().getTargetProductsCount()).isEqualTo(initialCount - 1);
 
         LOGGER.info("Delete operation test passed");
     }
@@ -240,10 +234,10 @@ public class JdbcIT {
         LOGGER.info("Adding new column to source table...");
 
         // Add a new column to the source table
-        JdbcTestUtils.addColumnToSource("phone_number", "VARCHAR(50)");
+        testUtils().addColumnToSource("phone_number", "VARCHAR(50)");
 
         // Insert a record with the new column
-        JdbcTestUtils.insertSourceRecord(
+        testUtils().insertSourceRecord(
                 3001,
                 "Jane",
                 "Smith",
@@ -255,7 +249,7 @@ public class JdbcIT {
                 .pollInterval(Duration.ofSeconds(1))
                 .until(() -> {
                     try {
-                        return JdbcTestUtils.getTargetRecordById(3001) != null;
+                        return testUtils().getTargetRecordById(3001) != null;
                     }
                     catch (Exception e) {
                         return false;
@@ -266,7 +260,7 @@ public class JdbcIT {
         Thread.sleep(2000);
 
         // Verify the new column exists in target
-        boolean columnExists = JdbcTestUtils.targetColumnExists("phone_number");
+        boolean columnExists = testUtils().targetColumnExists("phone_number");
         assertThat(columnExists).isTrue();
 
         LOGGER.info("Schema evolution test passed - column 'phone_number' added to target");
@@ -279,14 +273,14 @@ public class JdbcIT {
 
         LOGGER.info("Testing multiple operations in sequence...");
 
-        int initialCount = JdbcTestUtils.getTargetRecordCount();
+        int initialCount = testUtils().getTargetRecordCount();
 
         // Perform multiple operations
-        JdbcTestUtils.insertSourceRecord(4001, "Alice", "Johnson", "alice@example.com");
-        JdbcTestUtils.insertSourceRecord(4002, "Bob", "Williams", "bob@example.com");
-        JdbcTestUtils.updateSourceRecord(4001, "Alice Updated", "Johnson Updated", "alice.updated@example.com");
+        testUtils().insertSourceRecord(4001, "Alice", "Johnson", "alice@example.com");
+        testUtils().insertSourceRecord(4002, "Bob", "Williams", "bob@example.com");
+        testUtils().updateSourceRecord(4001, "Alice Updated", "Johnson Updated", "alice.updated@example.com");
         // Delete customer 1004 (Anne Kretchmar) - less likely to have orders
-        JdbcTestUtils.deleteSourceRecord(1004);
+        testUtils().deleteSourceRecord(1004);
 
         // Wait for all operations to complete
         // Expected: initial + 2 inserts - 1 delete
@@ -297,7 +291,7 @@ public class JdbcIT {
                 .pollInterval(Duration.ofSeconds(1))
                 .until(() -> {
                     try {
-                        int count = JdbcTestUtils.getTargetRecordCount();
+                        int count = testUtils().getTargetRecordCount();
                         LOGGER.debug("Target has {} records (expecting {})", count, expectedCount);
                         return count == expectedCount;
                     }
@@ -307,20 +301,20 @@ public class JdbcIT {
                 });
 
         // Verify final state
-        assertThat(JdbcTestUtils.getTargetRecordCount()).isEqualTo(expectedCount);
+        assertThat(testUtils().getTargetRecordCount()).isEqualTo(expectedCount);
 
         // Verify the updated record
-        Map<String, Object> alice = JdbcTestUtils.getTargetRecordById(4001);
+        Map<String, Object> alice = testUtils().getTargetRecordById(4001);
         assertThat(alice).isNotNull();
         assertThat(alice.get("first_name")).isEqualTo("Alice Updated");
 
         // Verify the inserted record
-        Map<String, Object> bob = JdbcTestUtils.getTargetRecordById(4002);
+        Map<String, Object> bob = testUtils().getTargetRecordById(4002);
         assertThat(bob).isNotNull();
         assertThat(bob.get("first_name")).isEqualTo("Bob");
 
         // Verify the deleted record is gone
-        Map<String, Object> deleted = JdbcTestUtils.getTargetRecordById(1004);
+        Map<String, Object> deleted = testUtils().getTargetRecordById(1004);
         assertThat(deleted).isNull();
 
         LOGGER.info("Multiple operations test passed");

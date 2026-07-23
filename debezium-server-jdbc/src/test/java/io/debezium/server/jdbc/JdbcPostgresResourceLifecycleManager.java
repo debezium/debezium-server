@@ -24,9 +24,9 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
  * Manages lifecycle of a PostgreSQL container used as the JDBC sink target.
  * This is separate from the source PostgreSQL managed by PostgresTestResourceLifecycleManager.
  */
-public class JdbcTestResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
+public class JdbcPostgresResourceLifecycleManager implements QuarkusTestResourceLifecycleManager {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcTestResourceLifecycleManager.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcPostgresResourceLifecycleManager.class);
 
     public static PostgreSQLContainer container;
 
