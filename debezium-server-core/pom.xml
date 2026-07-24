@@ -46,6 +46,10 @@
 
         <dependency>
             <groupId>io.debezium</groupId>
+            <artifactId>debezium-storage-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
             <artifactId>debezium-storage-configmap</artifactId>
             <exclusions>
                 <exclusion>

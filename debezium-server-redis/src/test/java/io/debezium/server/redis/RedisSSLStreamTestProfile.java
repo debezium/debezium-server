@@ -33,7 +33,7 @@ public class RedisSSLStreamTestProfile implements QuarkusTestProfile {
         config.put("javax.net.ssl.trustStore", trustStoreFile.getPath());
         config.put("javax.net.ssl.keyStorePassword", "secret");
         config.put("javax.net.ssl.trustStorePassword", "secret");
-        config.put("debezium.source.offset.storage", "io.debezium.server.redis.RedisOffsetBackingStore");
+        config.put("debezium.source.offset.storage", "redis");
         config.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         return config;
     }

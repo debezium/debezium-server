@@ -42,14 +42,20 @@ jobs:
         env:
           branch_name: ${{ github.head_ref }}
         run: |
-          curl --silent -X "GET" https://api.github.com/repos/debezium/debezium/pulls | jq '.[] | {branch: .head.ref}' | jq -r '.branch' >> SORTED_PULLS.txt
+            next_url="https://api.github.com/repos/debezium/debezium/pulls?per_page=100&sort=updated"
+            branch_found=false
+            while [ -n "$next_url" ] && ! $branch_found; do
+                response=$(curl -si -X "GET" --url "$next_url")
+                next_url=$(echo "$response" | grep -oP '(?<=<)[^>]*(?=>; rel="next")' || true)
+                echo "$response" | sed -n '/\[/,$ p' | jq -r '.[] | .head.ref' > /tmp/pulls_page.txt
 
-          while IFS=" " read -r BRANCH;
-          do
-            if grep -q "$branch_name" <<< "$BRANCH"; then
-              echo "BRANCH_FOUND=true" >> $GITHUB_OUTPUT
-            fi
-          done < SORTED_PULLS.txt
+                while IFS=" " read -r BRANCH; do
+                  if [ "$branch_name" = "$BRANCH" ]; then
+                    branch_found=true
+                    echo "BRANCH_FOUND=true" >> $GITHUB_OUTPUT
+                  fi
+                done < /tmp/pulls_page.txt
+            done  
       - name: Checkout core repository with pull request branch
         if: ${{ steps.branch.outputs.BRANCH_FOUND == 'true' }}
         uses: actions/checkout@v7
