@@ -1,0 +1,104 @@
+# =============================================================================
+# Debezium Server -> Databricks Zerobus Ingest (Kafka-compatible endpoint)
+# =============================================================================
+# Replace every <PLACEHOLDER>. The Kafka Producer API of Zerobus is in Beta and
+# requires the `enableZerobusKafkaIngress` region flag to be enabled for your
+# workspace (ask in #lakeflow-connect-zerobus).
+#
+# Prerequisites on Databricks:
+#   - Workspace in a Zerobus-GA region (AWS/Azure).
+#   - A service principal with, on the target table's catalog/schema/table:
+#       USE CATALOG, USE SCHEMA, SELECT, MODIFY   (NOT ALL_PRIVILEGES)
+#   - A UC MANAGED Delta table, same region as the workspace,
+#     WITHOUT Change Data Feed and WITHOUT column mapping.
+
+# ---- Source: PostgreSQL CDC -------------------------------------------------
+debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector
+debezium.source.offset.storage.file.filename=data/offsets.dat
+debezium.source.offset.flush.interval.ms=10000
+debezium.source.database.hostname=<PG_HOST>
+debezium.source.database.port=5432
+debezium.source.database.user=<PG_USER>
+debezium.source.database.password=<PG_PASSWORD>
+debezium.source.database.dbname=<PG_DB>
+debezium.source.topic.prefix=<CATALOG>_<SCHEMA>
+debezium.source.plugin.name=pgoutput
+debezium.source.slot.name=debezium_zerobus
+debezium.source.schema.include.list=<SCHEMA>
+debezium.source.table.include.list=<SCHEMA>.<TABLE>
+
+# ---- Transform: flatten row + CDC metadata, and route topic -> Delta table --
+# ExtractNewRecordState turns the Debezium envelope into the flat "after" row
+# and adds __op/__lsn/__source_ts_ms (which must exist as columns in the table).
+#
+# IMPORTANT (Debezium 3.6+): the delete option is `delete.tombstone.handling.mode`
+# (the older `delete.handling.mode` + `drop.tombstones` are ignored silently).
+#   rewrite = keep the delete as a row with __deleted="true" (needs a __deleted
+#             STRING column). Requires REPLICA IDENTITY FULL on the source table
+#             to carry the previous column values.
+# Zerobus only accepts JSON objects; the sink skips tombstones automatically.
+debezium.transforms=unwrap,route
+debezium.transforms.unwrap.type=io.debezium.transforms.ExtractNewRecordState
+debezium.transforms.unwrap.delete.tombstone.handling.mode=rewrite
+debezium.transforms.unwrap.add.fields=op,lsn,source.ts_ms
+# Route "<topic.prefix>.<schema>.<table>" -> "<catalog>.<schema>.<table>".
+# One topic maps to one managed Delta table; ASCII/digits/underscore only.
+debezium.transforms.route.type=org.apache.kafka.connect.transforms.RegexRouter
+debezium.transforms.route.regex=<TOPIC_PREFIX>\\.<SCHEMA>\\.(.*)
+debezium.transforms.route.replacement=<CATALOG>.<TARGET_SCHEMA>.$1
+
+# ---- Message format ---------------------------------------------------------
+# JSON without schema envelope keeps the payload flat so it matches the Delta
+# table columns. Use a Variant column for schema-flexible payloads.
+debezium.format.key=json
+debezium.format.value=json
+debezium.format.key.schemas.enable=false
+debezium.format.value.schemas.enable=false
+
+# =============================================================================
+# Sink option A (RECOMMENDED / GA): gRPC via the Zerobus Java SDK.
+# Works today without the Kafka beta flag. Uncomment this block and comment out
+# the Kafka block below. One stream is opened per resolved table.
+# =============================================================================
+# debezium.sink.type=zerobus
+# debezium.sink.zerobus.endpoint=<WORKSPACE_ID>.zerobus.<REGION>.cloud.databricks.com
+# debezium.sink.zerobus.workspace.url=<WORKSPACE_URL>
+# debezium.sink.zerobus.client.id=<SP_CLIENT_ID>
+# debezium.sink.zerobus.client.secret=<SP_CLIENT_SECRET>
+# Optional: pin all events to one fully-qualified managed Delta table.
+# debezium.sink.zerobus.table=<CATALOG>.<SCHEMA>.<TABLE>
+
+# =============================================================================
+# Sink option B (GA): REST API. No persistent connection, no Kafka flag.
+# POSTs one record per request to /zerobus/v1/tables/<table>/insert.
+# =============================================================================
+# debezium.sink.type=zerobusrest
+# debezium.sink.zerobusrest.uri=https://<WORKSPACE_ID>.zerobus.<REGION>.cloud.databricks.com
+# debezium.sink.zerobusrest.workspace.url=<WORKSPACE_URL>
+# debezium.sink.zerobusrest.workspace.id=<WORKSPACE_ID>
+# debezium.sink.zerobusrest.client.id=<SP_CLIENT_ID>
+# debezium.sink.zerobusrest.client.secret=<SP_CLIENT_SECRET>
+# debezium.sink.zerobusrest.table=<CATALOG>.<SCHEMA>.<TABLE>
+
+# =============================================================================
+# Sink option C (BETA): native Kafka producer -> Zerobus Kafka endpoint.
+# Requires the `enableZerobusKafkaIngress` region flag.
+# =============================================================================
+# ---- Sink: native Kafka producer pointed at the Zerobus Kafka endpoint ------
+debezium.sink.type=kafka
+debezium.sink.kafka.producer.bootstrap.servers=<WORKSPACE_ID>.zerobus.<REGION>.cloud.databricks.com:9092
+debezium.sink.kafka.producer.security.protocol=SASL_SSL
+debezium.sink.kafka.producer.sasl.mechanism=OAUTHBEARER
+debezium.sink.kafka.producer.key.serializer=org.apache.kafka.common.serialization.StringSerializer
+debezium.sink.kafka.producer.value.serializer=org.apache.kafka.common.serialization.StringSerializer
+
+# OAuth via the Databricks service principal, scoped to the Zerobus audience.
+debezium.sink.kafka.producer.sasl.login.callback.handler.class=io.debezium.server.databricks.zerobus.ZerobusOAuthBearerLoginCallbackHandler
+debezium.sink.kafka.producer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+  workspaceUrl="<WORKSPACE_URL>" \
+  workspaceId="<WORKSPACE_ID>" \
+  clientId="<SP_CLIENT_ID>" \
+  clientSecret="<SP_CLIENT_SECRET>" ;
+
+# Zerobus is at-least-once. Deduplicate downstream (e.g. SDP AUTO CDC SEQUENCE BY
+# using the Debezium source LSN/offset carried in the record).

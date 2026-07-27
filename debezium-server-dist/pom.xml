@@ -36,6 +36,7 @@
         <sink.instructlab.scope>compile</sink.instructlab.scope>
         <sink.fluss.scope>compile</sink.fluss.scope>
         <sink.jdbc.scope>compile</sink.jdbc.scope>
+        <sink.databricks-zerobus.scope>compile</sink.databricks-zerobus.scope>
 
         <!-- Storage module dependency scopes - default to test -->
         <storage.chronicle-queue.scope>test</storage.chronicle-queue.scope>
@@ -105,6 +106,11 @@
             <groupId>io.debezium</groupId>
             <artifactId>debezium-server-kafka</artifactId>
             <scope>${sink.kafka.scope}</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-databricks-zerobus</artifactId>
+            <scope>${sink.databricks-zerobus.scope}</scope>
         </dependency>
         <dependency>
             <groupId>io.debezium</groupId>
@@ -273,6 +279,7 @@
                 <sink.instructlab.scope>test</sink.instructlab.scope>
                 <sink.fluss.scope>test</sink.fluss.scope>
                 <sink.jdbc.scope>test</sink.jdbc.scope>
+                <sink.databricks-zerobus.scope>test</sink.databricks-zerobus.scope>
             </properties>
         </profile>
 
@@ -479,6 +486,13 @@
             <id>connector-db2</id>
             <properties>
                 <connector.db2.scope>compile</connector.db2.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-databricks-zerobus</id>
+            <properties>
+                <sink.databricks-zerobus.scope>compile</sink.databricks-zerobus.scope>
             </properties>
         </profile>
 

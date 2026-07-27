@@ -1,0 +1,2 @@
+io.debezium.server.databricks.zerobus.ZerobusChangeConsumer
+io.debezium.server.databricks.zerobus.ZerobusRestChangeConsumer

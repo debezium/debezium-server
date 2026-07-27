@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>io.debezium</groupId>
+        <artifactId>debezium-server</artifactId>
+        <version>3.7.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>debezium-server-databricks-zerobus</artifactId>
+    <name>Debezium Server Databricks Zerobus Integration</name>
+    <packaging>jar</packaging>
+
+    <properties>
+        <version.zerobus.sdk>1.3.0</version.zerobus.sdk>
+    </properties>
+
+    <description>
+        Databricks Zerobus Ingest integration for Debezium Server. Provides a Kafka
+        OAUTHBEARER login callback handler so the native Kafka sink can authenticate
+        against the Zerobus Kafka-compatible endpoint (port 9092, SASL_SSL) using a
+        Databricks service principal and the Zerobus token audience.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-core</artifactId>
+        </dependency>
+
+        <!-- Kafka client provides AuthenticateCallbackHandler / OAuthBearer SPI (Kafka route) -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
+
+        <!--
+          Databricks Zerobus Ingest SDK (gRPC route, GA). It is a JNI wrapper over a native Rust
+          client and ships per-platform native libraries, so it is marked optional: the module
+          compiles and unit-tests against it, but it is NOT propagated transitively into the default
+          Debezium Server distribution. Deployments that use the gRPC route (debezium.sink.type=
+          zerobus) must add this jar to the runtime classpath; the REST route (zerobusrest) needs
+          nothing from it.
+        -->
+        <dependency>
+            <groupId>com.databricks</groupId>
+            <artifactId>zerobus-ingest-sdk</artifactId>
+            <version>${version.zerobus.sdk}</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+          The Zerobus SDK pulls Jackson up to a newer version in the server distribution, which
+          drops jackson-dataformat-yaml from the assembled classpath. Quarkus config-yaml needs it
+          (NoClassDefFoundError: YAMLFactory at startup otherwise), so pin it back in explicitly.
+        -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
