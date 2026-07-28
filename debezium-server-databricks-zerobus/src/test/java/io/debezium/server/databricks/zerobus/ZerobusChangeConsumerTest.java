@@ -7,6 +7,8 @@ package io.debezium.server.databricks.zerobus;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -25,6 +27,7 @@ import com.databricks.zerobus.ZerobusJsonStream;
 import io.debezium.DebeziumException;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 
 /**
  * Tests the gRPC route's batch handling by mocking the Databricks {@link ZerobusJsonStream} (the
@@ -81,6 +84,45 @@ class ZerobusChangeConsumerTest {
         assertThatThrownBy(() -> consumer.handle(events(event("{\"id\":1}", "main.default.customers"))))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("main.default.customers");
+    }
+
+    @Test
+    void recordsIngestAndFlushMetricsOnSuccess() throws Exception {
+        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
+        ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
+        set(consumer, "metrics", metrics);
+
+        consumer.handle(events(event("{\"id\":1}", "main.default.customers")));
+
+        verify(metrics).recordIngested(null, -1L); // no typed envelope in this event → null op / -1 ts
+        verify(metrics).flushed(anyLong());
+    }
+
+    @Test
+    void recordsSkippedMetricForTombstone() throws Exception {
+        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
+        ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
+        set(consumer, "metrics", metrics);
+
+        consumer.handle(events(event(null, "main.default.customers")));
+
+        verify(metrics).recordSkipped();
+        verify(metrics, never()).recordIngested(org.mockito.ArgumentMatchers.any(), anyLong());
+    }
+
+    @Test
+    void recordsErrorMetricWhenIngestFails() throws Exception {
+        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        doThrow(new RuntimeException("boom")).when(stream).ingestRecordOffset(eq("{\"id\":1}"));
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
+        ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
+        set(consumer, "metrics", metrics);
+
+        assertThatThrownBy(() -> consumer.handle(events(event("{\"id\":1}", "main.default.customers"))))
+                .isInstanceOf(DebeziumException.class);
+        verify(metrics).recordError();
     }
 
     // --- helpers -------------------------------------------------------------

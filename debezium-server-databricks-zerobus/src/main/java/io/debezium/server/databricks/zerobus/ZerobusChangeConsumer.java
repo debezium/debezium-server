@@ -33,6 +33,7 @@ import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
+import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 
 /**
  * Debezium Server sink that writes change events directly into Databricks Zerobus Ingest using the
@@ -61,6 +62,8 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
     private ZerobusChangeConsumerConfig config;
     private ZerobusSdk sdk;
+    private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("grpc");
+    private long batchesSinceLog = 0;
 
     // One stream per target table (Zerobus: 1 stream = 1 table).
     private final Map<String, ZerobusJsonStream> streams = new HashMap<>();
@@ -72,6 +75,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         this.config = new ZerobusChangeConsumerConfig(configuration);
 
         this.sdk = new ZerobusSdk(config.getEndpoint(), config.getWorkspaceUrl());
+        metrics.register();
         LOGGER.info("Zerobus gRPC sink connected: endpoint={}, workspaceUrl={}", config.getEndpoint(), config.getWorkspaceUrl());
     }
 
@@ -81,6 +85,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         for (Map.Entry<String, ZerobusJsonStream> entry : streams.entrySet()) {
             try {
                 entry.getValue().close();
+                metrics.streamClosed();
             }
             catch (Exception e) {
                 LOGGER.warn("Could not close Zerobus stream for table '{}'", entry.getKey(), e);
@@ -90,6 +95,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         if (sdk != null) {
             sdk.close();
         }
+        metrics.unregister();
         LOGGER.info("Zerobus gRPC sink closed");
     }
 
@@ -103,8 +109,10 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 LOGGER.debug("Ingesting into {}: {}", table, json);
                 try {
                     stream(table).ingestRecordOffset(json);
+                    metrics.recordIngested(operationOf(record), sourceTsMsOf(record));
                 }
                 catch (Exception e) {
+                    metrics.recordError();
                     throw new DebeziumException("Failed to ingest record into Zerobus table '" + table + "'", e);
                 }
             }
@@ -112,19 +120,32 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 // Skip records that are not ingestable: tombstones / null payloads, and events whose
                 // destination is not a fully-qualified table (e.g. MySQL schema-history / DDL events,
                 // which the binlog connector emits on the topic-prefix "topic").
+                metrics.recordSkipped();
                 LOGGER.trace("Skipping record for destination '{}' (table={}): {}", record.destination(), table, json);
             }
             record.commit();
         }
 
         // Flush every touched stream to durability before acknowledging the batch (at-least-once).
+        final long flushStartNanos = System.nanoTime();
         for (Map.Entry<String, ZerobusJsonStream> entry : streams.entrySet()) {
             try {
                 entry.getValue().flush();
             }
             catch (Exception e) {
+                metrics.recordError();
                 throw new DebeziumException("Failed to flush Zerobus stream for table '" + entry.getKey() + "'", e);
             }
+        }
+        metrics.flushed((System.nanoTime() - flushStartNanos) / 1_000_000L);
+        maybeLogMetrics();
+    }
+
+    private void maybeLogMetrics() {
+        final int interval = config.getMetricsLogInterval();
+        if (interval > 0 && ++batchesSinceLog >= interval) {
+            batchesSinceLog = 0;
+            metrics.logMetricsSummary();
         }
     }
 
@@ -180,6 +201,68 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         return record.value() == null ? null : verbatim.apply(record.value());
     }
 
+    /**
+     * Extracts the Debezium operation ({@code c}/{@code u}/{@code d}/{@code r}) from a change event, or
+     * {@code null} when unavailable. Shared by the gRPC and REST routes to split ingestion metrics by
+     * operation. Handles both shapes the sink sees in practice:
+     * <ul>
+     * <li>the full Debezium envelope, which carries {@code op} at the top level;</li>
+     * <li>an unwrapped record (the recommended {@code ExtractNewRecordState} setup with
+     * {@code add.fields=op,...}), which exposes it as {@code __op} (default {@code __} prefix).</li>
+     * </ul>
+     */
+    static String operationOf(BatchEvent record) {
+        org.apache.kafka.connect.data.Struct struct = valueStruct(record);
+        if (struct == null) {
+            return null;
+        }
+        if (struct.schema().field("op") != null) {
+            return struct.getString("op");
+        }
+        if (struct.schema().field("__op") != null) {
+            return struct.getString("__op");
+        }
+        return null;
+    }
+
+    /**
+     * Extracts {@code source.ts_ms} (the source database change timestamp) from a change event, or
+     * {@code -1} when unavailable. Used to compute the sink's freshness / lag behind the source.
+     * Handles both the full envelope (nested {@code source.ts_ms}) and an unwrapped record with
+     * {@code add.fields=source.ts_ms} (exposed as the top-level {@code __source_ts_ms}).
+     */
+    static long sourceTsMsOf(BatchEvent record) {
+        org.apache.kafka.connect.data.Struct struct = valueStruct(record);
+        if (struct == null) {
+            return -1L;
+        }
+        // Envelope: nested source.ts_ms
+        if (struct.schema().field("source") != null && struct.get("source") instanceof org.apache.kafka.connect.data.Struct) {
+            org.apache.kafka.connect.data.Struct sourceStruct = (org.apache.kafka.connect.data.Struct) struct.get("source");
+            long ts = longField(sourceStruct, "ts_ms");
+            if (ts >= 0) {
+                return ts;
+            }
+        }
+        // Unwrapped: flattened __source_ts_ms
+        return longField(struct, "__source_ts_ms");
+    }
+
+    private static org.apache.kafka.connect.data.Struct valueStruct(BatchEvent record) {
+        Object value = record.record() == null ? null : record.record().value();
+        return value instanceof org.apache.kafka.connect.data.Struct ? (org.apache.kafka.connect.data.Struct) value : null;
+    }
+
+    private static long longField(org.apache.kafka.connect.data.Struct struct, String field) {
+        if (struct.schema().field(field) != null) {
+            Object v = struct.get(field);
+            if (v instanceof Number) {
+                return ((Number) v).longValue();
+            }
+        }
+        return -1L;
+    }
+
     /** Zerobus only accepts JSON objects; a null or "null"/non-object payload (a tombstone) must be skipped. */
     static boolean isJsonObject(String json) {
         if (json == null) {
@@ -199,7 +282,9 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
             StreamConfigurationOptions options = StreamConfigurationOptions.builder()
                     .setMaxInflightRecords(config.getMaxInflightRecords())
                     .build();
-            return sdk.createJsonStream(table, config.getClientId(), config.getClientSecret(), options).join();
+            ZerobusJsonStream openedStream = sdk.createJsonStream(table, config.getClientId(), config.getClientSecret(), options).join();
+            metrics.streamOpened();
+            return openedStream;
         }
         catch (Exception e) {
             throw new DebeziumException("Could not open Zerobus stream for table '" + table + "'", e);
@@ -214,7 +299,8 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 ZerobusChangeConsumerConfig.CLIENT_ID,
                 ZerobusChangeConsumerConfig.CLIENT_SECRET,
                 ZerobusChangeConsumerConfig.TABLE,
-                ZerobusChangeConsumerConfig.MAX_INFLIGHT_RECORDS);
+                ZerobusChangeConsumerConfig.MAX_INFLIGHT_RECORDS,
+                ZerobusChangeConsumerConfig.METRICS_LOG_INTERVAL);
     }
 
     @Override

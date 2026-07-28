@@ -58,12 +58,21 @@ public class ZerobusRestChangeConsumerConfig {
             .withDescription("Fully qualified default target table (catalog.schema.table). Used when the mapped "
                     + "topic name is not already a fully qualified table name.");
 
+    public static final Field METRICS_LOG_INTERVAL = Field.create("metrics.log.interval")
+            .withDisplayName("Metrics log interval (batches)")
+            .withType(ConfigDef.Type.INT)
+            .withDefault(0)
+            .withImportance(ConfigDef.Importance.LOW)
+            .withDescription("Emit a periodic INFO log line summarizing the sink metrics every N processed batches. "
+                    + "0 (the default) disables periodic logging; the metrics remain available over JMX regardless.");
+
     private final String uri;
     private final String workspaceUrl;
     private final String workspaceId;
     private final String clientId;
     private final String clientSecret;
     private final String table;
+    private final int metricsLogInterval;
 
     public ZerobusRestChangeConsumerConfig(Configuration config) {
         this.uri = config.getString(URI);
@@ -72,6 +81,7 @@ public class ZerobusRestChangeConsumerConfig {
         this.clientId = config.getString(CLIENT_ID);
         this.clientSecret = config.getString(CLIENT_SECRET);
         this.table = config.getString(TABLE);
+        this.metricsLogInterval = config.getInteger(METRICS_LOG_INTERVAL);
     }
 
     public String getUri() {
@@ -96,5 +106,9 @@ public class ZerobusRestChangeConsumerConfig {
 
     public String getTable() {
         return table;
+    }
+
+    public int getMetricsLogInterval() {
+        return metricsLogInterval;
     }
 }

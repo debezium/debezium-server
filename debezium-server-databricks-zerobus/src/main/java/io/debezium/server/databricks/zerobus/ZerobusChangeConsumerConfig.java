@@ -61,12 +61,21 @@ public class ZerobusChangeConsumerConfig {
             .withImportance(ConfigDef.Importance.MEDIUM)
             .withDescription("Maximum number of un-acknowledged records per stream (non-blocking ingestion).");
 
+    public static final Field METRICS_LOG_INTERVAL = Field.create("metrics.log.interval")
+            .withDisplayName("Metrics log interval (batches)")
+            .withType(ConfigDef.Type.INT)
+            .withDefault(0)
+            .withImportance(ConfigDef.Importance.LOW)
+            .withDescription("Emit a periodic INFO log line summarizing the sink metrics every N processed batches. "
+                    + "0 (the default) disables periodic logging; the metrics remain available over JMX regardless.");
+
     private final String endpoint;
     private final String workspaceUrl;
     private final String clientId;
     private final String clientSecret;
     private final String table;
     private final int maxInflightRecords;
+    private final int metricsLogInterval;
 
     public ZerobusChangeConsumerConfig(Configuration config) {
         this.endpoint = config.getString(ENDPOINT);
@@ -75,6 +84,7 @@ public class ZerobusChangeConsumerConfig {
         this.clientSecret = config.getString(CLIENT_SECRET);
         this.table = config.getString(TABLE);
         this.maxInflightRecords = config.getInteger(MAX_INFLIGHT_RECORDS);
+        this.metricsLogInterval = config.getInteger(METRICS_LOG_INTERVAL);
     }
 
     public String getEndpoint() {
@@ -99,5 +109,9 @@ public class ZerobusChangeConsumerConfig {
 
     public int getMaxInflightRecords() {
         return maxInflightRecords;
+    }
+
+    public int getMetricsLogInterval() {
+        return metricsLogInterval;
     }
 }

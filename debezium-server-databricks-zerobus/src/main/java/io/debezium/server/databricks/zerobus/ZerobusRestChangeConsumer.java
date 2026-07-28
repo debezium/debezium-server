@@ -34,6 +34,7 @@ import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
+import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 
 /**
  * Debezium Server sink that writes change events into Databricks Zerobus Ingest over the REST API
@@ -58,6 +59,8 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
     private ZerobusTokenProvider tokenProvider;
     private HttpClient httpClient;
     private String baseUri;
+    private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("rest");
+    private long batchesSinceLog = 0;
 
     @PostConstruct
     void connect() {
@@ -70,12 +73,14 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
                 config.getWorkspaceUrl(), config.getWorkspaceId(), config.getClientId(), config.getClientSecret(), config.getTable());
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
+        metrics.register();
         LOGGER.info("Zerobus REST sink connected: uri={}, table={}", baseUri, config.getTable());
     }
 
     @PreDestroy
     @Override
     public void close() {
+        metrics.unregister();
         LOGGER.info("Zerobus REST sink closed");
     }
 
@@ -86,13 +91,29 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
             String table = resolveTable(record.destination());
             if (ZerobusChangeConsumer.isJsonObject(json) && table != null) {
                 try {
+                    final long postStartNanos = System.nanoTime();
                     post(table, json);
+                    metrics.flushed((System.nanoTime() - postStartNanos) / 1_000_000L);
+                    metrics.recordIngested(ZerobusChangeConsumer.operationOf(record), ZerobusChangeConsumer.sourceTsMsOf(record));
                 }
                 catch (IOException e) {
+                    metrics.recordError();
                     throw new DebeziumException("Failed to POST record to Zerobus REST for table '" + table + "'", e);
                 }
             }
+            else {
+                metrics.recordSkipped();
+            }
             record.commit();
+        }
+        maybeLogMetrics();
+    }
+
+    private void maybeLogMetrics() {
+        final int interval = config.getMetricsLogInterval();
+        if (interval > 0 && ++batchesSinceLog >= interval) {
+            batchesSinceLog = 0;
+            metrics.logMetricsSummary();
         }
     }
 
@@ -132,7 +153,8 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
                 ZerobusRestChangeConsumerConfig.WORKSPACE_ID,
                 ZerobusRestChangeConsumerConfig.CLIENT_ID,
                 ZerobusRestChangeConsumerConfig.CLIENT_SECRET,
-                ZerobusRestChangeConsumerConfig.TABLE);
+                ZerobusRestChangeConsumerConfig.TABLE,
+                ZerobusRestChangeConsumerConfig.METRICS_LOG_INTERVAL);
     }
 
     @Override

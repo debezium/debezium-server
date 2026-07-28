@@ -26,6 +26,7 @@ import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
+import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 
 /**
  * Verifies the REST route's HTTP contract by mocking the JDK {@link HttpClient} (as suggested for
@@ -92,6 +93,29 @@ class ZerobusRestChangeConsumerTest {
         assertThatThrownBy(() -> consumer.handle(events(event("{\"id\":1}", "oradbz.main.default.customers"))))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("main.default.customers");
+    }
+
+    @Test
+    void recordsIngestAndFlushMetricsOnSuccessfulPost() throws Exception {
+        stubResponse(200, "{}");
+        ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
+        set(consumer, "metrics", metrics);
+
+        consumer.handle(events(event("{\"id\":1}", "oradbz.main.default.customers")));
+
+        org.mockito.Mockito.verify(metrics).recordIngested(null, -1L);
+        org.mockito.Mockito.verify(metrics).flushed(org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void recordsErrorMetricOnNonSuccessStatus() throws Exception {
+        stubResponse(500, "boom");
+        ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
+        set(consumer, "metrics", metrics);
+
+        assertThatThrownBy(() -> consumer.handle(events(event("{\"id\":1}", "oradbz.main.default.customers"))))
+                .isInstanceOf(DebeziumException.class);
+        org.mockito.Mockito.verify(metrics).recordError();
     }
 
     // --- helpers -------------------------------------------------------------
