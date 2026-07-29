@@ -167,7 +167,7 @@ class ZerobusOAuthBearerLoginCallbackHandlerTest {
         return callback;
     }
 
-    private static final class RecordingHttpClient implements ZerobusOAuthBearerLoginCallbackHandler.TokenHttpClient {
+    private static final class RecordingHttpClient implements TokenHttpClient {
         private final String response;
         int callCount;
         String lastUrl;

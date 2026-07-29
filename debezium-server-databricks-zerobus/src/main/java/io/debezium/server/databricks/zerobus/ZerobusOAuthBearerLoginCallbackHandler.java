@@ -6,13 +6,8 @@
 package io.debezium.server.databricks.zerobus;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
@@ -64,9 +59,6 @@ public class ZerobusOAuthBearerLoginCallbackHandler implements AuthenticateCallb
 
     /** Assumed lifetime for a statically-supplied token (e.g. a PAT) when no expiry is known. */
     private static final long STATIC_TOKEN_LIFETIME_MS = 24L * 60 * 60 * 1000;
-
-    private static final Pattern EXPIRES_IN_PATTERN = Pattern.compile("\"expires_in\"\\s*:\\s*(\\d+)");
-    private static final Pattern ACCESS_TOKEN_PATTERN = Pattern.compile("\"access_token\"\\s*:\\s*\"([^\"]+)\"");
 
     private String tokenEndpoint;
     private String audience;
@@ -217,22 +209,13 @@ public class ZerobusOAuthBearerLoginCallbackHandler implements AuthenticateCallb
     }
 
     private ZerobusOAuthBearerToken requestToken(long issuedAtMs) throws IOException {
-        String body = "grant_type=client_credentials"
-                + "&scope=all-apis"
-                + "&resource=" + URLEncoder.encode(audience, StandardCharsets.UTF_8)
-                + "&authorization_details=" + URLEncoder.encode(authorizationDetails, StandardCharsets.UTF_8);
+        ZerobusTokenExchange exchange = new ZerobusTokenExchange(
+                tokenEndpoint, audience, authorizationDetails, clientId, clientSecret, httpClient);
+        ZerobusTokenExchange.Token token = exchange.requestToken();
+        long expiryMs = issuedAtMs + token.expiresInSeconds * 1000L;
 
-        String basicAuth = Base64.getEncoder()
-                .encodeToString((clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
-
-        String response = httpClient.postForm(tokenEndpoint, "Basic " + basicAuth, body);
-
-        String accessToken = firstMatch(ACCESS_TOKEN_PATTERN, response, "access_token");
-        long expiresInSeconds = Long.parseLong(firstMatch(EXPIRES_IN_PATTERN, response, "expires_in"));
-        long expiryMs = issuedAtMs + expiresInSeconds * 1000L;
-
-        LOGGER.debug("Obtained Zerobus OAuth token, expires in {}s", expiresInSeconds);
-        return new ZerobusOAuthBearerToken(accessToken, expiryMs, issuedAtMs, principalName);
+        LOGGER.debug("Obtained Zerobus OAuth token, expires in {}s", token.expiresInSeconds);
+        return new ZerobusOAuthBearerToken(token.accessToken, expiryMs, issuedAtMs, principalName);
     }
 
     @Override
@@ -244,14 +227,6 @@ public class ZerobusOAuthBearerLoginCallbackHandler implements AuthenticateCallb
 
     void setHttpClient(TokenHttpClient httpClient) {
         this.httpClient = httpClient;
-    }
-
-    private static String firstMatch(Pattern pattern, String response, String field) throws IOException {
-        Matcher matcher = pattern.matcher(response);
-        if (!matcher.find()) {
-            throw new IOException("Could not find '" + field + "' in Zerobus token endpoint response");
-        }
-        return matcher.group(1);
     }
 
     private static String requiredOption(Map<String, ?> options, String key) {
@@ -271,8 +246,4 @@ public class ZerobusOAuthBearerLoginCallbackHandler implements AuthenticateCallb
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
-    /** Minimal HTTP abstraction so the token exchange can be unit-tested without a live workspace. */
-    interface TokenHttpClient {
-        String postForm(String url, String authorizationHeader, String formBody) throws IOException;
-    }
 }

@@ -64,15 +64,32 @@ class ZerobusChangeConsumerTest {
     }
 
     @Test
-    void skipsTombstoneButStillFlushesTouchedStreams() throws Exception {
+    void skipsTombstoneAndFlushesNothingWhenNoStreamTouched() throws Exception {
         ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
 
         consumer.handle(events(event(null, "main.default.customers")));
 
         verify(stream, never()).ingestRecordOffset(org.mockito.ArgumentMatchers.anyString());
-        // flush still runs over the (pre-seeded) stream map at end of batch
-        verify(stream).flush();
+        // a tombstone-only batch touches no stream, so nothing is flushed (only touched streams flush)
+        verify(stream, never()).flush();
+    }
+
+    @Test
+    void flushesOnlyTheStreamsTouchedInTheBatch() throws Exception {
+        ZerobusJsonStream customers = mock(ZerobusJsonStream.class);
+        ZerobusJsonStream orders = mock(ZerobusJsonStream.class);
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", customers);
+        // pre-seed a second, untouched stream
+        @SuppressWarnings("unchecked")
+        Map<String, ZerobusJsonStream> streams = (Map<String, ZerobusJsonStream>) get(consumer, "streams");
+        streams.put("main.default.orders", orders);
+
+        // only customers receives a record this batch
+        consumer.handle(events(event("{\"id\":1}", "main.default.customers")));
+
+        verify(customers).flush();
+        verify(orders, never()).flush(); // untouched stream must not be flushed
     }
 
     @Test

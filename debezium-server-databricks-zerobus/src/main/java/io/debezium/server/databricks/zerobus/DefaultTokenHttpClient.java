@@ -14,8 +14,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
-import io.debezium.server.databricks.zerobus.ZerobusOAuthBearerLoginCallbackHandler.TokenHttpClient;
-
 /**
  * Default {@link TokenHttpClient} backed by the JDK {@link HttpClient}. Posts an
  * {@code application/x-www-form-urlencoded} body to the Databricks OIDC token endpoint.

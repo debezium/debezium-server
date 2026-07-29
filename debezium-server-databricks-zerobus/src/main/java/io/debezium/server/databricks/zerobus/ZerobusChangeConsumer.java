@@ -6,8 +6,10 @@
 package io.debezium.server.databricks.zerobus;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -102,6 +104,11 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     @Override
     public void handle(CapturingEvents<BatchEvent> events) throws InterruptedException {
 
+        // Track only the streams that actually received a record in this batch, so we flush those
+        // rather than every open stream: with N tables but only a few touched per batch, flushing
+        // all N would add avoidable round-trips.
+        final Set<String> touchedTables = new HashSet<>();
+
         for (BatchEvent record : events.records()) {
             String json = toZerobusJson(record, this::getString);
             String table = resolveTable(record.destination());
@@ -109,6 +116,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 LOGGER.debug("Ingesting into {}: {}", table, json);
                 try {
                     stream(table).ingestRecordOffset(json);
+                    touchedTables.add(table);
                     metrics.recordIngested(operationOf(record), sourceTsMsOf(record));
                 }
                 catch (Exception e) {
@@ -126,15 +134,15 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
             record.commit();
         }
 
-        // Flush every touched stream to durability before acknowledging the batch (at-least-once).
+        // Flush only the streams touched in this batch to durability before acknowledging (at-least-once).
         final long flushStartNanos = System.nanoTime();
-        for (Map.Entry<String, ZerobusJsonStream> entry : streams.entrySet()) {
+        for (String table : touchedTables) {
             try {
-                entry.getValue().flush();
+                streams.get(table).flush();
             }
             catch (Exception e) {
                 metrics.recordError();
-                throw new DebeziumException("Failed to flush Zerobus stream for table '" + entry.getKey() + "'", e);
+                throw new DebeziumException("Failed to flush Zerobus stream for table '" + table + "'", e);
             }
         }
         metrics.flushed((System.nanoTime() - flushStartNanos) / 1_000_000L);
