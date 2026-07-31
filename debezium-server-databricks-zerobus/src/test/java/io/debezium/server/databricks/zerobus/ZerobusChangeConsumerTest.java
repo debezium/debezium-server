@@ -93,6 +93,25 @@ class ZerobusChangeConsumerTest {
     }
 
     @Test
+    void commitsOffsetsOnlyAfterTheStreamIsFlushed() throws Exception {
+        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
+
+        BatchEvent record = mock(BatchEvent.class);
+        org.mockito.Mockito.when(record.value()).thenReturn("{\"id\":1}");
+        org.mockito.Mockito.when(record.destination()).thenReturn("main.default.customers");
+
+        consumer.handle(events(record));
+
+        // The offset must be acknowledged only after the batch is durable: flush first, commit second.
+        // Committing before the flush would risk dropping buffered records on a crash (at-least-once).
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(stream, record);
+        inOrder.verify(stream).ingestRecordOffset("{\"id\":1}");
+        inOrder.verify(stream).flush();
+        inOrder.verify(record).commit();
+    }
+
+    @Test
     void wrapsIngestErrorAsDebeziumException() throws Exception {
         ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
         doThrow(new RuntimeException("boom")).when(stream).ingestRecordOffset("{\"id\":1}");

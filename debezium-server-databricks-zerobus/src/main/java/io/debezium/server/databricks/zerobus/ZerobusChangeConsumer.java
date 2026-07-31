@@ -131,10 +131,12 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 metrics.recordSkipped();
                 LOGGER.trace("Skipping record for destination '{}' (table={}): {}", record.destination(), table, json);
             }
-            record.commit();
         }
 
-        // Flush only the streams touched in this batch to durability before acknowledging (at-least-once).
+        // Flush only the streams touched in this batch to durability, then acknowledge the offsets.
+        // The commit must happen after the flush: committing first would advance the source offset
+        // while the ingested records are still buffered, so a crash between commit and flush would
+        // drop them (breaking the at-least-once guarantee).
         final long flushStartNanos = System.nanoTime();
         for (String table : touchedTables) {
             try {
@@ -146,6 +148,10 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
             }
         }
         metrics.flushed((System.nanoTime() - flushStartNanos) / 1_000_000L);
+
+        for (BatchEvent record : events.records()) {
+            record.commit();
+        }
         maybeLogMetrics();
     }
 

@@ -42,7 +42,7 @@ public class ZerobusChangeConsumerConfig {
 
     public static final Field CLIENT_SECRET = Field.create("client.secret")
             .withDisplayName("Service principal client secret")
-            .withType(ConfigDef.Type.STRING)
+            .withType(ConfigDef.Type.PASSWORD)
             .withImportance(ConfigDef.Importance.HIGH)
             .withValidation(Field::isRequired)
             .withDescription("OAuth client secret for the service principal.");
