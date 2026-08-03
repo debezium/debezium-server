@@ -83,6 +83,7 @@ mvn clean package -DskipITs -DskipTests -Passembly -Pcustom-distribution,sink-ka
 - `sink-milvus` - Milvus
 - `sink-qdrant` - Qdrant
 - `sink-instructlab` - InstructLab
+- `sink-ydb` - YDB Topics
 
 This approach allows you to create smaller, more focused distributions that only include the sink modules you actually need.
 

@@ -84,6 +84,7 @@
         <module>debezium-server-sns</module>
         <module>debezium-server-fluss</module>
         <module>debezium-server-instructlab</module>
+        <module>debezium-server-ydb</module>
         <module>debezium-system-tests</module>
         <module>debezium-server-native-dist</module>
     </modules>
