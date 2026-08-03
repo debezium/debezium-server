@@ -20,6 +20,16 @@
             <groupId>io.debezium</groupId>
             <artifactId>debezium-storage-redis</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-storage-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-storage-common</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
         <!-- Target systems -->
         <dependency>
