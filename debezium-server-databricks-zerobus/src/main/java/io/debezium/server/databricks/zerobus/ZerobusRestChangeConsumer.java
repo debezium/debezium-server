@@ -69,9 +69,12 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
         this.config = new ZerobusRestChangeConsumerConfig(configuration);
 
         this.baseUri = config.getUri().endsWith("/") ? config.getUri().substring(0, config.getUri().length() - 1) : config.getUri();
+        // A single HttpClient (and therefore a single thread pool) serves both the record POSTs and
+        // the OAuth token exchange.
+        this.httpClient = HttpClient.newBuilder().connectTimeout(DefaultTokenHttpClient.CONNECT_TIMEOUT).build();
         this.tokenProvider = new ZerobusTokenProvider(
-                config.getWorkspaceUrl(), config.getWorkspaceId(), config.getClientId(), config.getClientSecret(), config.getTable());
-        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+                config.getWorkspaceUrl(), config.getWorkspaceId(), config.getClientId(), config.getClientSecret(), config.getTable(),
+                new DefaultTokenHttpClient(httpClient));
 
         metrics.register();
         LOGGER.info("Zerobus REST sink connected: uri={}, table={}", baseUri, config.getTable());

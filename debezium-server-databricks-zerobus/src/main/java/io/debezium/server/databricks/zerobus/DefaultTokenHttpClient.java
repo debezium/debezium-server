@@ -17,15 +17,24 @@ import java.time.Duration;
 /**
  * Default {@link TokenHttpClient} backed by the JDK {@link HttpClient}. Posts an
  * {@code application/x-www-form-urlencoded} body to the Databricks OIDC token endpoint.
+ * <p>
+ * A caller that already owns an {@link HttpClient} should pass it in, so that a single client (and
+ * therefore a single thread pool) serves both the token exchange and the caller's own requests.
  */
 class DefaultTokenHttpClient implements TokenHttpClient {
 
-    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(CONNECT_TIMEOUT)
-            .build();
+    private final HttpClient httpClient;
+
+    DefaultTokenHttpClient() {
+        this(HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build());
+    }
+
+    DefaultTokenHttpClient(HttpClient httpClient) {
+        this.httpClient = httpClient;
+    }
 
     @Override
     public String postForm(String url, String authorizationHeader, String formBody) throws IOException {
