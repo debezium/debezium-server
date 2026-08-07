@@ -34,18 +34,9 @@
             <artifactId>kafka-clients</artifactId>
         </dependency>
 
-        <!--
-          Databricks Zerobus Ingest SDK (gRPC route, GA). It is a JNI wrapper over a native Rust
-          client and ships per-platform native libraries, so it is marked optional: the module
-          compiles and unit-tests against it, but it is NOT propagated transitively into the default
-          Debezium Server distribution. Deployments that use the gRPC route (debezium.sink.type=
-          zerobus) must add this jar to the runtime classpath; the REST route (zerobusrest) needs
-          nothing from it.
-        -->
         <dependency>
             <groupId>com.databricks</groupId>
             <artifactId>zerobus-ingest-sdk</artifactId>
-            <optional>true</optional>
         </dependency>
 
         <!--

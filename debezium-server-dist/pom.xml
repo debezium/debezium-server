@@ -494,15 +494,6 @@
             <properties>
                 <sink.databricks-zerobus.scope>compile</sink.databricks-zerobus.scope>
             </properties>
-            <dependencies>
-                <!-- The sink declares the Zerobus SDK as optional, so it is not resolved transitively.
-                     A distribution built for this sink has to request it explicitly, otherwise the
-                     gRPC route fails at startup with NoClassDefFoundError on ZerobusSdk. -->
-                <dependency>
-                    <groupId>com.databricks</groupId>
-                    <artifactId>zerobus-ingest-sdk</artifactId>
-                </dependency>
-            </dependencies>
         </profile>
 
         <profile>
