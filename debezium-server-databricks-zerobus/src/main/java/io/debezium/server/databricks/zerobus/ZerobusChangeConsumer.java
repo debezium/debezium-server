@@ -295,8 +295,8 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     private ZerobusJsonStream createStream(String table) {
         try {
             LOGGER.info("Opening Zerobus JSON stream for table '{}'", table);
-            StreamConfigurationOptions options = StreamConfigurationOptions.builder()
-                    .setMaxInflightRecords(config.getMaxInflightRecords())
+            StreamConfigurationOptions options = recoveryOptions(StreamConfigurationOptions.builder()
+                    .setMaxInflightRecords(config.getMaxInflightRecords()))
                     .build();
             ZerobusJsonStream openedStream = sdk.createJsonStream(table, config.getClientId(), config.getClientSecret(), options).join();
             metrics.streamOpened();
@@ -305,6 +305,41 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         catch (Exception e) {
             throw new DebeziumException("Could not open Zerobus stream for table '" + table + "'", e);
         }
+    }
+
+    /**
+     * Applies the stream recovery options that are configured, leaving the others at whatever the SDK
+     * defaults to.
+     * <p>
+     * With recovery enabled the SDK re-sends the records a failed stream has not acknowledged, which is
+     * safe precisely because it knows which those are; the sink therefore does not retry the batch
+     * itself and cannot duplicate records that already landed. An error that recovery cannot resolve
+     * still propagates, so the offset is not committed past it.
+     */
+    static StreamConfigurationOptions.StreamConfigurationOptionsBuilder recoveryOptions(
+                                                                                        StreamConfigurationOptions.StreamConfigurationOptionsBuilder builder,
+                                                                                        ZerobusChangeConsumerConfig config) {
+        if (config.getRecovery() != null) {
+            builder.setRecovery(config.getRecovery());
+        }
+        if (config.getRecoveryRetries() != null) {
+            builder.setRecoveryRetries(config.getRecoveryRetries());
+        }
+        if (config.getRecoveryBackoffMs() != null) {
+            builder.setRecoveryBackoffMs(config.getRecoveryBackoffMs());
+        }
+        if (config.getRecoveryTimeoutMs() != null) {
+            builder.setRecoveryTimeoutMs(config.getRecoveryTimeoutMs());
+        }
+        if (config.getFlushTimeoutMs() != null) {
+            builder.setFlushTimeoutMs(config.getFlushTimeoutMs());
+        }
+        return builder;
+    }
+
+    private StreamConfigurationOptions.StreamConfigurationOptionsBuilder recoveryOptions(
+                                                                                         StreamConfigurationOptions.StreamConfigurationOptionsBuilder builder) {
+        return recoveryOptions(builder, config);
     }
 
     @Override
@@ -316,6 +351,11 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 ZerobusChangeConsumerConfig.CLIENT_SECRET,
                 ZerobusChangeConsumerConfig.TABLE,
                 ZerobusChangeConsumerConfig.MAX_INFLIGHT_RECORDS,
+                ZerobusChangeConsumerConfig.RECOVERY,
+                ZerobusChangeConsumerConfig.RECOVERY_RETRIES,
+                ZerobusChangeConsumerConfig.RECOVERY_BACKOFF_MS,
+                ZerobusChangeConsumerConfig.RECOVERY_TIMEOUT_MS,
+                ZerobusChangeConsumerConfig.FLUSH_TIMEOUT_MS,
                 ZerobusChangeConsumerConfig.METRICS_LOG_INTERVAL);
     }
 

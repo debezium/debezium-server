@@ -61,6 +61,45 @@ public class ZerobusChangeConsumerConfig {
             .withImportance(ConfigDef.Importance.MEDIUM)
             .withDescription("Maximum number of un-acknowledged records per stream (non-blocking ingestion).");
 
+    // The recovery options below deliberately declare no default: the value is passed to the SDK
+    // only when it is set, so that an unset option keeps whatever the SDK's own default is rather
+    // than having this sink pin it to a value that could drift from the SDK across upgrades.
+
+    public static final Field RECOVERY = Field.create("recovery")
+            .withDisplayName("Enable stream recovery")
+            .withType(ConfigDef.Type.BOOLEAN)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Whether the Zerobus SDK recovers a stream that fails with a retriable error, "
+                    + "re-sending the records it has not acknowledged. When this option is not set, the SDK default applies.");
+
+    public static final Field RECOVERY_RETRIES = Field.create("recovery.retries")
+            .withDisplayName("Stream recovery retries")
+            .withType(ConfigDef.Type.INT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Maximum number of times the SDK attempts to recover a failed stream. "
+                    + "When this option is not set, the SDK default applies.");
+
+    public static final Field RECOVERY_BACKOFF_MS = Field.create("recovery.backoff.ms")
+            .withDisplayName("Stream recovery backoff")
+            .withType(ConfigDef.Type.INT)
+            .withImportance(ConfigDef.Importance.LOW)
+            .withDescription("Delay, in milliseconds, between stream recovery attempts. "
+                    + "When this option is not set, the SDK default applies.");
+
+    public static final Field RECOVERY_TIMEOUT_MS = Field.create("recovery.timeout.ms")
+            .withDisplayName("Stream recovery timeout")
+            .withType(ConfigDef.Type.INT)
+            .withImportance(ConfigDef.Importance.LOW)
+            .withDescription("Time, in milliseconds, after which a stream recovery attempt is abandoned. "
+                    + "When this option is not set, the SDK default applies.");
+
+    public static final Field FLUSH_TIMEOUT_MS = Field.create("flush.timeout.ms")
+            .withDisplayName("Flush timeout")
+            .withType(ConfigDef.Type.INT)
+            .withImportance(ConfigDef.Importance.LOW)
+            .withDescription("Time, in milliseconds, that a flush waits for the records in the stream to be "
+                    + "acknowledged. When this option is not set, the SDK default applies.");
+
     public static final Field METRICS_LOG_INTERVAL = Field.create("metrics.log.interval")
             .withDisplayName("Metrics log interval (batches)")
             .withType(ConfigDef.Type.INT)
@@ -75,6 +114,11 @@ public class ZerobusChangeConsumerConfig {
     private final String clientSecret;
     private final String table;
     private final int maxInflightRecords;
+    private final Boolean recovery;
+    private final Integer recoveryRetries;
+    private final Integer recoveryBackoffMs;
+    private final Integer recoveryTimeoutMs;
+    private final Integer flushTimeoutMs;
     private final int metricsLogInterval;
 
     public ZerobusChangeConsumerConfig(Configuration config) {
@@ -84,7 +128,23 @@ public class ZerobusChangeConsumerConfig {
         this.clientSecret = config.getString(CLIENT_SECRET);
         this.table = config.getString(TABLE);
         this.maxInflightRecords = config.getInteger(MAX_INFLIGHT_RECORDS);
+        // Read through hasKey, because Configuration.getInteger/getBoolean parse the raw value and
+        // throw on an absent one rather than returning null. Null here is meaningful: it tells the
+        // stream builder to leave the corresponding SDK default alone.
+        this.recovery = optionalBoolean(config, RECOVERY);
+        this.recoveryRetries = optionalInteger(config, RECOVERY_RETRIES);
+        this.recoveryBackoffMs = optionalInteger(config, RECOVERY_BACKOFF_MS);
+        this.recoveryTimeoutMs = optionalInteger(config, RECOVERY_TIMEOUT_MS);
+        this.flushTimeoutMs = optionalInteger(config, FLUSH_TIMEOUT_MS);
         this.metricsLogInterval = config.getInteger(METRICS_LOG_INTERVAL);
+    }
+
+    private static Integer optionalInteger(Configuration config, Field field) {
+        return config.hasKey(field.name()) ? config.getInteger(field) : null;
+    }
+
+    private static Boolean optionalBoolean(Configuration config, Field field) {
+        return config.hasKey(field.name()) ? config.getBoolean(field) : null;
     }
 
     public String getEndpoint() {
@@ -109,6 +169,31 @@ public class ZerobusChangeConsumerConfig {
 
     public int getMaxInflightRecords() {
         return maxInflightRecords;
+    }
+
+    /** @return whether stream recovery is enabled, or {@code null} to keep the SDK default */
+    public Boolean getRecovery() {
+        return recovery;
+    }
+
+    /** @return the number of recovery attempts, or {@code null} to keep the SDK default */
+    public Integer getRecoveryRetries() {
+        return recoveryRetries;
+    }
+
+    /** @return the delay between recovery attempts, or {@code null} to keep the SDK default */
+    public Integer getRecoveryBackoffMs() {
+        return recoveryBackoffMs;
+    }
+
+    /** @return the recovery attempt timeout, or {@code null} to keep the SDK default */
+    public Integer getRecoveryTimeoutMs() {
+        return recoveryTimeoutMs;
+    }
+
+    /** @return the flush timeout, or {@code null} to keep the SDK default */
+    public Integer getFlushTimeoutMs() {
+        return flushTimeoutMs;
     }
 
     public int getMetricsLogInterval() {
