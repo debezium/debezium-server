@@ -6,7 +6,6 @@
 package io.debezium.server.databricks.zerobus;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -19,10 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-
-import com.databricks.zerobus.ZerobusJsonStream;
 
 import io.debezium.DebeziumException;
 import io.debezium.runtime.BatchEvent;
@@ -30,59 +26,52 @@ import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 
 /**
- * Tests the gRPC route's batch handling by mocking the Databricks {@link ZerobusJsonStream} (the
- * approach for the gRPC route noted in issue #2279). We pre-seed the consumer's per-table stream map
- * so {@code handle()} never calls the real {@code ZerobusSdk} — verifying ingest, flush-per-batch,
+ * Tests the gRPC route's batch handling by mocking {@link ZerobusStreamHandle} (the approach for the
+ * gRPC route noted in issue #2279). We pre-seed the consumer's per-table stream map so
+ * {@code handle()} never calls the real {@code ZerobusSdk} — verifying ingest, flush-per-batch,
  * tombstone skipping and fail-fast on ingest/flush errors, with no cloud and no live stream open.
  * <p>
- * Skipped when the SDK native library cannot be loaded (mocking {@code ZerobusJsonStream} touches
- * the SDK's native loader), mirroring how the SDK's own {@code StreamBuilderTest} guards itself.
+ * Mocking the sink's own interface rather than the SDK's {@code ZerobusJsonStream} keeps these tests
+ * off the SDK's native loader, so they run on a platform with no native library available.
  */
 class ZerobusChangeConsumerTest {
 
-    @BeforeAll
-    static void requireNativeLibrary() {
-        boolean loadable = true;
-        try {
-            Class.forName("com.databricks.zerobus.ZerobusSdk");
-        }
-        catch (Throwable t) {
-            loadable = false;
-        }
-        assumeTrue(loadable, "Zerobus SDK / native library required to mock ZerobusJsonStream");
+    @SuppressWarnings("unchecked")
+    private static ZerobusStreamHandle<String> mockStream() {
+        return mock(ZerobusStreamHandle.class);
     }
 
     @Test
     void ingestsQualifiedRecordThenFlushes() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusStreamHandle<String> stream = mockStream();
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
 
         consumer.handle(events(event("{\"id\":1}", "main.default.customers")));
 
-        verify(stream).ingestRecordOffset("{\"id\":1}");
+        verify(stream).ingest("{\"id\":1}");
         verify(stream).flush();
     }
 
     @Test
     void skipsTombstoneAndFlushesNothingWhenNoStreamTouched() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusStreamHandle<String> stream = mockStream();
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
 
         consumer.handle(events(event(null, "main.default.customers")));
 
-        verify(stream, never()).ingestRecordOffset(org.mockito.ArgumentMatchers.anyString());
+        verify(stream, never()).ingest(org.mockito.ArgumentMatchers.anyString());
         // a tombstone-only batch touches no stream, so nothing is flushed (only touched streams flush)
         verify(stream, never()).flush();
     }
 
     @Test
     void flushesOnlyTheStreamsTouchedInTheBatch() throws Exception {
-        ZerobusJsonStream customers = mock(ZerobusJsonStream.class);
-        ZerobusJsonStream orders = mock(ZerobusJsonStream.class);
+        ZerobusStreamHandle<String> customers = mockStream();
+        ZerobusStreamHandle<String> orders = mockStream();
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", customers);
         // pre-seed a second, untouched stream
         @SuppressWarnings("unchecked")
-        Map<String, ZerobusJsonStream> streams = (Map<String, ZerobusJsonStream>) get(consumer, "streams");
+        Map<String, ZerobusStreamHandle<String>> streams = (Map<String, ZerobusStreamHandle<String>>) get(consumer, "streams");
         streams.put("main.default.orders", orders);
 
         // only customers receives a record this batch
@@ -94,7 +83,7 @@ class ZerobusChangeConsumerTest {
 
     @Test
     void commitsOffsetsOnlyAfterTheStreamIsFlushed() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusStreamHandle<String> stream = mockStream();
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
 
         BatchEvent record = mock(BatchEvent.class);
@@ -106,15 +95,15 @@ class ZerobusChangeConsumerTest {
         // The offset must be acknowledged only after the batch is durable: flush first, commit second.
         // Committing before the flush would risk dropping buffered records on a crash (at-least-once).
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(stream, record);
-        inOrder.verify(stream).ingestRecordOffset("{\"id\":1}");
+        inOrder.verify(stream).ingest("{\"id\":1}");
         inOrder.verify(stream).flush();
         inOrder.verify(record).commit();
     }
 
     @Test
     void wrapsIngestErrorAsDebeziumException() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
-        doThrow(new RuntimeException("boom")).when(stream).ingestRecordOffset("{\"id\":1}");
+        ZerobusStreamHandle<String> stream = mockStream();
+        doThrow(new RuntimeException("boom")).when(stream).ingest("{\"id\":1}");
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
 
         assertThatThrownBy(() -> consumer.handle(events(event("{\"id\":1}", "main.default.customers"))))
@@ -124,7 +113,7 @@ class ZerobusChangeConsumerTest {
 
     @Test
     void recordsIngestAndFlushMetricsOnSuccess() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusStreamHandle<String> stream = mockStream();
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
         ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
         set(consumer, "metrics", metrics);
@@ -137,7 +126,7 @@ class ZerobusChangeConsumerTest {
 
     @Test
     void recordsSkippedMetricForTombstone() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusStreamHandle<String> stream = mockStream();
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
         ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
         set(consumer, "metrics", metrics);
@@ -150,8 +139,8 @@ class ZerobusChangeConsumerTest {
 
     @Test
     void recordsErrorMetricWhenIngestFails() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
-        doThrow(new RuntimeException("boom")).when(stream).ingestRecordOffset(eq("{\"id\":1}"));
+        ZerobusStreamHandle<String> stream = mockStream();
+        doThrow(new RuntimeException("boom")).when(stream).ingest(eq("{\"id\":1}"));
         ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
         ZerobusSinkMetrics metrics = mock(ZerobusSinkMetrics.class);
         set(consumer, "metrics", metrics);
@@ -165,7 +154,7 @@ class ZerobusChangeConsumerTest {
 
     /** Builds a consumer with a configured default table and a pre-seeded stream map (no SDK call). */
     @SuppressWarnings("unchecked")
-    private ZerobusChangeConsumer consumerWithStream(String table, ZerobusJsonStream stream) throws Exception {
+    private ZerobusChangeConsumer consumerWithStream(String table, ZerobusStreamHandle<String> stream) throws Exception {
         ZerobusChangeConsumer consumer = new ZerobusChangeConsumer();
 
         io.debezium.config.Configuration cfg = io.debezium.config.Configuration.create()
@@ -176,7 +165,7 @@ class ZerobusChangeConsumerTest {
                 .build();
         set(consumer, "config", new ZerobusChangeConsumerConfig(cfg));
 
-        Map<String, ZerobusJsonStream> streams = (Map<String, ZerobusJsonStream>) get(consumer, "streams");
+        Map<String, ZerobusStreamHandle<String>> streams = (Map<String, ZerobusStreamHandle<String>>) get(consumer, "streams");
         streams.put(table, stream);
         return consumer;
     }

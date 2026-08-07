@@ -45,8 +45,8 @@ import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 /**
  * Debezium Server sink that writes change events directly into Databricks Zerobus Ingest using the
  * Zerobus Java SDK (gRPC transport, GA). Change events are serialized as JSON by Debezium
- * ({@code debezium.format.value=json}) and forwarded verbatim through a per-table
- * {@link ZerobusJsonStream}.
+ * ({@code debezium.format.value=json}) and forwarded through a per-table
+ * {@link ZerobusStreamHandle}, which a {@link ZerobusJsonStream} backs.
  * <p>
  * Zerobus binds one stream to one managed Delta table. This consumer therefore keeps a stream per
  * resolved table name. The target table for a record is the mapped destination (topic) name, unless
@@ -74,7 +74,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
     // One stream per target table (Zerobus: 1 stream = 1 table). Access-ordered so that iteration
     // yields the least recently used table first, which is what bounds the number of open streams.
-    private final Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
+    private final Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
 
     /**
      * Lets a deployment supply its own {@link ZerobusSdk}, for example to point at a different
@@ -91,6 +91,18 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new ZerobusChangeConsumerConfig(configuration);
 
+        // The envelope payload mode and the Protobuf record format are declared as configuration but
+        // not yet implemented (tracked under debezium/dbz#2279). Refusing them at startup keeps a
+        // deployment that asks for one from silently getting typed JSON rows instead.
+        if (config.getPayloadMode() != ZerobusChangeConsumerConfig.PayloadMode.TYPED
+                || config.getRecordFormat() != ZerobusChangeConsumerConfig.RecordFormat.JSON) {
+            throw new DebeziumException("Only '" + ZerobusChangeConsumerConfig.PAYLOAD_MODE.name() + "="
+                    + ZerobusChangeConsumerConfig.PayloadMode.TYPED.getValue() + "' with '"
+                    + ZerobusChangeConsumerConfig.RECORD_FORMAT.name() + "="
+                    + ZerobusChangeConsumerConfig.RecordFormat.JSON.getValue()
+                    + "' is implemented so far; the other combinations are reserved and not yet supported.");
+        }
+
         if (customZerobusSdk.isResolvable()) {
             this.sdk = customZerobusSdk.get();
             LOGGER.info("Obtained custom configured ZerobusSdk '{}'", sdk);
@@ -106,7 +118,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     @PreDestroy
     @Override
     public void close() {
-        for (Map.Entry<String, ZerobusJsonStream> entry : streams.entrySet()) {
+        for (Map.Entry<String, ZerobusStreamHandle<String>> entry : streams.entrySet()) {
             try {
                 entry.getValue().close();
                 metrics.streamClosed();
@@ -144,7 +156,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
             if (isJsonObject(json) && table != null) {
                 LOGGER.debug("Ingesting into {}: {}", table, json);
                 try {
-                    stream(table).ingestRecordOffset(json);
+                    stream(table).ingest(json);
                     touchedTables.add(table);
                     ingestedOperations.add(operationOf(record));
                     final long sourceTsMs = sourceTsMsOf(record);
@@ -329,7 +341,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         return trimmed.startsWith("{") && trimmed.endsWith("}");
     }
 
-    private ZerobusJsonStream stream(String table) {
+    private ZerobusStreamHandle<String> stream(String table) {
         return streams.computeIfAbsent(table, this::createStream);
     }
 
@@ -347,9 +359,9 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         if (limit <= 0) {
             return;
         }
-        final Iterator<Map.Entry<String, ZerobusJsonStream>> iterator = streams.entrySet().iterator();
+        final Iterator<Map.Entry<String, ZerobusStreamHandle<String>>> iterator = streams.entrySet().iterator();
         while (streams.size() > limit && iterator.hasNext()) {
-            final Map.Entry<String, ZerobusJsonStream> eldest = iterator.next();
+            final Map.Entry<String, ZerobusStreamHandle<String>> eldest = iterator.next();
             try {
                 eldest.getValue().flush();
                 eldest.getValue().close();
@@ -366,7 +378,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         }
     }
 
-    private ZerobusJsonStream createStream(String table) {
+    private ZerobusStreamHandle<String> createStream(String table) {
         try {
             LOGGER.info("Opening Zerobus JSON stream for table '{}'", table);
             StreamConfigurationOptions options = recoveryOptions(StreamConfigurationOptions.builder()
@@ -374,7 +386,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                     .build();
             ZerobusJsonStream openedStream = sdk.createJsonStream(table, config.getClientId(), config.getClientSecret(), options).join();
             metrics.streamOpened();
-            return openedStream;
+            return new ZerobusJsonStreamHandle(openedStream);
         }
         catch (Exception e) {
             throw new DebeziumException("Could not open Zerobus stream for table '" + table + "'", e);
@@ -424,6 +436,8 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 ZerobusChangeConsumerConfig.CLIENT_ID,
                 ZerobusChangeConsumerConfig.CLIENT_SECRET,
                 ZerobusChangeConsumerConfig.TABLE,
+                ZerobusChangeConsumerConfig.PAYLOAD_MODE,
+                ZerobusChangeConsumerConfig.RECORD_FORMAT,
                 ZerobusChangeConsumerConfig.MAX_INFLIGHT_RECORDS,
                 ZerobusChangeConsumerConfig.MAX_OPEN_STREAMS,
                 ZerobusChangeConsumerConfig.RECOVERY,

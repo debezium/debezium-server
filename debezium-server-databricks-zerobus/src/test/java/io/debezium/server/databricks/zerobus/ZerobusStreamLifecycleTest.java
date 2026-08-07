@@ -20,8 +20,6 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import com.databricks.zerobus.ZerobusJsonStream;
-
 import io.debezium.config.Configuration;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
@@ -33,7 +31,12 @@ import io.debezium.runtime.CapturingEvents;
  */
 class ZerobusStreamLifecycleTest {
 
-    private static ZerobusChangeConsumer consumerWith(Map<String, ZerobusJsonStream> streams, String... extraConfig) throws Exception {
+    @SuppressWarnings("unchecked")
+    private static ZerobusStreamHandle<String> mockStream() {
+        return mock(ZerobusStreamHandle.class);
+    }
+
+    private static ZerobusChangeConsumer consumerWith(Map<String, ZerobusStreamHandle<String>> streams, String... extraConfig) throws Exception {
         ZerobusChangeConsumer consumer = new ZerobusChangeConsumer();
         Configuration.Builder builder = Configuration.create()
                 .with("endpoint", "ws.zerobus.us-west-2.cloud.databricks.com")
@@ -64,10 +67,10 @@ class ZerobusStreamLifecycleTest {
     @Test
     void closesLeastRecentlyUsedStreamsAboveTheLimit() throws Exception {
         // Access-ordered, as in the consumer, so iteration yields the least recently used first.
-        Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
-        ZerobusJsonStream oldest = mock(ZerobusJsonStream.class);
-        ZerobusJsonStream middle = mock(ZerobusJsonStream.class);
-        ZerobusJsonStream newest = mock(ZerobusJsonStream.class);
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
+        ZerobusStreamHandle<String> oldest = mockStream();
+        ZerobusStreamHandle<String> middle = mockStream();
+        ZerobusStreamHandle<String> newest = mockStream();
         streams.put("main.default.a", oldest);
         streams.put("main.default.b", middle);
         streams.put("main.default.c", newest);
@@ -85,9 +88,9 @@ class ZerobusStreamLifecycleTest {
 
     @Test
     void respectsAccessOrderWhenChoosingWhatToEvict() throws Exception {
-        Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
-        ZerobusJsonStream a = mock(ZerobusJsonStream.class);
-        ZerobusJsonStream b = mock(ZerobusJsonStream.class);
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
+        ZerobusStreamHandle<String> a = mockStream();
+        ZerobusStreamHandle<String> b = mockStream();
         streams.put("main.default.a", a);
         streams.put("main.default.b", b);
         // Touching "a" makes "b" the least recently used.
@@ -102,10 +105,10 @@ class ZerobusStreamLifecycleTest {
 
     @Test
     void keepsEveryStreamOpenWhenTheLimitIsZero() throws Exception {
-        Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
-        ZerobusJsonStream a = mock(ZerobusJsonStream.class);
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
+        ZerobusStreamHandle<String> a = mockStream();
         streams.put("main.default.a", a);
-        streams.put("main.default.b", mock(ZerobusJsonStream.class));
+        streams.put("main.default.b", mockStream());
 
         evict(consumerWith(streams, "max.open.streams", "0"));
 
@@ -115,11 +118,11 @@ class ZerobusStreamLifecycleTest {
 
     @Test
     void anEvictionFailureStillDropsTheStreamAndDoesNotThrow() throws Exception {
-        Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
-        ZerobusJsonStream failing = mock(ZerobusJsonStream.class);
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
+        ZerobusStreamHandle<String> failing = mockStream();
         org.mockito.Mockito.doThrow(new RuntimeException("close failed")).when(failing).close();
         streams.put("main.default.a", failing);
-        streams.put("main.default.b", mock(ZerobusJsonStream.class));
+        streams.put("main.default.b", mockStream());
 
         // The records were already flushed and committed, so an eviction problem must not fail a batch.
         evict(consumerWith(streams, "max.open.streams", "1"));
@@ -129,28 +132,28 @@ class ZerobusStreamLifecycleTest {
 
     @Test
     void countsRecordsAsIngestedOnlyAfterTheFlushSucceeds() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
-        Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
+        ZerobusStreamHandle<String> stream = mockStream();
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
         streams.put("main.default.t", stream);
         ZerobusChangeConsumer consumer = consumerWith(streams);
-        when(stream.ingestRecordOffset(any(String.class))).thenReturn(1L);
+        when(stream.ingest(any(String.class))).thenReturn(1L);
 
         consumer.handle(events(event("{\"id\":1,\"__op\":\"c\"}"), event("{\"id\":2,\"__op\":\"c\"}")));
 
         // Both records are durable, so both are counted, and the counting happens after the flush.
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(stream);
-        inOrder.verify(stream, org.mockito.Mockito.times(2)).ingestRecordOffset(any(String.class));
+        inOrder.verify(stream, org.mockito.Mockito.times(2)).ingest(any(String.class));
         inOrder.verify(stream).flush();
     }
 
     @Test
     void countsNothingAsIngestedWhenTheFlushFails() throws Exception {
-        ZerobusJsonStream stream = mock(ZerobusJsonStream.class);
+        ZerobusStreamHandle<String> stream = mockStream();
         org.mockito.Mockito.doThrow(new RuntimeException("flush failed")).when(stream).flush();
-        Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
         streams.put("main.default.t", stream);
         ZerobusChangeConsumer consumer = consumerWith(streams);
-        when(stream.ingestRecordOffset(any(String.class))).thenReturn(1L);
+        when(stream.ingest(any(String.class))).thenReturn(1L);
 
         try {
             consumer.handle(events(event("{\"id\":1,\"__op\":\"c\"}")));
