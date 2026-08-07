@@ -53,6 +53,14 @@ rules:
     name: "$2"
     task: "$3"
     context: "$4"
+- pattern: "debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^,]+), task=([^>]+)>([^:]+)"
+  name: "debezium_metrics_$5"
+  type: GAUGE
+  labels:
+    plugin: "$1"
+    name: "$3"
+    task: "$4"
+    context: "$2"
 - pattern: "debezium.([^:]+)<type=connector-metrics, context=([^,]+), server=([^>]+)>([^:]+)"
   name: "debezium_metrics_$4"
   type: GAUGE
