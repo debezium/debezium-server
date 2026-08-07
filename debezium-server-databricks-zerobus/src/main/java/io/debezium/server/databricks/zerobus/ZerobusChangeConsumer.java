@@ -5,8 +5,10 @@
  */
 package io.debezium.server.databricks.zerobus;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,6 +16,8 @@ import java.util.Set;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 import jakarta.inject.Named;
 
 import org.eclipse.microprofile.config.Config;
@@ -33,6 +37,7 @@ import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
+import io.debezium.server.CustomConsumerBuilder;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
 import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
@@ -67,8 +72,18 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("grpc");
     private long batchesSinceLog = 0;
 
-    // One stream per target table (Zerobus: 1 stream = 1 table).
-    private final Map<String, ZerobusJsonStream> streams = new HashMap<>();
+    // One stream per target table (Zerobus: 1 stream = 1 table). Access-ordered so that iteration
+    // yields the least recently used table first, which is what bounds the number of open streams.
+    private final Map<String, ZerobusJsonStream> streams = new LinkedHashMap<>(16, 0.75f, true);
+
+    /**
+     * Lets a deployment supply its own {@link ZerobusSdk}, for example to point at a different
+     * endpoint or to wrap the client, following the injection point the other Debezium Server sinks
+     * expose. When no such bean is provided, the SDK is built from the connector configuration.
+     */
+    @Inject
+    @CustomConsumerBuilder
+    Instance<ZerobusSdk> customZerobusSdk;
 
     @PostConstruct
     void connect() {
@@ -76,7 +91,13 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new ZerobusChangeConsumerConfig(configuration);
 
-        this.sdk = new ZerobusSdk(config.getEndpoint(), config.getWorkspaceUrl());
+        if (customZerobusSdk.isResolvable()) {
+            this.sdk = customZerobusSdk.get();
+            LOGGER.info("Obtained custom configured ZerobusSdk '{}'", sdk);
+        }
+        else {
+            this.sdk = new ZerobusSdk(config.getEndpoint(), config.getWorkspaceUrl());
+        }
         metrics.register();
         metrics.setConnected(true);
         LOGGER.info("Zerobus gRPC sink connected: endpoint={}, workspaceUrl={}", config.getEndpoint(), config.getWorkspaceUrl());
@@ -111,6 +132,12 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         // all N would add avoidable round-trips.
         final Set<String> touchedTables = new HashSet<>();
 
+        // Metadata of the records handed to the SDK, counted only once the flush below makes them
+        // durable. Counting at ingestion time would over-report: a record enqueued on a stream whose
+        // flush then fails never became durable, yet would already have incremented the counters.
+        final List<String> ingestedOperations = new ArrayList<>(events.records().size());
+        long lastSourceTsMs = -1L;
+
         for (BatchEvent record : events.records()) {
             String json = toZerobusJson(record, this::getString);
             String table = resolveTable(record.destination());
@@ -119,7 +146,11 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 try {
                     stream(table).ingestRecordOffset(json);
                     touchedTables.add(table);
-                    metrics.recordIngested(operationOf(record), sourceTsMsOf(record));
+                    ingestedOperations.add(operationOf(record));
+                    final long sourceTsMs = sourceTsMsOf(record);
+                    if (sourceTsMs >= 0) {
+                        lastSourceTsMs = sourceTsMs;
+                    }
                 }
                 catch (Exception e) {
                     metrics.recordError();
@@ -151,9 +182,19 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         }
         metrics.flushed((System.nanoTime() - flushStartNanos) / 1_000_000L);
 
+        // Past the durability barrier, so the batch can now be counted as ingested. The source
+        // timestamp of the last durable record drives the freshness gauge.
+        for (String operation : ingestedOperations) {
+            metrics.recordIngested(operation, -1L);
+        }
+        if (lastSourceTsMs >= 0) {
+            metrics.recordSourceTsMs(lastSourceTsMs);
+        }
+
         for (BatchEvent record : events.records()) {
             record.commit();
         }
+        evictStreamsAboveLimit();
         maybeLogMetrics();
     }
 
@@ -292,6 +333,39 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         return streams.computeIfAbsent(table, this::createStream);
     }
 
+    /**
+     * Closes the least recently used streams until at most {@code max.open.streams} remain open.
+     * <p>
+     * Zerobus binds one stream to one table, so a source with many tables would otherwise accumulate
+     * an unbounded number of open streams, each holding a connection. A stream is flushed before it is
+     * closed, so evicting one never drops buffered records; it is reopened on demand if the table is
+     * written to again. Eviction runs after the batch has been flushed and committed, so it never
+     * closes a stream this batch still depends on.
+     */
+    private void evictStreamsAboveLimit() {
+        final int limit = config.getMaxOpenStreams();
+        if (limit <= 0) {
+            return;
+        }
+        final Iterator<Map.Entry<String, ZerobusJsonStream>> iterator = streams.entrySet().iterator();
+        while (streams.size() > limit && iterator.hasNext()) {
+            final Map.Entry<String, ZerobusJsonStream> eldest = iterator.next();
+            try {
+                eldest.getValue().flush();
+                eldest.getValue().close();
+                metrics.streamClosed();
+                LOGGER.debug("Closed least recently used Zerobus stream for table '{}' to stay within {} open streams",
+                        eldest.getKey(), limit);
+            }
+            catch (Exception e) {
+                // An eviction failure must not fail the batch: the records were already flushed and
+                // committed, and the stream is dropped from the map either way.
+                LOGGER.warn("Could not cleanly close Zerobus stream for table '{}' during eviction", eldest.getKey(), e);
+            }
+            iterator.remove();
+        }
+    }
+
     private ZerobusJsonStream createStream(String table) {
         try {
             LOGGER.info("Opening Zerobus JSON stream for table '{}'", table);
@@ -351,6 +425,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 ZerobusChangeConsumerConfig.CLIENT_SECRET,
                 ZerobusChangeConsumerConfig.TABLE,
                 ZerobusChangeConsumerConfig.MAX_INFLIGHT_RECORDS,
+                ZerobusChangeConsumerConfig.MAX_OPEN_STREAMS,
                 ZerobusChangeConsumerConfig.RECOVERY,
                 ZerobusChangeConsumerConfig.RECOVERY_RETRIES,
                 ZerobusChangeConsumerConfig.RECOVERY_BACKOFF_MS,

@@ -115,6 +115,19 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
         }
     }
 
+    /**
+     * Records the source timestamp of the most recent durable event, driving
+     * {@link #getMilliSecondsBehindSource()}. Separate from {@link #recordIngested(String, long)} so a
+     * caller that only learns the timestamp is durable after a flush can report it then.
+     *
+     * @param sourceTsMs the event's {@code source.ts_ms}; ignored when negative
+     */
+    public void recordSourceTsMs(long sourceTsMs) {
+        if (sourceTsMs >= 0) {
+            lastSourceTsMs.set(sourceTsMs);
+        }
+    }
+
     /** Records one skipped record (tombstone / null payload / non-qualified destination). */
     public void recordSkipped() {
         totalRecordsSkipped.incrementAndGet();

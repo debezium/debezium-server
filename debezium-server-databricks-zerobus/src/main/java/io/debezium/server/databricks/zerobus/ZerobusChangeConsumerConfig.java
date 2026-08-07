@@ -61,6 +61,16 @@ public class ZerobusChangeConsumerConfig {
             .withImportance(ConfigDef.Importance.MEDIUM)
             .withDescription("Maximum number of un-acknowledged records per stream (non-blocking ingestion).");
 
+    public static final Field MAX_OPEN_STREAMS = Field.create("max.open.streams")
+            .withDisplayName("Max open streams")
+            .withType(ConfigDef.Type.INT)
+            .withDefault(100)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Maximum number of Zerobus streams kept open at once. Zerobus binds one stream to one "
+                    + "table, so a source with many tables would otherwise hold an unbounded number of connections. "
+                    + "When the limit is exceeded, the least recently used streams are flushed and closed, and are "
+                    + "reopened on demand. Set to 0 to keep every stream open.");
+
     // The recovery options below deliberately declare no default: the value is passed to the SDK
     // only when it is set, so that an unset option keeps whatever the SDK's own default is rather
     // than having this sink pin it to a value that could drift from the SDK across upgrades.
@@ -114,6 +124,7 @@ public class ZerobusChangeConsumerConfig {
     private final String clientSecret;
     private final String table;
     private final int maxInflightRecords;
+    private final int maxOpenStreams;
     private final Boolean recovery;
     private final Integer recoveryRetries;
     private final Integer recoveryBackoffMs;
@@ -128,6 +139,7 @@ public class ZerobusChangeConsumerConfig {
         this.clientSecret = config.getString(CLIENT_SECRET);
         this.table = config.getString(TABLE);
         this.maxInflightRecords = config.getInteger(MAX_INFLIGHT_RECORDS);
+        this.maxOpenStreams = config.getInteger(MAX_OPEN_STREAMS);
         // Read through hasKey, because Configuration.getInteger/getBoolean parse the raw value and
         // throw on an absent one rather than returning null. Null here is meaningful: it tells the
         // stream builder to leave the corresponding SDK default alone.
@@ -169,6 +181,10 @@ public class ZerobusChangeConsumerConfig {
 
     public int getMaxInflightRecords() {
         return maxInflightRecords;
+    }
+
+    public int getMaxOpenStreams() {
+        return maxOpenStreams;
     }
 
     /** @return whether stream recovery is enabled, or {@code null} to keep the SDK default */

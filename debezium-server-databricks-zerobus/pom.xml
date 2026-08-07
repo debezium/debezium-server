@@ -45,7 +45,6 @@
         <dependency>
             <groupId>com.databricks</groupId>
             <artifactId>zerobus-ingest-sdk</artifactId>
-            <version>${version.zerobus.sdk}</version>
             <optional>true</optional>
         </dependency>
 
