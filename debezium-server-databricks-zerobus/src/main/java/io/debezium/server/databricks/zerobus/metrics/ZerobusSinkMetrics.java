@@ -52,8 +52,10 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
     private final AtomicLong totalReads = new AtomicLong();
     private final AtomicLong activeStreams = new AtomicLong();
     private final AtomicLong lastSourceTsMs = new AtomicLong(-1L);
+    private final AtomicLong lastEventTsMs = new AtomicLong(-1L);
     private final AtomicLong lastFlushDurationMillis = new AtomicLong();
     private final AtomicLong maxFlushDurationMillis = new AtomicLong();
+    private volatile boolean connected;
 
     public ZerobusSinkMetrics(String route) {
         this(route, System::currentTimeMillis);
@@ -89,6 +91,7 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
      */
     public void recordIngested(String op, long sourceTsMs) {
         totalRecordsIngested.incrementAndGet();
+        lastEventTsMs.set(clock.getAsLong());
         if (op != null) {
             switch (op) {
                 case "c":
@@ -122,11 +125,25 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
         totalErrors.incrementAndGet();
     }
 
+    /** Marks the sink as holding, or no longer holding, a usable connection to Zerobus. */
+    public void setConnected(boolean connected) {
+        this.connected = connected;
+    }
+
     /** Records a completed flush (gRPC) or record POST (REST) and its duration. */
     public void flushed(long durationMillis) {
         totalFlushes.incrementAndGet();
         lastFlushDurationMillis.set(durationMillis);
         maxFlushDurationMillis.accumulateAndGet(durationMillis, Math::max);
+    }
+
+    /**
+     * Records a completed flush whose duration was not measured, leaving the duration gauges at their
+     * last sampled values. Used by the Kafka route, which samples latency rather than timing every
+     * record.
+     */
+    public void flushed() {
+        totalFlushes.incrementAndGet();
     }
 
     public void streamOpened() {
@@ -140,11 +157,12 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
     /** Emits a single INFO line summarizing the current counters — for periodic throughput logging. */
     public void logMetricsSummary() {
         LOGGER.info("Zerobus sink metrics [{}]: ingested={} (c={} u={} d={} r={}) skipped={} errors={} "
-                + "flushes={} activeStreams={} behindSourceMs={} lastFlushMs={} maxFlushMs={}",
+                + "flushes={} activeStreams={} connected={} behindSourceMs={} sinceLastEventMs={} "
+                + "lastFlushMs={} maxFlushMs={}",
                 route, getTotalRecordsIngested(), getTotalInserts(), getTotalUpdates(), getTotalDeletes(),
                 getTotalReads(), getTotalRecordsSkipped(), getTotalErrors(), getTotalFlushes(),
-                getActiveStreams(), getMilliSecondsBehindSource(), getLastFlushDurationMillis(),
-                getMaxFlushDurationMillis());
+                getActiveStreams(), isConnected(), getMilliSecondsBehindSource(),
+                getMilliSecondsSinceLastEvent(), getLastFlushDurationMillis(), getMaxFlushDurationMillis());
     }
 
     // -- MXBean getters -------------------------------------------------------------------------
@@ -201,6 +219,20 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
             return -1L;
         }
         return Math.max(0L, clock.getAsLong() - ts);
+    }
+
+    @Override
+    public long getMilliSecondsSinceLastEvent() {
+        final long ts = lastEventTsMs.get();
+        if (ts < 0) {
+            return -1L;
+        }
+        return Math.max(0L, clock.getAsLong() - ts);
+    }
+
+    @Override
+    public boolean isConnected() {
+        return connected;
     }
 
     @Override

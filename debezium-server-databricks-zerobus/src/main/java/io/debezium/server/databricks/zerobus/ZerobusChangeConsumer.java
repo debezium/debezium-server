@@ -78,6 +78,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
         this.sdk = new ZerobusSdk(config.getEndpoint(), config.getWorkspaceUrl());
         metrics.register();
+        metrics.setConnected(true);
         LOGGER.info("Zerobus gRPC sink connected: endpoint={}, workspaceUrl={}", config.getEndpoint(), config.getWorkspaceUrl());
     }
 
@@ -97,6 +98,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         if (sdk != null) {
             sdk.close();
         }
+        metrics.setConnected(false);
         metrics.unregister();
         LOGGER.info("Zerobus gRPC sink closed");
     }

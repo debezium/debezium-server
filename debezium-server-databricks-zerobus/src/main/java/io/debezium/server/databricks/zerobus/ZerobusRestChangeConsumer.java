@@ -77,12 +77,14 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
                 new DefaultTokenHttpClient(httpClient));
 
         metrics.register();
+        metrics.setConnected(true);
         LOGGER.info("Zerobus REST sink connected: uri={}, table={}", baseUri, config.getTable());
     }
 
     @PreDestroy
     @Override
     public void close() {
+        metrics.setConnected(false);
         metrics.unregister();
         LOGGER.info("Zerobus REST sink closed");
     }

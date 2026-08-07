@@ -11,8 +11,8 @@ package io.debezium.server.databricks.zerobus.metrics;
  * They are registered under the object name
  * {@code debezium.zerobus:type=connector-metrics,context=sink,server=<route>,task=0} — mirroring the
  * convention used by the JDBC sink connector ({@code JdbcSinkConnectorMetricsMXBean}) and by Debezium
- * source connectors. The {@code server} key carries the delivery route ({@code grpc} or {@code rest})
- * so both consumers can be observed side by side.
+ * source connectors. The {@code server} key carries the delivery route ({@code grpc}, {@code rest} or
+ * {@code kafka}) so all three can be observed side by side.
  * <p>
  * The counters describe what the sink actually forwarded to Zerobus (the target managed Delta
  * table): how many change events were ingested, split by operation ({@code c}/{@code u}/{@code d} and
@@ -34,8 +34,10 @@ public interface ZerobusSinkMetricsMXBean {
     String METRIC_TOTAL_READS = "TotalReads";
     String METRIC_ACTIVE_STREAMS = "ActiveStreams";
     String METRIC_MILLISECONDS_BEHIND_SOURCE = "MilliSecondsBehindSource";
+    String METRIC_MILLISECONDS_SINCE_LAST_EVENT = "MilliSecondsSinceLastEvent";
     String METRIC_LAST_FLUSH_DURATION_MILLIS = "LastFlushDurationMillis";
     String METRIC_MAX_FLUSH_DURATION_MILLIS = "MaxFlushDurationMillis";
+    String METRIC_CONNECTED = "Connected";
     String METRIC_ROUTE = "Route";
 
     /**
@@ -56,7 +58,8 @@ public interface ZerobusSinkMetricsMXBean {
 
     /**
      * @return the total number of stream flushes performed (gRPC route); for the REST route this
-     *         tracks successful record POSTs, which are the durability boundary there
+     *         tracks successful record POSTs and for the Kafka route broker-acknowledged records,
+     *         which are the respective durability boundaries there
      */
     long getTotalFlushes();
 
@@ -82,7 +85,7 @@ public interface ZerobusSinkMetricsMXBean {
 
     /**
      * @return the number of currently open Zerobus streams (one per target table); always {@code 0}
-     *         for the REST route, which opens no persistent streams
+     *         for the REST and Kafka routes, which open no persistent streams
      */
     long getActiveStreams();
 
@@ -94,17 +97,42 @@ public interface ZerobusSinkMetricsMXBean {
     long getMilliSecondsBehindSource();
 
     /**
-     * @return the duration of the most recent flush (gRPC) or record POST (REST), in milliseconds
+     * @return the time elapsed since the sink last forwarded an event, in milliseconds; {@code -1}
+     *         until the first event is ingested. Mirrors {@code MilliSecondsSinceLastEvent} on the
+     *         source connectors.
+     *         <p>
+     *         This complements {@link #getMilliSecondsBehindSource()}, which freezes at its last
+     *         value when the pipeline stops and therefore cannot distinguish an idle source from a
+     *         stalled sink. A value that keeps growing while the source is known to be writing
+     *         indicates a stalled pipeline.
+     */
+    long getMilliSecondsSinceLastEvent();
+
+    /**
+     * @return the duration of the most recent flush (gRPC), record POST (REST) or broker
+     *         acknowledgement (Kafka), in milliseconds
      */
     long getLastFlushDurationMillis();
 
     /**
-     * @return the longest flush/POST duration observed, in milliseconds
+     * @return the longest flush/POST/acknowledgement duration observed, in milliseconds
      */
     long getMaxFlushDurationMillis();
 
     /**
-     * @return the delivery route these metrics belong to ({@code grpc} or {@code rest})
+     * @return whether the sink currently holds a usable connection to Zerobus. Mirrors
+     *         {@code Connected} on the source connectors.
+     *         <p>
+     *         On the gRPC route this reflects the SDK client being open; on the REST route it
+     *         reflects the HTTP client being initialized. On the Kafka route the value is always
+     *         {@code true} while metrics are being reported, because a producer interceptor observes
+     *         records rather than connection state — use the standard
+     *         {@code kafka.producer:type=producer-metrics} attributes to monitor the connection there.
+     */
+    boolean isConnected();
+
+    /**
+     * @return the delivery route these metrics belong to ({@code grpc}, {@code rest} or {@code kafka})
      */
     String getRoute();
 }
