@@ -74,4 +74,28 @@ class ZerobusPayloadModeTest {
         assertThat(configWith("payload.mode", "not-a-mode").getPayloadMode()).isEqualTo(PayloadMode.TYPED);
         assertThat(configWith("record.format", "not-a-format").getRecordFormat()).isEqualTo(RecordFormat.JSON);
     }
+
+    @Test
+    void exposesEnvelopeSafetyDefaults() {
+        ZerobusChangeConsumerConfig config = configWith("payload.mode", "envelope");
+
+        assertThat(config.getMaxRecordBytes()).isEqualTo(10_000_000);
+        assertThat(config.getIdempotencyMode()).isEqualTo("source");
+        assertThat(config.getTombstoneHandlingMode()).isEqualTo("event");
+        assertThat(config.getJsonFlexibleFieldsEncoding()).isEqualTo("string");
+    }
+
+    @Test
+    void rejectsInvalidEnvelopeSafetyOptionsAtStartup() {
+        assertThatThrownBy(() -> configWith("payload.mode", "envelope", "max.record.bytes", "0"))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("max.record.bytes");
+        assertThatThrownBy(() -> configWith("payload.mode", "envelope", "filter.value.regex", ".*"))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("filter.value.json.pointer")
+                .hasMessageContaining("filter.value.regex");
+        assertThatThrownBy(() -> configWith("payload.mode", "envelope", "filter.destination.regex", "["))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("filter.destination.regex");
+    }
 }

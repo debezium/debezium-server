@@ -6,24 +6,20 @@
 package io.debezium.server.databricks.zerobus;
 
 import com.databricks.zerobus.ZerobusException;
-import com.databricks.zerobus.ZerobusJsonStream;
+import com.databricks.zerobus.ZerobusProtoStream;
 
-/**
- * Adapts the SDK's {@link ZerobusJsonStream} to {@link ZerobusStreamHandle}, which is the only thing
- * the sink's batch handling needs from a stream. A second implementation can wrap
- * {@code ZerobusProtoStream} without the batch handling knowing which one it drives.
- */
-final class ZerobusJsonStreamHandle implements ZerobusStreamHandle<String> {
+/** Adapts an SDK Protobuf stream to the sink's encoding-independent stream contract. */
+final class ZerobusProtoStreamHandle implements ZerobusStreamHandle<byte[]> {
 
-    private final ZerobusJsonStream stream;
+    private final ZerobusProtoStream stream;
 
-    ZerobusJsonStreamHandle(ZerobusJsonStream stream) {
+    ZerobusProtoStreamHandle(ZerobusProtoStream stream) {
         this.stream = stream;
     }
 
     @Override
-    public long ingest(String json) throws ZerobusException {
-        return stream.ingestRecordOffset(json);
+    public long ingest(byte[] payload) throws ZerobusException {
+        return stream.ingestRecordOffset(payload);
     }
 
     @Override

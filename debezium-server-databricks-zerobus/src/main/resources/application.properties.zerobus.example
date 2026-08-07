@@ -67,6 +67,17 @@ debezium.format.value.schemas.enable=false
 # debezium.sink.zerobus.client.secret=<SP_CLIENT_SECRET>
 # Optional: pin all events to one fully-qualified managed Delta table.
 # debezium.sink.zerobus.table=<CATALOG>.<SCHEMA>.<TABLE>
+# Data contract: typed/json keeps the target table's columns; envelope preserves
+# key, value, source position, headers, operation, and a deterministic identity.
+# For a raw CDC envelope, remove the unwrap transform above and keep only route.
+# debezium.sink.zerobus.payload.mode=envelope
+# debezium.sink.zerobus.record.format=json
+# Protobuf is supported only with payload.mode=envelope.
+# debezium.sink.zerobus.record.format=protobuf
+# Reject an encoded envelope before ingestion when it exceeds this byte limit.
+# debezium.sink.zerobus.max.record.bytes=10000000
+# Tombstones are explicit envelope rows by default; set drop to intentionally skip them.
+# debezium.sink.zerobus.tombstone.handling.mode=event
 
 # =============================================================================
 # Sink option B (GA): REST API. No persistent connection, no Kafka flag.

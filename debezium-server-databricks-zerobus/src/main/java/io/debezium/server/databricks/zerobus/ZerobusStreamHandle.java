@@ -29,6 +29,9 @@ interface ZerobusStreamHandle<P> extends AutoCloseable {
      */
     long ingest(P payload) throws ZerobusException;
 
+    /** Waits until the stream has acknowledged the record assigned {@code offset}. */
+    void waitForOffset(long offset) throws ZerobusException;
+
     /** Waits for every record enqueued on this stream to be acknowledged. This is the durability barrier. */
     void flush() throws ZerobusException;
 
