@@ -7,9 +7,12 @@ package io.debezium.server.databricks.zerobus;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -141,11 +144,12 @@ final class ZerobusEnvelopeMapper extends BaseChangeConsumer {
                     .collect(java.util.stream.Collectors.joining("&"));
         }
 
-        return "destination=" + encode(String.valueOf(record.destination()))
+        String canonicalIdentity = "destination=" + encode(String.valueOf(record.destination()))
                 + "|partition=" + encode(String.valueOf(record.partition()))
                 + "|key=" + encode(canonicalValue(key))
                 + "|operation=" + encode(operation.name().toLowerCase(java.util.Locale.ROOT))
                 + "|" + identity;
+        return "sha256:" + sha256(canonicalIdentity);
     }
 
     private String canonicalValue(Object value) {
@@ -163,6 +167,16 @@ final class ZerobusEnvelopeMapper extends BaseChangeConsumer {
 
     private String encode(String value) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        }
+        catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
     }
 
     private String serializedValue(Object value) {

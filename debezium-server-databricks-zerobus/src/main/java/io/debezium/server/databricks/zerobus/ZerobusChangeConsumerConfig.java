@@ -199,7 +199,8 @@ public class ZerobusChangeConsumerConfig {
             .withDisplayName("Included operations")
             .withType(ConfigDef.Type.STRING)
             .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("Optional comma-separated operation allowlist: create, read, update, change, delete, tombstone.");
+            .withDescription("Optional comma-separated operation allowlist using Debezium codes c, r, u, d, t, or m. "
+                    + "The long aliases create, read, update, delete, truncate, message, change, and tombstone are also accepted.");
 
     public static final Field FILTER_HEADER_NAME = Field.create("filter.header.name")
             .withDisplayName("Header filter name")
@@ -408,7 +409,7 @@ public class ZerobusChangeConsumerConfig {
                 continue;
             }
             try {
-                operations.add(ZerobusOperation.valueOf(operation.toUpperCase(Locale.ROOT)));
+                operations.add(ZerobusOperation.fromFilterToken(operation));
             }
             catch (IllegalArgumentException e) {
                 throw new io.debezium.DebeziumException("Unsupported Zerobus filter operation '" + operation + "'", e);

@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,8 +63,18 @@ class ZerobusEnvelopeTest {
                 .containsEntry("partition.server", "inventory")
                 .containsEntry("offset.lsn", "123456789")
                 .containsEntry("offset.event_serial_no", "3");
-        assertThat(envelope.idempotencyKey()).contains("source_position=").doesNotContain("headers=");
+        assertThat(envelope.idempotencyKey()).startsWith("sha256:").hasSize(71);
         assertThat(mapper.map(event, "main.bronze.customers").idempotencyKey()).isEqualTo(envelope.idempotencyKey());
+    }
+
+    @Test
+    void preservesTruncateAndMessageOperations() {
+        ZerobusEnvelopeMapper mapper = new ZerobusEnvelopeMapper(configWith());
+
+        assertThat(mapper.map(event("main.bronze.customers", null, "{\"op\":\"t\"}", 0),
+                "main.bronze.customers").operation()).isEqualTo(ZerobusOperation.TRUNCATE);
+        assertThat(mapper.map(event("main.bronze.customers", null, "{\"op\":\"m\"}", 0),
+                "main.bronze.customers").operation()).isEqualTo(ZerobusOperation.MESSAGE);
     }
 
     @Test
@@ -129,6 +140,33 @@ class ZerobusEnvelopeTest {
         order.verify(first).commit();
         order.verify(second).commit();
         order.verify(third).commit();
+    }
+
+    @Test
+    void leavesTheBatchUncommittedWhenALaterTableGroupFailsAfterAnEarlierAcknowledgement() throws Exception {
+        ZerobusStreamHandle<String> customers = mockStream();
+        ZerobusStreamHandle<String> orders = mockStream();
+        when(customers.ingest(anyString())).thenReturn(10L);
+        when(orders.ingest(anyString())).thenReturn(20L);
+        doThrow(new RuntimeException("acknowledgement failed")).when(orders).waitForOffset(20L);
+        ZerobusChangeConsumer consumer = consumer(configWith(), Map.of(
+                "main.bronze.customers", customers,
+                "main.bronze.orders", orders),
+                Map.of());
+        BatchEvent first = event("main.bronze.customers", "1", "{\"op\":\"c\"}", 0);
+        BatchEvent second = event("main.bronze.orders", "10", "{\"op\":\"u\"}", 0);
+
+        assertThatThrownBy(() -> consumer.handle(events(first, second)))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("main.bronze.orders");
+
+        InOrder order = inOrder(customers, orders);
+        order.verify(customers).ingest(anyString());
+        order.verify(customers).waitForOffset(10L);
+        order.verify(orders).ingest(anyString());
+        order.verify(orders).waitForOffset(20L);
+        verify(first, never()).commit();
+        verify(second, never()).commit();
     }
 
     @Test
@@ -243,6 +281,7 @@ class ZerobusEnvelopeTest {
         set(consumer, "config", config);
         ((Map<String, ZerobusStreamHandle<String>>) get(consumer, "streams")).putAll(jsonStreams);
         ((Map<String, ZerobusStreamHandle<byte[]>>) get(consumer, "protobufStreams")).putAll(protobufStreams);
+        consumer.configureEnvelopePath();
         return consumer;
     }
 

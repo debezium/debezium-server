@@ -56,9 +56,10 @@ import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
  * resolved table name. The target table for a record is the mapped destination (topic) name, unless
  * a fully-qualified default table is configured via {@code debezium.sink.zerobus.table}.
  * <p>
- * Delivery is at-least-once: each batch is flushed to durability before the records are committed,
- * so a crash after flush but before commit may re-send records. Deduplicate downstream using the
- * Debezium source LSN/offset carried in the payload.
+ * Delivery is at-least-once: each contiguous table group is acknowledged before processing continues,
+ * while source offsets are committed only after the whole batch succeeds. A later group failure can
+ * therefore replay an earlier durable group. Deduplicate downstream using {@code idempotency_key}; the
+ * readable Debezium source position remains available in {@code source_position}.
  */
 @Named("zerobus")
 @Dependent
@@ -121,13 +122,15 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
      * {@code tombstone.handling.mode=event} could never produce a {@code TOMBSTONE} envelope. The typed
      * and REST paths are unaffected either way: they discard a null payload in {@code isJsonObject}.
      * <p>
-     * The configuration is read here rather than from {@link #config}, because the engine queries this
-     * capability while deciding what to capture, which is not ordered against {@code @PostConstruct}.
+     * The initialized configuration is reused when available. The fallback reads MicroProfile Config so
+     * the capability remains safe if it is queried before {@code @PostConstruct} has populated the field.
      */
     @Override
     public Optional<Boolean> tombstoneSupport() {
-        final ZerobusChangeConsumerConfig capabilityConfig = new ZerobusChangeConsumerConfig(
-                io.debezium.config.Configuration.from(getConfigSubset(ConfigProvider.getConfig(), PROP_PREFIX)));
+        final ZerobusChangeConsumerConfig capabilityConfig = config == null
+                ? new ZerobusChangeConsumerConfig(
+                        io.debezium.config.Configuration.from(getConfigSubset(ConfigProvider.getConfig(), PROP_PREFIX)))
+                : config;
         return Optional.of(capabilityConfig.getPayloadMode() == ZerobusChangeConsumerConfig.PayloadMode.ENVELOPE
                 && ZerobusChangeConsumerConfig.TOMBSTONE_EVENT.equals(capabilityConfig.getTombstoneHandlingMode()));
     }
@@ -241,7 +244,6 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     }
 
     private void handleEnvelope(CapturingEvents<BatchEvent> events) {
-        configureEnvelopePath();
         List<ZerobusEnvelope> contiguousTableRecords = new ArrayList<>();
         String currentTable = null;
 
@@ -300,7 +302,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         maybeLogMetrics();
     }
 
-    private void configureEnvelopePath() {
+    void configureEnvelopePath() {
         if (config == null || config.getPayloadMode() != ZerobusChangeConsumerConfig.PayloadMode.ENVELOPE
                 || envelopeMapper != null) {
             return;
@@ -383,7 +385,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
             case READ -> "r";
             case UPDATE -> "u";
             case DELETE -> "d";
-            case CHANGE, TOMBSTONE -> null;
+            case CHANGE, TRUNCATE, MESSAGE, TOMBSTONE -> null;
         };
     }
 

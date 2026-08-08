@@ -13,6 +13,8 @@ enum ZerobusOperation {
     UPDATE,
     CHANGE,
     DELETE,
+    TRUNCATE,
+    MESSAGE,
     TOMBSTONE;
 
     static ZerobusOperation fromDebeziumCode(String code) {
@@ -24,7 +26,23 @@ enum ZerobusOperation {
             case "r" -> READ;
             case "u" -> UPDATE;
             case "d" -> DELETE;
+            case "t" -> TRUNCATE;
+            case "m" -> MESSAGE;
             default -> CHANGE;
+        };
+    }
+
+    static ZerobusOperation fromFilterToken(String token) {
+        return switch (token.toLowerCase(Locale.ROOT)) {
+            case "c", "create" -> CREATE;
+            case "r", "read" -> READ;
+            case "u", "update" -> UPDATE;
+            case "d", "delete" -> DELETE;
+            case "t", "truncate" -> TRUNCATE;
+            case "m", "message" -> MESSAGE;
+            case "change" -> CHANGE;
+            case "tombstone" -> TOMBSTONE;
+            default -> throw new IllegalArgumentException("Unsupported operation token: " + token);
         };
     }
 }

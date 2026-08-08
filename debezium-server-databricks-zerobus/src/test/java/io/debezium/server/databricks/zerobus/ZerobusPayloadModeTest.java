@@ -8,6 +8,8 @@ package io.debezium.server.databricks.zerobus;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Field;
+
 import org.junit.jupiter.api.Test;
 
 import io.debezium.DebeziumException;
@@ -20,6 +22,17 @@ import io.debezium.server.databricks.zerobus.ZerobusChangeConsumerConfig.RecordF
  * defaults keep the behaviour a deployment that sets neither option already relies on.
  */
 class ZerobusPayloadModeTest {
+
+    private static final ZerobusOperation[] ALL_OPERATIONS = {
+            ZerobusOperation.CREATE,
+            ZerobusOperation.READ,
+            ZerobusOperation.UPDATE,
+            ZerobusOperation.DELETE,
+            ZerobusOperation.TRUNCATE,
+            ZerobusOperation.MESSAGE,
+            ZerobusOperation.TOMBSTONE,
+            ZerobusOperation.CHANGE
+    };
 
     private static ZerobusChangeConsumerConfig configWith(String... options) {
         Configuration.Builder builder = Configuration.create()
@@ -100,6 +113,15 @@ class ZerobusPayloadModeTest {
     }
 
     @Test
+    void acceptsDebeziumOperationCodesAndLongAliases() {
+        assertThat(configWith("filter.operations", "c,r,u,d,t,m,tombstone,change").getFilterOperations())
+                .containsExactlyInAnyOrder(ALL_OPERATIONS);
+        assertThat(configWith("filter.operations", "create,read,update,delete,truncate,message,tombstone,change")
+                .getFilterOperations())
+                .containsExactlyInAnyOrder(ALL_OPERATIONS);
+    }
+
+    @Test
     void asksForTombstonesOnlyWhenTheEnvelopeModeWritesThem() {
         // The engine withholds tombstones unless a consumer asks for them, so the envelope mode's
         // 'event' tombstone handling is unreachable without this capability being reported.
@@ -120,8 +142,16 @@ class ZerobusPayloadModeTest {
 
     /** Mirrors what the consumer reports to the engine, without needing a CDI container. */
     private static java.util.Optional<Boolean> tombstoneSupportOf(String... options) {
-        ZerobusChangeConsumerConfig config = configWith(options);
-        return java.util.Optional.of(config.getPayloadMode() == PayloadMode.ENVELOPE
-                && "event".equals(config.getTombstoneHandlingMode()));
+        try {
+            ZerobusChangeConsumer consumer = new ZerobusChangeConsumer();
+            Field config = ZerobusChangeConsumer.class.getDeclaredField("config");
+            config.setAccessible(true);
+            config.set(consumer, configWith(options));
+            return consumer.tombstoneSupport();
+        }
+        catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
     }
+
 }
