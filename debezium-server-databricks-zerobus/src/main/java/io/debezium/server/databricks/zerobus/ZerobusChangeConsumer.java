@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import jakarta.annotation.PostConstruct;
@@ -111,6 +112,24 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         metrics.register();
         metrics.setConnected(true);
         LOGGER.info("Zerobus gRPC sink connected: endpoint={}, workspaceUrl={}", config.getEndpoint(), config.getWorkspaceUrl());
+    }
+
+    /**
+     * Asks the engine for tombstones only when the envelope payload mode is configured to write them.
+     * <p>
+     * Without this the engine defaults to withholding tombstones, so
+     * {@code tombstone.handling.mode=event} could never produce a {@code TOMBSTONE} envelope. The typed
+     * and REST paths are unaffected either way: they discard a null payload in {@code isJsonObject}.
+     * <p>
+     * The configuration is read here rather than from {@link #config}, because the engine queries this
+     * capability while deciding what to capture, which is not ordered against {@code @PostConstruct}.
+     */
+    @Override
+    public Optional<Boolean> tombstoneSupport() {
+        final ZerobusChangeConsumerConfig capabilityConfig = new ZerobusChangeConsumerConfig(
+                io.debezium.config.Configuration.from(getConfigSubset(ConfigProvider.getConfig(), PROP_PREFIX)));
+        return Optional.of(capabilityConfig.getPayloadMode() == ZerobusChangeConsumerConfig.PayloadMode.ENVELOPE
+                && ZerobusChangeConsumerConfig.TOMBSTONE_EVENT.equals(capabilityConfig.getTombstoneHandlingMode()));
     }
 
     @PreDestroy

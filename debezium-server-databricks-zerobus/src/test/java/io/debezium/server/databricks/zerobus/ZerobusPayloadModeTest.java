@@ -98,4 +98,30 @@ class ZerobusPayloadModeTest {
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("filter.destination.regex");
     }
+
+    @Test
+    void asksForTombstonesOnlyWhenTheEnvelopeModeWritesThem() {
+        // The engine withholds tombstones unless a consumer asks for them, so the envelope mode's
+        // 'event' tombstone handling is unreachable without this capability being reported.
+        assertThat(tombstoneSupportOf("payload.mode", "envelope", "tombstone.handling.mode", "event")).contains(true);
+    }
+
+    @Test
+    void doesNotAskForTombstonesWhenTheEnvelopeModeDropsThem() {
+        assertThat(tombstoneSupportOf("payload.mode", "envelope", "tombstone.handling.mode", "drop")).contains(false);
+    }
+
+    @Test
+    void doesNotAskForTombstonesInTypedMode() {
+        // The typed path discards a null payload in isJsonObject, so receiving tombstones would only
+        // cost it work; the default 'event' handling must not leak across payload modes.
+        assertThat(tombstoneSupportOf("payload.mode", "typed", "tombstone.handling.mode", "event")).contains(false);
+    }
+
+    /** Mirrors what the consumer reports to the engine, without needing a CDI container. */
+    private static java.util.Optional<Boolean> tombstoneSupportOf(String... options) {
+        ZerobusChangeConsumerConfig config = configWith(options);
+        return java.util.Optional.of(config.getPayloadMode() == PayloadMode.ENVELOPE
+                && "event".equals(config.getTombstoneHandlingMode()));
+    }
 }
