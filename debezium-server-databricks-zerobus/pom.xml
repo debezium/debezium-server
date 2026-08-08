@@ -11,11 +11,6 @@
     <name>Debezium Server Databricks Zerobus Integration</name>
     <packaging>jar</packaging>
 
-    <properties>
-        <version.zerobus.sdk>1.3.0</version.zerobus.sdk>
-        <version.protobuf>4.33.0</version.protobuf>
-    </properties>
-
     <description>
         Databricks Zerobus Ingest integration for Debezium Server. Provides a Kafka
         OAUTHBEARER login callback handler so the native Kafka sink can authenticate
@@ -42,7 +37,6 @@
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
-            <version>${version.protobuf}</version>
         </dependency>
 
         <!--

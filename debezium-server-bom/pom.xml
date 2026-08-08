@@ -14,6 +14,7 @@
     <properties>
         <version.kinesis>2.53.1</version.kinesis>
         <version.zerobus.sdk>1.3.0</version.zerobus.sdk>
+        <version.zerobus.protobuf>4.33.2</version.zerobus.protobuf>
         <version.sqs>2.53.1</version.sqs>
         <version.sns>2.53.1</version.sns>
         <version.pubsub>26.74.0</version.pubsub>
@@ -246,6 +247,15 @@
                 <groupId>com.databricks</groupId>
                 <artifactId>zerobus-ingest-sdk</artifactId>
                 <version>${version.zerobus.sdk}</version>
+            </dependency>
+            <!-- The Zerobus SDK exposes Protobuf types on its public API but does not declare the
+                 runtime itself, so a module that opens a Protobuf stream has to depend on it. Managed
+                 here at the version the distribution already resolves, so that what the sink compiles
+                 against and what it runs against cannot drift. -->
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${version.zerobus.protobuf}</version>
             </dependency>
             <dependency>
                 <groupId>io.debezium</groupId>
