@@ -46,4 +46,16 @@ public class ConnectorHealthCheckFailingConnectionIT {
                         .body("checks.find { it.name == 'debezium' }.status", equalTo("DOWN")));
     }
 
+    @Test
+    void readinessReportsDownWhenConnectorFails() {
+        Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
+                .untilAsserted(() -> given()
+                        .when().get("/q/health/ready")
+                        .then()
+                        .statusCode(503)
+                        .body("status", equalTo("DOWN"))
+                        .body("checks.name", hasItem("debezium"))
+                        .body("checks.find { it.name == 'debezium' }.status", equalTo("DOWN")));
+    }
+
 }

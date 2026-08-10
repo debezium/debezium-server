@@ -65,4 +65,16 @@ public class ConnectorHealthCheckIT {
                         .body("checks.find { it.name == 'debezium' }.status", equalTo("UP")));
     }
 
+    @Test
+    void readinessReportsUpWhenConnectorIsPolling() {
+        Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
+                .untilAsserted(() -> given()
+                        .when().get("/q/health/ready")
+                        .then()
+                        .statusCode(200)
+                        .body("status", equalTo("UP"))
+                        .body("checks.name", hasItem("debezium"))
+                        .body("checks.find { it.name == 'debezium' }.status", equalTo("UP")));
+    }
+
 }
