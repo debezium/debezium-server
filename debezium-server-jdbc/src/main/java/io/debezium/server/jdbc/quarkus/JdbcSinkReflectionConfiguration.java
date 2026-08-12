@@ -12,6 +12,7 @@ import io.debezium.connector.jdbc.dialect.mysql.MySqlDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.oracle.OracleDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.postgres.PostgresDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.sqlserver.SqlServerDatabaseDialect;
+import io.debezium.connector.jdbc.dialect.starrocks.StarRocksDialectResolver;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(targets = {
@@ -22,6 +23,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SqlServerDatabaseDialect.SqlServerDatabaseDialectProvider.class,
         Db2DatabaseDialect.Db2DatabaseProvider.class,
         Db2iDatabaseDialect.Db2iDatabaseProvider.class,
+        StarRocksDialectResolver.class,
 })
 public class JdbcSinkReflectionConfiguration {
 }
