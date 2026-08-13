@@ -27,7 +27,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         Db2iDatabaseDialect.Db2iDatabaseProvider.class,
         StarRocksDialectResolver.class,
         SingleStoreDatabaseDialect.class,
-        StarRocksDatabaseDialect.StarRocksDatabaseDialectProvider.class
+        StarRocksDatabaseDialect.StarRocksDatabaseDialectProvider.class,
+        SingleStoreDatabaseDialect.SingleStoreDatabaseDialectProvider.class,
 })
 public class JdbcSinkReflectionConfiguration {
 }
