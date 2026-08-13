@@ -11,7 +11,9 @@ import io.debezium.connector.jdbc.dialect.mysql.MariaDbDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.mysql.MySqlDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.oracle.OracleDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.postgres.PostgresDatabaseDialect;
+import io.debezium.connector.jdbc.dialect.singlestore.SingleStoreDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.sqlserver.SqlServerDatabaseDialect;
+import io.debezium.connector.jdbc.dialect.starrocks.StarRocksDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.starrocks.StarRocksDialectResolver;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -24,6 +26,8 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         Db2DatabaseDialect.Db2DatabaseProvider.class,
         Db2iDatabaseDialect.Db2iDatabaseProvider.class,
         StarRocksDialectResolver.class,
+        SingleStoreDatabaseDialect.class,
+        StarRocksDatabaseDialect.StarRocksDatabaseDialectProvider.class
 })
 public class JdbcSinkReflectionConfiguration {
 }
