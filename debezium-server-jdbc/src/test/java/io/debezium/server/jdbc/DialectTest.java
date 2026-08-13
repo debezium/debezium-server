@@ -5,9 +5,19 @@
  */
 package io.debezium.server.jdbc;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.hibernate.engine.jdbc.dialect.spi.DialectResolver;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+
 import io.debezium.connector.jdbc.dialect.DatabaseDialectProvider;
 import io.debezium.connector.jdbc.dialect.cockroachdb.CockroachDBDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.db2.Db2DatabaseDialect;
@@ -20,14 +30,6 @@ import io.debezium.connector.jdbc.dialect.singlestore.SingleStoreDatabaseDialect
 import io.debezium.connector.jdbc.dialect.sqlserver.SqlServerDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.starrocks.StarRocksDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.starrocks.StarRocksDialectResolver;
-import org.hibernate.engine.jdbc.dialect.spi.DialectResolver;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class DialectTest {
 

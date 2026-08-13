@@ -5,6 +5,7 @@
  */
 package io.debezium.server.jdbc.quarkus;
 
+import io.debezium.connector.jdbc.dialect.cockroachdb.CockroachDBDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.db2.Db2DatabaseDialect;
 import io.debezium.connector.jdbc.dialect.db2i.Db2iDatabaseDialect;
 import io.debezium.connector.jdbc.dialect.mysql.MariaDbDatabaseDialect;
@@ -29,6 +30,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         SingleStoreDatabaseDialect.class,
         StarRocksDatabaseDialect.StarRocksDatabaseDialectProvider.class,
         SingleStoreDatabaseDialect.SingleStoreDatabaseDialectProvider.class,
+        CockroachDBDatabaseDialect.CockroachDBDatabaseDialectProvider.class
 })
 public class JdbcSinkReflectionConfiguration {
 }
