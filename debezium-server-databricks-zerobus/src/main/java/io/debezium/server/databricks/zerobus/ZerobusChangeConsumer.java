@@ -215,17 +215,19 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         // The commit must happen after the flush: committing first would advance the source offset
         // while the ingested records are still buffered, so a crash between commit and flush would
         // drop them (breaking the at-least-once guarantee).
-        final long flushStartNanos = System.nanoTime();
-        for (String table : touchedTables) {
-            try {
-                streams.get(table).flush();
+        if (!touchedTables.isEmpty()) {
+            final long flushStartNanos = System.nanoTime();
+            for (String table : touchedTables) {
+                try {
+                    streams.get(table).flush();
+                }
+                catch (Exception e) {
+                    metrics.recordError();
+                    throw new DebeziumException("Failed to flush Zerobus stream for table '" + table + "'", e);
+                }
             }
-            catch (Exception e) {
-                metrics.recordError();
-                throw new DebeziumException("Failed to flush Zerobus stream for table '" + table + "'", e);
-            }
+            metrics.flushed((System.nanoTime() - flushStartNanos) / 1_000_000L);
         }
-        metrics.flushed((System.nanoTime() - flushStartNanos) / 1_000_000L);
 
         // Past the durability barrier, so the batch can now be counted as ingested. The source
         // timestamp of the last durable record drives the freshness gauge.
