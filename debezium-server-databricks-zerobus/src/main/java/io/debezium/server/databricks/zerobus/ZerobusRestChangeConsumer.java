@@ -6,12 +6,7 @@
 package io.debezium.server.databricks.zerobus;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.List;
 
 import jakarta.annotation.PostConstruct;
@@ -44,14 +39,14 @@ import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
  * This route needs neither the Kafka ingress flag nor a persistent connection, so it suits
  * serverless / edge deployments. Like the other routes it is at-least-once; deduplicate downstream.
  */
-@Named("zerobusrest")
+@Named("zerobus-rest")
 @Dependent
 public class ZerobusRestChangeConsumer extends BaseChangeConsumer
         implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZerobusRestChangeConsumer.class);
 
-    private static final String PROP_PREFIX = "debezium.sink.zerobusrest.";
+    private static final String PROP_PREFIX = "debezium.sink.zerobus-rest.";
 
     private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
@@ -59,6 +54,7 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
     private ZerobusTokenProvider tokenProvider;
     private HttpClient httpClient;
     private String baseUri;
+    private ZerobusRestClient restClient;
     private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("rest");
     private long batchesSinceLog = 0;
 
@@ -75,6 +71,7 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
         this.tokenProvider = new ZerobusTokenProvider(
                 config.getWorkspaceUrl(), config.getWorkspaceId(), config.getClientId(), config.getClientSecret(), config.getTable(),
                 new DefaultTokenHttpClient(httpClient));
+        this.restClient = new ZerobusRestClient(httpClient, baseUri, tokenProvider, config.getWorkspaceUrl());
 
         metrics.register();
         metrics.setConnected(true);
@@ -97,7 +94,7 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
             if (ZerobusChangeConsumer.isJsonObject(json) && table != null) {
                 try {
                     final long postStartNanos = System.nanoTime();
-                    post(table, json);
+                    restClient.insert(table, json);
                     metrics.flushed((System.nanoTime() - postStartNanos) / 1_000_000L);
                     metrics.recordIngested(ZerobusChangeConsumer.operationOf(record), ZerobusChangeConsumer.sourceTsMsOf(record));
                 }
@@ -120,25 +117,6 @@ public class ZerobusRestChangeConsumer extends BaseChangeConsumer
             batchesSinceLog = 0;
             metrics.logMetricsSummary();
         }
-    }
-
-    private void post(String table, String json) throws IOException, InterruptedException {
-        String url = baseUri + "/zerobus/v1/tables/" + table + "/insert";
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(30))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + tokenProvider.currentToken())
-                .header("unity-catalog-endpoint", config.getWorkspaceUrl())
-                .header("x-databricks-zerobus-table-name", table)
-                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
-                .build();
-
-        HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-            throw new IOException("Zerobus REST returned HTTP " + resp.statusCode() + " for table '" + table + "': " + resp.body());
-        }
-        LOGGER.trace("Ingested record to {} (HTTP {})", table, resp.statusCode());
     }
 
     private String resolveTable(String destination) {

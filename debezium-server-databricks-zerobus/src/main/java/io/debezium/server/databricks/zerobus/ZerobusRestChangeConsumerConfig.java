@@ -12,7 +12,7 @@ import io.debezium.config.Field;
 
 /**
  * Configuration fields for {@link ZerobusRestChangeConsumer} (the REST route).
- * Properties are prefixed with {@code debezium.sink.zerobusrest.} in {@code application.properties}.
+ * Properties are prefixed with {@code debezium.sink.zerobus-rest.} in {@code application.properties}.
  */
 public class ZerobusRestChangeConsumerConfig {
 

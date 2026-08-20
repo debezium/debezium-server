@@ -89,13 +89,13 @@ debezium.format.value.schemas.enable=false
 # Sink option B (GA): REST API. No persistent connection, no Kafka flag.
 # POSTs one record per request to /zerobus/v1/tables/<table>/insert.
 # =============================================================================
-# debezium.sink.type=zerobusrest
-# debezium.sink.zerobusrest.uri=https://<WORKSPACE_ID>.zerobus.<REGION>.cloud.databricks.com
-# debezium.sink.zerobusrest.workspace.url=<WORKSPACE_URL>
-# debezium.sink.zerobusrest.workspace.id=<WORKSPACE_ID>
-# debezium.sink.zerobusrest.client.id=<SP_CLIENT_ID>
-# debezium.sink.zerobusrest.client.secret=<SP_CLIENT_SECRET>
-# debezium.sink.zerobusrest.table=<CATALOG>.<SCHEMA>.<TABLE>
+# debezium.sink.type=zerobus-rest
+# debezium.sink.zerobus-rest.uri=https://<WORKSPACE_ID>.zerobus.<REGION>.cloud.databricks.com
+# debezium.sink.zerobus-rest.workspace.url=<WORKSPACE_URL>
+# debezium.sink.zerobus-rest.workspace.id=<WORKSPACE_ID>
+# debezium.sink.zerobus-rest.client.id=<SP_CLIENT_ID>
+# debezium.sink.zerobus-rest.client.secret=<SP_CLIENT_SECRET>
+# debezium.sink.zerobus-rest.table=<CATALOG>.<SCHEMA>.<TABLE>
 
 # =============================================================================
 # Sink option C (BETA): native Kafka producer -> Zerobus Kafka endpoint.

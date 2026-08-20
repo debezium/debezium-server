@@ -56,9 +56,12 @@ class ZerobusRestChangeConsumerTest {
         set(consumer, "baseUri", "https://zerobus.example.com");
         set(consumer, "httpClient", httpClient);
         // token provider with a pre-seeded (non-expiring) token, so currentToken() never hits the network
-        set(consumer, "tokenProvider", tokenProviderWithCachedToken(
+        ZerobusTokenProvider tokenProvider = tokenProviderWithCachedToken(
                 "https://dbc-a1b2.cloud.databricks.com", "1234567890123456", "sp-client", "sp-secret",
-                "main.default.customers", "test-token-xyz"));
+                "main.default.customers", "test-token-xyz");
+        set(consumer, "tokenProvider", tokenProvider);
+        set(consumer, "restClient", new ZerobusRestClient(
+                httpClient, "https://zerobus.example.com", tokenProvider, "https://dbc-a1b2.cloud.databricks.com"));
     }
 
     @Test

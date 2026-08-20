@@ -25,7 +25,7 @@ import io.debezium.annotation.ThreadSafe;
 /**
  * Exposes {@link ZerobusSinkMetrics} for the Kafka delivery route, in which the Zerobus
  * Kafka-compatible endpoint is written to through the generic {@code kafka} sink rather than through
- * the {@code zerobus} or {@code zerobusrest} consumers.
+ * the {@code zerobus} or {@code zerobus-rest} consumers.
  * <p>
  * Because that route never enters {@code ZerobusChangeConsumer}, the sink cannot instrument itself.
  * A {@link ProducerInterceptor} is the extension point the Kafka producer already provides, so no
