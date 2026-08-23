@@ -6,8 +6,12 @@
 package io.debezium.server.databricks.zerobus;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
+import com.databricks.zerobus.StreamConfigurationOptions;
+import com.databricks.zerobus.ZerobusJsonStream;
+import com.databricks.zerobus.ZerobusSdk;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,7 +21,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.debezium.DebeziumException;
 
 /** Serializes the stable CDC envelope to a Zerobus JSON record. */
-final class ZerobusJsonEnvelopeSerializer {
+final class ZerobusJsonEnvelopeSerializer implements ZerobusEnvelopeSerializer<String> {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String flexibleFieldsEncoding;
@@ -26,7 +30,8 @@ final class ZerobusJsonEnvelopeSerializer {
         this.flexibleFieldsEncoding = config.getJsonFlexibleFieldsEncoding();
     }
 
-    String serialize(ZerobusEnvelope record) {
+    @Override
+    public String serialize(ZerobusEnvelope record) {
         ObjectNode root = mapper.createObjectNode();
         root.put("target_table", record.targetTable());
         root.put("destination", record.destination());
@@ -44,6 +49,18 @@ final class ZerobusJsonEnvelopeSerializer {
         catch (JsonProcessingException e) {
             throw new DebeziumException("Failed to serialize Zerobus JSON envelope", e);
         }
+    }
+
+    @Override
+    public int byteSize(String payload) {
+        return payload.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    @Override
+    public ZerobusStreamHandle<String> openStream(ZerobusSdk sdk, String table, StreamConfigurationOptions options,
+                                                  String clientId, String clientSecret) {
+        ZerobusJsonStream stream = sdk.createJsonStream(table, clientId, clientSecret, options).join();
+        return new ZerobusJsonStreamHandle(stream);
     }
 
     private void setFlexibleField(ObjectNode root, String fieldName, JsonNode value) {

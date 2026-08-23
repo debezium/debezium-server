@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
 
+import com.databricks.zerobus.StreamConfigurationOptions;
+import com.databricks.zerobus.ZerobusProtoStream;
+import com.databricks.zerobus.ZerobusSdk;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
@@ -20,7 +23,7 @@ import com.google.protobuf.DynamicMessage;
 import io.debezium.DebeziumException;
 
 /** Serializes the stable CDC envelope to the descriptor supplied to a Zerobus Protobuf stream. */
-final class ZerobusProtobufEnvelopeSerializer {
+final class ZerobusProtobufEnvelopeSerializer implements ZerobusEnvelopeSerializer<byte[]> {
 
     private static final String MESSAGE_NAME = "DebeziumZerobusEnvelope";
     private static final DescriptorProto DESCRIPTOR_PROTO = DescriptorProto.newBuilder()
@@ -48,7 +51,8 @@ final class ZerobusProtobufEnvelopeSerializer {
         return DESCRIPTOR;
     }
 
-    byte[] serialize(ZerobusEnvelope record) {
+    @Override
+    public byte[] serialize(ZerobusEnvelope record) {
         try {
             DynamicMessage.Builder builder = DynamicMessage.newBuilder(DESCRIPTOR);
             set(builder, "target_table", record.targetTable());
@@ -67,6 +71,18 @@ final class ZerobusProtobufEnvelopeSerializer {
         catch (IOException e) {
             throw new DebeziumException("Failed to serialize Zerobus Protobuf envelope", e);
         }
+    }
+
+    @Override
+    public int byteSize(byte[] payload) {
+        return payload.length;
+    }
+
+    @Override
+    public ZerobusStreamHandle<byte[]> openStream(ZerobusSdk sdk, String table, StreamConfigurationOptions options,
+                                                  String clientId, String clientSecret) {
+        ZerobusProtoStream stream = sdk.createProtoStream(table, DESCRIPTOR_PROTO, clientId, clientSecret, options).join();
+        return new ZerobusProtoStreamHandle(stream);
     }
 
     private static FieldDescriptorProto field(String name, int number, FieldDescriptorProto.Type type) {

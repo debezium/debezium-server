@@ -5,10 +5,8 @@
  */
 package io.debezium.server.databricks.zerobus;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import com.databricks.zerobus.StreamConfigurationOptions;
 import com.databricks.zerobus.ZerobusJsonStream;
-import com.databricks.zerobus.ZerobusProtoStream;
 import com.databricks.zerobus.ZerobusSdk;
 
 import io.debezium.DebeziumException;
@@ -79,12 +76,13 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
     // One stream per target table (Zerobus: 1 stream = 1 table). Access-ordered so that iteration
     // yields the least recently used table first, which is what bounds the number of open streams.
+    // The typed path always writes JSON strings; the envelope path stores whatever encoding its
+    // serializer produces, so its stream map is wildcarded and the payload type is recovered locally.
     private final Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
-    private final Map<String, ZerobusStreamHandle<byte[]>> protobufStreams = new LinkedHashMap<>(16, 0.75f, true);
+    private final Map<String, ZerobusStreamHandle<?>> envelopeStreams = new LinkedHashMap<>(16, 0.75f, true);
     private ZerobusEnvelopeMapper envelopeMapper;
     private ZerobusEventFilter envelopeFilter;
-    private ZerobusJsonEnvelopeSerializer jsonEnvelopeSerializer;
-    private ZerobusProtobufEnvelopeSerializer protobufEnvelopeSerializer;
+    private ZerobusEnvelopeSerializer<?> envelopeSerializer;
 
     /**
      * Lets a deployment supply its own {@link ZerobusSdk}, for example to point at a different
@@ -139,7 +137,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     @Override
     public void close() {
         closeStreams(streams);
-        closeStreams(protobufStreams);
+        closeStreams(envelopeStreams);
         if (sdk != null) {
             sdk.close();
         }
@@ -148,8 +146,8 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         LOGGER.info("Zerobus gRPC sink closed");
     }
 
-    private <P> void closeStreams(Map<String, ZerobusStreamHandle<P>> openStreams) {
-        for (Map.Entry<String, ZerobusStreamHandle<P>> entry : openStreams.entrySet()) {
+    private void closeStreams(Map<String, ? extends ZerobusStreamHandle<?>> openStreams) {
+        for (var entry : openStreams.entrySet()) {
             try {
                 entry.getValue().close();
                 metrics.streamClosed();
@@ -311,19 +309,13 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         }
         envelopeMapper = new ZerobusEnvelopeMapper(config);
         envelopeFilter = new ZerobusEventFilter(config, envelopeMapper);
-        jsonEnvelopeSerializer = new ZerobusJsonEnvelopeSerializer(config);
-        protobufEnvelopeSerializer = new ZerobusProtobufEnvelopeSerializer();
+        envelopeSerializer = ZerobusEnvelopeSerializer.create(config);
     }
 
     private void writeEnvelopeGroup(String table, List<ZerobusEnvelope> records) {
         try {
             long started = System.nanoTime();
-            if (config.getRecordFormat() == ZerobusChangeConsumerConfig.RecordFormat.PROTOBUF) {
-                writeProtobufEnvelopeGroup(table, records);
-            }
-            else {
-                writeJsonEnvelopeGroup(table, records);
-            }
+            ingestEnvelopeGroup(envelopeSerializer, table, records);
             metrics.flushed((System.nanoTime() - started) / 1_000_000L);
             for (ZerobusEnvelope record : records) {
                 metrics.recordIngested(metricOperation(record.operation()),
@@ -340,33 +332,22 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         }
     }
 
-    private void writeJsonEnvelopeGroup(String table, List<ZerobusEnvelope> records) throws Exception {
-        List<String> payloads = new ArrayList<>(records.size());
+    /**
+     * Serializes and ingests one contiguous table group, then waits for its durability. Generic over the
+     * serializer's payload type so the format is chosen once ({@link #envelopeSerializer}) and this path
+     * never branches on JSON vs Protobuf.
+     */
+    private <P> void ingestEnvelopeGroup(ZerobusEnvelopeSerializer<P> serializer, String table, List<ZerobusEnvelope> records) throws Exception {
+        List<P> payloads = new ArrayList<>(records.size());
         for (ZerobusEnvelope record : records) {
-            String payload = jsonEnvelopeSerializer.serialize(record);
-            validatePayloadSize(record, payload.getBytes(StandardCharsets.UTF_8).length);
+            P payload = serializer.serialize(record);
+            validatePayloadSize(record, serializer.byteSize(payload));
             payloads.add(payload);
         }
 
-        ZerobusStreamHandle<String> stream = stream(table);
+        ZerobusStreamHandle<P> stream = envelopeStream(serializer, table);
         long lastOffset = -1L;
-        for (String payload : payloads) {
-            lastOffset = stream.ingest(payload);
-        }
-        stream.waitForOffset(lastOffset);
-    }
-
-    private void writeProtobufEnvelopeGroup(String table, List<ZerobusEnvelope> records) throws Exception {
-        List<byte[]> payloads = new ArrayList<>(records.size());
-        for (ZerobusEnvelope record : records) {
-            byte[] payload = protobufEnvelopeSerializer.serialize(record);
-            validatePayloadSize(record, payload.length);
-            payloads.add(payload);
-        }
-
-        ZerobusStreamHandle<byte[]> stream = protobufStream(table);
-        long lastOffset = -1L;
-        for (byte[] payload : payloads) {
+        for (P payload : payloads) {
             lastOffset = stream.ingest(payload);
         }
         stream.waitForOffset(lastOffset);
@@ -540,22 +521,17 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     }
 
     private void evictEnvelopeStreamsAboveLimit() {
-        if (config.getRecordFormat() == ZerobusChangeConsumerConfig.RecordFormat.PROTOBUF) {
-            evictStreamsAboveLimit(protobufStreams);
-        }
-        else {
-            evictStreamsAboveLimit(streams);
-        }
+        evictStreamsAboveLimit(envelopeStreams);
     }
 
-    private <P> void evictStreamsAboveLimit(Map<String, ZerobusStreamHandle<P>> openStreams) {
+    private void evictStreamsAboveLimit(Map<String, ? extends ZerobusStreamHandle<?>> openStreams) {
         final int limit = config.getMaxOpenStreams();
         if (limit <= 0) {
             return;
         }
-        final Iterator<Map.Entry<String, ZerobusStreamHandle<P>>> iterator = openStreams.entrySet().iterator();
+        final var iterator = openStreams.entrySet().iterator();
         while (openStreams.size() > limit && iterator.hasNext()) {
-            final Map.Entry<String, ZerobusStreamHandle<P>> eldest = iterator.next();
+            final var eldest = iterator.next();
             try {
                 eldest.getValue().flush();
                 eldest.getValue().close();
@@ -587,24 +563,27 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         }
     }
 
-    private ZerobusStreamHandle<byte[]> protobufStream(String table) {
-        return protobufStreams.computeIfAbsent(table, this::createProtobufStream);
-    }
-
-    private ZerobusStreamHandle<byte[]> createProtobufStream(String table) {
-        try {
-            LOGGER.info("Opening Zerobus Protobuf stream for table '{}'", table);
-            StreamConfigurationOptions options = recoveryOptions(StreamConfigurationOptions.builder()
-                    .setMaxInflightRecords(config.getMaxInflightRecords()))
-                    .build();
-            ZerobusProtoStream openedStream = sdk.createProtoStream(table, protobufEnvelopeSerializer.descriptorProto(),
-                    config.getClientId(), config.getClientSecret(), options).join();
-            metrics.streamOpened();
-            return new ZerobusProtoStreamHandle(openedStream);
-        }
-        catch (Exception e) {
-            throw new DebeziumException("Could not open Zerobus Protobuf stream for table '" + table + "'", e);
-        }
+    /**
+     * Returns the envelope stream for {@code table}, opening one through the serializer if absent. The
+     * map is wildcarded because it holds whichever encoding the serializer produces; the cast is safe
+     * because the same serializer both opens and feeds every stream in it.
+     */
+    @SuppressWarnings("unchecked")
+    private <P> ZerobusStreamHandle<P> envelopeStream(ZerobusEnvelopeSerializer<P> serializer, String table) {
+        return (ZerobusStreamHandle<P>) envelopeStreams.computeIfAbsent(table, t -> {
+            try {
+                LOGGER.info("Opening Zerobus {} stream for table '{}'", config.getRecordFormat().getValue(), t);
+                StreamConfigurationOptions options = recoveryOptions(StreamConfigurationOptions.builder()
+                        .setMaxInflightRecords(config.getMaxInflightRecords()))
+                        .build();
+                ZerobusStreamHandle<P> openedStream = serializer.openStream(sdk, t, options, config.getClientId(), config.getClientSecret());
+                metrics.streamOpened();
+                return openedStream;
+            }
+            catch (Exception e) {
+                throw new DebeziumException("Could not open Zerobus stream for table '" + t + "'", e);
+            }
+        });
     }
 
     /**

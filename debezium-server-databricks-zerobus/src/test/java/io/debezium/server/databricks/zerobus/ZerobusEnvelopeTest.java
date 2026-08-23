@@ -279,8 +279,11 @@ class ZerobusEnvelopeTest {
             throws Exception {
         ZerobusChangeConsumer consumer = new ZerobusChangeConsumer();
         set(consumer, "config", config);
-        ((Map<String, ZerobusStreamHandle<String>>) get(consumer, "streams")).putAll(jsonStreams);
-        ((Map<String, ZerobusStreamHandle<byte[]>>) get(consumer, "protobufStreams")).putAll(protobufStreams);
+        // The envelope path keeps every encoding in one wildcarded stream map; a given test seeds only
+        // the JSON or the Protobuf mocks, so putting both in is safe (the other map is empty).
+        Map<String, ZerobusStreamHandle<?>> envelopeStreams = (Map<String, ZerobusStreamHandle<?>>) get(consumer, "envelopeStreams");
+        envelopeStreams.putAll(jsonStreams);
+        envelopeStreams.putAll(protobufStreams);
         consumer.configureEnvelopePath();
         return consumer;
     }
