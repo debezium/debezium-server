@@ -42,6 +42,13 @@ rules:
         desc: The number of change data capture events processed.
         metricAttribute:
           debezium.event.type: const(delete)
+      TotalNumberOfReadEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(read)
 
       NumberOfErroneousEvents:
         metric: event.erroneous.count
@@ -194,6 +201,13 @@ rules:
         desc: The number of change data capture events processed.
         metricAttribute:
           debezium.event.type: const(delete)
+      TotalNumberOfReadEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(read)
 
       NumberOfErroneousEvents:
         metric: event.erroneous.count
@@ -345,6 +359,13 @@ rules:
         desc: The number of change data capture events processed.
         metricAttribute:
           debezium.event.type: const(delete)
+      TotalNumberOfReadEventsSeen:
+        metric: event.count
+        type: counter
+        unit: "{event}"
+        desc: The number of change data capture events processed.
+        metricAttribute:
+          debezium.event.type: const(read)
 
       NumberOfErroneousEvents:
         metric: event.erroneous.count
