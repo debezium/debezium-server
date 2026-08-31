@@ -86,7 +86,7 @@ jobs:
           repository: debezium/debezium-connector-informix
           path: informix
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: 25
@@ -122,7 +122,7 @@ jobs:
     needs: build
     steps:
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: 25
@@ -173,7 +173,7 @@ jobs:
     needs: build
     steps:
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: 25
