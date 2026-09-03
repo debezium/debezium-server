@@ -5,8 +5,12 @@
  */
 package io.debezium.server.rabbitmq;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,10 +24,8 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
-import javax.net.ssl.SNIHostName;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLParameters;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManagerFactory;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -52,7 +54,6 @@ import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
@@ -184,28 +185,18 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
             EnvironmentBuilder environmentBuilder = Environment.builder();
 
             if (config.isTlsEnable()) {
+                SslContext sslContext;
                 try {
-                    SslContext sslContext = SslContextBuilder.forClient()
-                            .sslProvider(SslProvider.JDK)
-                            .protocols("TLSv1.2", "TLSv1.3")
-                            .build();
-
-                    if (config.getTlsServerName() != null) {
-                        SSLParameters sslParameters = new SSLParameters();
-                        sslParameters.setServerNames(Collections.singletonList(new SNIHostName(config.getTlsServerName())));
-
-                        SSLEngine sslEngine = sslContext.newEngine(ByteBufAllocator.DEFAULT);
-                        sslEngine.setSSLParameters(sslParameters);
-                    }
-
-                    environmentBuilder = environmentBuilder
-                            .tls()
-                            .sslContext(sslContext)
-                            .environmentBuilder();
+                    sslContext = buildSslContext(config);
                 }
-                catch (SSLException e) {
-                    LOGGER.error("Failed to set SSL context: {}", e.getMessage());
+                catch (GeneralSecurityException | IOException e) {
+                    throw new DebeziumException("Failed to set SSL context", e);
                 }
+
+                environmentBuilder = environmentBuilder
+                        .tls()
+                        .sslContext(sslContext)
+                        .environmentBuilder();
             }
 
             environment = environmentBuilder
@@ -311,6 +302,53 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
         }
     }
 
+    SslContext buildSslContext(RabbitMqStreamNativeChangeConsumerConfig config) throws GeneralSecurityException, IOException {
+        SslContextBuilder builder = SslContextBuilder.forClient()
+                .sslProvider(SslProvider.JDK)
+                .protocols("TLSv1.2", "TLSv1.3");
+
+        if (config.getTrustStoreType() != null) {
+            if (RabbitMqStreamNativeChangeConsumerConfig.STORE_TYPE_PEM.equalsIgnoreCase(config.getTrustStoreType())) {
+                builder.trustManager(new File(config.getTrustStoreFilePath()));
+            }
+            else {
+                TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                trustManagerFactory.init(loadKeyStore(config.getTrustStoreType(), config.getTrustStoreFilePath(), config.getTrustStorePassword()));
+                builder.trustManager(trustManagerFactory);
+            }
+        }
+
+        if (config.getKeyStoreType() != null) {
+            if (RabbitMqStreamNativeChangeConsumerConfig.STORE_TYPE_PEM.equalsIgnoreCase(config.getKeyStoreType())) {
+                builder.keyManager(new File(config.getKeyStoreCertificateFilePath()), new File(config.getKeyStoreKeyFilePath()), config.getKeyStorePassword());
+            }
+            else {
+                KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                keyManagerFactory.init(loadKeyStore(config.getKeyStoreType(), config.getKeyStoreFilePath(), config.getKeyStorePassword()),
+                        passwordChars(config.getKeyStorePassword()));
+                builder.keyManager(keyManagerFactory);
+            }
+        }
+
+        if (config.isTlsVerifyHostname()) {
+            builder.endpointIdentificationAlgorithm("HTTPS");
+        }
+
+        return builder.build();
+    }
+
+    private static KeyStore loadKeyStore(String type, String filePath, String password) throws GeneralSecurityException, IOException {
+        KeyStore keyStore = KeyStore.getInstance(type);
+        try (FileInputStream in = new FileInputStream(filePath)) {
+            keyStore.load(in, passwordChars(password));
+        }
+        return keyStore;
+    }
+
+    private static char[] passwordChars(String password) {
+        return password != null ? password.toCharArray() : new char[0];
+    }
+
     @Override
     public Optional<Boolean> tombstoneSupport() {
         return Optional.of(true);
@@ -327,7 +365,15 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
                 RabbitMqStreamNativeChangeConsumerConfig.PASSWORD,
                 RabbitMqStreamNativeChangeConsumerConfig.VIRTUAL_HOST,
                 RabbitMqStreamNativeChangeConsumerConfig.TLS_ENABLE,
-                RabbitMqStreamNativeChangeConsumerConfig.TLS_SERVER_NAME,
+                RabbitMqStreamNativeChangeConsumerConfig.KEY_STORE_TYPE,
+                RabbitMqStreamNativeChangeConsumerConfig.KEY_STORE_CERTIFICATE_FILE_PATH,
+                RabbitMqStreamNativeChangeConsumerConfig.KEY_STORE_KEY_FILE_PATH,
+                RabbitMqStreamNativeChangeConsumerConfig.KEY_STORE_FILE_PATH,
+                RabbitMqStreamNativeChangeConsumerConfig.KEY_STORE_PASSWORD,
+                RabbitMqStreamNativeChangeConsumerConfig.TRUST_STORE_TYPE,
+                RabbitMqStreamNativeChangeConsumerConfig.TRUST_STORE_FILE_PATH,
+                RabbitMqStreamNativeChangeConsumerConfig.TRUST_STORE_PASSWORD,
+                RabbitMqStreamNativeChangeConsumerConfig.TLS_VERIFY_HOSTNAME,
                 RabbitMqStreamNativeChangeConsumerConfig.RPC_TIMEOUT,
                 RabbitMqStreamNativeChangeConsumerConfig.MAX_PRODUCERS_BY_CONNECTION,
                 RabbitMqStreamNativeChangeConsumerConfig.MAX_TRACKING_CONSUMERS_BY_CONNECTION,

@@ -17,6 +17,10 @@ import io.debezium.config.Field;
  */
 public class RabbitMqStreamNativeChangeConsumerConfig {
 
+    protected static final String STORE_TYPE_PEM = "PEM";
+    protected static final String STORE_TYPE_PKCS12 = "PKCS12";
+    protected static final String STORE_TYPE_JKS = "JKS";
+
     public static final Field CONNECTION_HOST = Field.create("connection.host")
             .withDisplayName("Connection Host (deprecated)")
             .withType(ConfigDef.Type.STRING)
@@ -79,12 +83,69 @@ public class RabbitMqStreamNativeChangeConsumerConfig {
             .withImportance(ConfigDef.Importance.MEDIUM)
             .withDescription("Enable TLS connection.");
 
-    public static final Field TLS_SERVER_NAME = Field.create("tls.serverName")
-            .withDisplayName("TLS Server Name")
+    public static final Field KEY_STORE_TYPE = Field.create("tls.keyStore.type")
+            .withDisplayName("Key Store Type")
             .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Type of the client key store: PEM, PKCS12, or JKS. Required for mTLS.");
+
+    public static final Field KEY_STORE_CERTIFICATE_FILE_PATH = Field.create("tls.keyStore.certificateFilePath")
+            .withDisplayName("Key Store Certificate File Path")
+            .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.LONG)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Path to the client certificate PEM file. Required together with tls.keyStore.keyFilePath when tls.keyStore.type is PEM.");
+
+    public static final Field KEY_STORE_KEY_FILE_PATH = Field.create("tls.keyStore.keyFilePath")
+            .withDisplayName("Key Store Key File Path")
+            .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.LONG)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Path to the client private key PEM file. Required together with tls.keyStore.certificateFilePath when tls.keyStore.type is PEM.");
+
+    public static final Field KEY_STORE_FILE_PATH = Field.create("tls.keyStore.filePath")
+            .withDisplayName("Key Store File Path")
+            .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.LONG)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Path to the client key store file. Required when tls.keyStore.type is PKCS12 or JKS.");
+
+    public static final Field KEY_STORE_PASSWORD = Field.create("tls.keyStore.password")
+            .withDisplayName("Key Store Password")
+            .withType(ConfigDef.Type.PASSWORD)
             .withWidth(ConfigDef.Width.MEDIUM)
-            .withImportance(ConfigDef.Importance.LOW)
-            .withDescription("TLS server name for SNI.");
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Password for the key store (PKCS12/JKS), or passphrase for the private key file (PEM), if any.");
+
+    public static final Field TRUST_STORE_TYPE = Field.create("tls.trustStore.type")
+            .withDisplayName("Trust Store Type")
+            .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Type of the trust store: PEM, PKCS12, or JKS. Required to trust a private/internal CA.");
+
+    public static final Field TRUST_STORE_FILE_PATH = Field.create("tls.trustStore.filePath")
+            .withDisplayName("Trust Store File Path")
+            .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.LONG)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Path to the trust store file (a CA bundle for PEM, or a key store file for PKCS12/JKS). Required when tls.trustStore.type is set.");
+
+    public static final Field TRUST_STORE_PASSWORD = Field.create("tls.trustStore.password")
+            .withDisplayName("Trust Store Password")
+            .withType(ConfigDef.Type.PASSWORD)
+            .withWidth(ConfigDef.Width.MEDIUM)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Password for the trust store. Only relevant when tls.trustStore.type is PKCS12 or JKS.");
+
+    public static final Field TLS_VERIFY_HOSTNAME = Field.create("tls.verify.hostname")
+            .withDisplayName("TLS Verify Hostname")
+            .withType(ConfigDef.Type.BOOLEAN)
+            .withDefault(false)
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("Verify that the server's certificate matches the host being connected to. Defaults to false to preserve prior behavior.");
 
     public static final Field RPC_TIMEOUT = Field.create("rpcTimeout")
             .withDisplayName("RPC Timeout (seconds)")
@@ -280,7 +341,15 @@ public class RabbitMqStreamNativeChangeConsumerConfig {
     private String password;
     private String virtualHost;
     private boolean tlsEnable;
-    private String tlsServerName;
+    private String keyStoreType;
+    private String keyStoreCertificateFilePath;
+    private String keyStoreKeyFilePath;
+    private String keyStoreFilePath;
+    private String keyStorePassword;
+    private String trustStoreType;
+    private String trustStoreFilePath;
+    private String trustStorePassword;
+    private boolean tlsVerifyHostname;
     private int rpcTimeout;
     private int maxProducersByConnection;
     private int maxTrackingConsumersByConnection;
@@ -321,7 +390,15 @@ public class RabbitMqStreamNativeChangeConsumerConfig {
         password = config.getString(PASSWORD);
         virtualHost = config.getString(VIRTUAL_HOST);
         tlsEnable = config.getBoolean(TLS_ENABLE, false);
-        tlsServerName = config.getString(TLS_SERVER_NAME);
+        keyStoreType = config.getString(KEY_STORE_TYPE);
+        keyStoreCertificateFilePath = config.getString(KEY_STORE_CERTIFICATE_FILE_PATH);
+        keyStoreKeyFilePath = config.getString(KEY_STORE_KEY_FILE_PATH);
+        keyStoreFilePath = config.getString(KEY_STORE_FILE_PATH);
+        keyStorePassword = config.getString(KEY_STORE_PASSWORD);
+        trustStoreType = config.getString(TRUST_STORE_TYPE);
+        trustStoreFilePath = config.getString(TRUST_STORE_FILE_PATH);
+        trustStorePassword = config.getString(TRUST_STORE_PASSWORD);
+        tlsVerifyHostname = config.getBoolean(TLS_VERIFY_HOSTNAME, false);
         rpcTimeout = config.getInteger(RPC_TIMEOUT, 10);
         maxProducersByConnection = config.getInteger(MAX_PRODUCERS_BY_CONNECTION, 256);
         maxTrackingConsumersByConnection = config.getInteger(MAX_TRACKING_CONSUMERS_BY_CONNECTION, 50);
@@ -358,6 +435,39 @@ public class RabbitMqStreamNativeChangeConsumerConfig {
         producerEnqueueTimeout = config.getInteger(PRODUCER_ENQUEUE_TIMEOUT, 10);
         batchConfirmTimeout = config.getInteger(BATCH_CONFIRM_TIMEOUT, 30);
         nullValue = config.getString(NULL_VALUE);
+
+        validateTlsOptions();
+    }
+
+    private void validateTlsOptions() {
+        validateStoreType(keyStoreType, KEY_STORE_TYPE.name());
+        if (STORE_TYPE_PEM.equalsIgnoreCase(keyStoreType)) {
+            validatePair(keyStoreCertificateFilePath, KEY_STORE_CERTIFICATE_FILE_PATH.name(),
+                    keyStoreKeyFilePath, KEY_STORE_KEY_FILE_PATH.name());
+        }
+        else if (keyStoreType != null && keyStoreFilePath == null) {
+            throw new io.debezium.DebeziumException(KEY_STORE_FILE_PATH.name() + " is required when " + KEY_STORE_TYPE.name() + " is " + keyStoreType);
+        }
+
+        validateStoreType(trustStoreType, TRUST_STORE_TYPE.name());
+        if (trustStoreType != null && trustStoreFilePath == null) {
+            throw new io.debezium.DebeziumException(TRUST_STORE_FILE_PATH.name() + " is required when " + TRUST_STORE_TYPE.name() + " is set");
+        }
+    }
+
+    private static void validateStoreType(String type, String fieldName) {
+        if (type != null
+                && !STORE_TYPE_PEM.equalsIgnoreCase(type)
+                && !STORE_TYPE_PKCS12.equalsIgnoreCase(type)
+                && !STORE_TYPE_JKS.equalsIgnoreCase(type)) {
+            throw new io.debezium.DebeziumException("Unsupported " + fieldName + " '" + type + "'. Must be one of: PEM, PKCS12, JKS.");
+        }
+    }
+
+    private static void validatePair(String first, String firstName, String second, String secondName) {
+        if ((first == null) != (second == null)) {
+            throw new io.debezium.DebeziumException(firstName + " and " + secondName + " must be configured together");
+        }
     }
 
     public String getConnectionHost() {
@@ -392,8 +502,40 @@ public class RabbitMqStreamNativeChangeConsumerConfig {
         return tlsEnable;
     }
 
-    public String getTlsServerName() {
-        return tlsServerName;
+    public String getKeyStoreType() {
+        return keyStoreType;
+    }
+
+    public String getKeyStoreCertificateFilePath() {
+        return keyStoreCertificateFilePath;
+    }
+
+    public String getKeyStoreKeyFilePath() {
+        return keyStoreKeyFilePath;
+    }
+
+    public String getKeyStoreFilePath() {
+        return keyStoreFilePath;
+    }
+
+    public String getKeyStorePassword() {
+        return keyStorePassword;
+    }
+
+    public String getTrustStoreType() {
+        return trustStoreType;
+    }
+
+    public String getTrustStoreFilePath() {
+        return trustStoreFilePath;
+    }
+
+    public String getTrustStorePassword() {
+        return trustStorePassword;
+    }
+
+    public boolean isTlsVerifyHostname() {
+        return tlsVerifyHostname;
     }
 
     public int getRpcTimeout() {
