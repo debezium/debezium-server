@@ -141,6 +141,20 @@ public class RedisMemoryThresholdTest {
         Assertions.assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
     }
 
+    /**
+     * The threshold keeps per-instance state, so one sink's estimate must not leak into another's.
+     */
+    @Test
+    public void testEstimateIsNotSharedBetweenInstances() {
+        RedisMemoryThreshold first = memoryThreshold(new RedisClientImpl(_10MB, _20MB));
+        for (int i = 0; i < 8; i++) {
+            first.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND);
+        }
+
+        RedisMemoryThreshold second = memoryThreshold(new RedisClientImpl(_19MB, _20MB));
+        Assertions.assertFalse(second.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+    }
+
     private static RedisMemoryThreshold memoryThreshold(RedisClient client) {
         Configuration config = Configuration.from(Collect.hashMapOf("debezium.sink.redis.address", "localhost",
                 "debezium.sink.redis.rate.per.second", RATE_PER_SECOND));
