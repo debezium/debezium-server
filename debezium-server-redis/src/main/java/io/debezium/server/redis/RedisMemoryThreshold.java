@@ -25,9 +25,9 @@ public class RedisMemoryThreshold {
     private static final String INFO_MEMORY = "memory";
     private static final String INFO_MEMORY_SECTION_MAXMEMORY = "maxmemory";
     private static final String INFO_MEMORY_SECTION_USEDMEMORY = "used_memory";
-    private static long accumulatedMemory = 0L;
-    private static long previouslyUsedMemory = 0L;
-    private static long totalProcessed = 0;
+    private long accumulatedMemory = 0L;
+    private long previouslyUsedMemory = 0L;
+    private long totalProcessed = 0;
 
     private RedisClient client;
     private long memoryLimit = 0;
