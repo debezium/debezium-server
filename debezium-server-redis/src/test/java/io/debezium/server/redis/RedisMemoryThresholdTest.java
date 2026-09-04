@@ -35,6 +35,7 @@ public class RedisMemoryThresholdTest {
 
     private static final String _5MB = String.valueOf(5 * 1024 * 1024);
     private static final String _10MB = String.valueOf(10 * 1024 * 1024);
+    private static final String _19MB = String.valueOf(19 * 1024 * 1024);
     private static final String _20MB = String.valueOf(20 * 1024 * 1024);
     private static final long RECORD_SIZE = 2048L;
     private static final int BUFFER_SIZE = 500;
@@ -106,16 +107,44 @@ public class RedisMemoryThresholdTest {
 
     @Test
     public void testMemoryLimits() {
-        Configuration config = Configuration.from(Collect.hashMapOf("debezium.sink.redis.address", "localhost",
-                "debezium.sink.redis.rate.per.second", RATE_PER_SECOND));
-        RedisMemoryThreshold redisMemoryThreshold = new RedisMemoryThreshold(new RedisClientImpl(_10MB, _20MB),
-                new RedisStreamChangeConsumerConfig(config));
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_10MB, _20MB));
         for (int i = 0; i < 8; i++) {
             Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
         }
-        Assertions.assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+        Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
         redisMemoryThreshold.setRedisClient(new RedisClientImpl(_5MB, _20MB));
         Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+    }
+
+    /**
+     * Redis reports 'used_memory' in coarse allocator steps, so the same reading is returned across many
+     * batches. The accumulated estimate must not grow past what Redis reports for ever: half the database
+     * is free the whole time here, so the sink has to keep consuming.
+     */
+    @Test
+    public void testConsumptionContinuesWhileReportedMemoryStaysConstant() {
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_10MB, _20MB));
+        for (int i = 0; i < 1000; i++) {
+            Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND),
+                    "Sink stopped consuming at batch " + i + " while Redis still reported 10MB of 20MB used");
+        }
+    }
+
+    /**
+     * The estimate may only relax when the reported memory disproves it. Once Redis itself reports too
+     * little headroom for another batch, back-pressure must still apply.
+     */
+    @Test
+    public void testConsumptionStopsWhenReportedMemoryLeavesNoHeadroom() {
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_19MB, _20MB));
+        Assertions.assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+        Assertions.assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+    }
+
+    private static RedisMemoryThreshold memoryThreshold(RedisClient client) {
+        Configuration config = Configuration.from(Collect.hashMapOf("debezium.sink.redis.address", "localhost",
+                "debezium.sink.redis.rate.per.second", RATE_PER_SECOND));
+        return new RedisMemoryThreshold(client, new RedisStreamChangeConsumerConfig(config));
     }
 
     private static class RedisClientImpl implements RedisClient {
