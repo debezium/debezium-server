@@ -26,6 +26,18 @@
         <module>runtime</module>
     </modules>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.debezium</groupId>
+                <artifactId>debezium-server-bom</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -45,7 +57,8 @@
                             </goals>
                             <phase>compile</phase>
                             <configuration>
-                                <deployment>${project.groupId}:${project.artifactId}-deployment:${project.version}</deployment>
+                                <deployment>${project.groupId}:${project.artifactId}-deployment:${project.version}
+                                </deployment>
                             </configuration>
                         </execution>
                     </executions>
