@@ -11,6 +11,7 @@
     </parent>
 
     <artifactId>debezium-server-common</artifactId>
+    <name>Debezium Server Common</name>
 
     <dependencies>
         <dependency>
