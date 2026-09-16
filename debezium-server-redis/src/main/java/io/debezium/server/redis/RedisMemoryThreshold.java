@@ -25,9 +25,9 @@ public class RedisMemoryThreshold {
     private static final String INFO_MEMORY = "memory";
     private static final String INFO_MEMORY_SECTION_MAXMEMORY = "maxmemory";
     private static final String INFO_MEMORY_SECTION_USEDMEMORY = "used_memory";
-    private static long accumulatedMemory = 0L;
-    private static long previouslyUsedMemory = 0L;
-    private static long totalProcessed = 0;
+    private long accumulatedMemory = 0L;
+    private long previouslyUsedMemory = 0L;
+    private long totalProcessed = 0;
 
     private RedisClient client;
     private long memoryLimit = 0;
@@ -72,22 +72,49 @@ public class RedisMemoryThreshold {
         long extimatedBatchSize = extraMemory * bufferFillRate;
         long usedMemory = memoryTuple.getItem1();
         long prevAccumulatedMemory = accumulatedMemory;
+        long prevPreviouslyUsedMemory = previouslyUsedMemory;
+        long batchMemory = extraMemory * bufferSize;
         long diff = usedMemory - previouslyUsedMemory;
         if (diff == 0L) {
-            accumulatedMemory += extraMemory * bufferSize;
+            // Redis reports 'used_memory' in coarse allocator steps, so an unchanged reading does not
+            // prove nothing was written; the accumulator estimates what was sent but is not visible yet.
+            accumulatedMemory += batchMemory;
         }
         else {
+            // A changed reading reconciles the estimate: Redis has now accounted for what was written,
+            // so only the batch about to be sent remains unaccounted for.
             previouslyUsedMemory = usedMemory;
-            accumulatedMemory = extraMemory * bufferSize;
+            accumulatedMemory = batchMemory;
         }
+
         long estimatedUsedMemory = usedMemory + accumulatedMemory + extimatedBatchSize;
+
+        // The accumulator only estimates writes Redis has not reported yet; those writes still landed in
+        // Redis. So once the estimate alone would stop the sink, an unchanged 'used_memory' reading
+        // disproves it - a Redis that really held this much would have reported a different figure.
+        // Without this reconciliation the accumulator grows on every coarse-grained reading, is never
+        // checked against reality, and eventually stops the sink for good while Redis is nearly empty.
+        // Discarding the unproven part keeps back-pressure driven by what Redis actually reports.
+        if (estimatedUsedMemory >= maximumMemory && usedMemory + extimatedBatchSize < maximumMemory) {
+            LOGGER.debug(
+                    "Discarding unconfirmed accumulated memory of {}: Redis still reports {} used of {}.",
+                    getSizeInHumanReadableFormat(accumulatedMemory), getSizeInHumanReadableFormat(usedMemory),
+                    getSizeInHumanReadableFormat(maximumMemory));
+            previouslyUsedMemory = usedMemory;
+            accumulatedMemory = batchMemory;
+            estimatedUsedMemory = usedMemory + accumulatedMemory + extimatedBatchSize;
+        }
 
         if (estimatedUsedMemory >= maximumMemory) {
             LOGGER.info(
                     "Sink memory threshold percentage was reached. Will retry; "
                             + "(estimated used memory size: {}, maxmemory: {}). Total Processed Records: {}",
                     getSizeInHumanReadableFormat(estimatedUsedMemory), getSizeInHumanReadableFormat(maximumMemory), totalProcessed);
+            // The batch was not sent, so neither the accumulator nor the last observed reading may
+            // advance. Rolling back only the accumulator would leave 'previouslyUsedMemory' updated,
+            // making the next call see an unchanged reading and resume accumulating from there.
             accumulatedMemory = prevAccumulatedMemory;
+            previouslyUsedMemory = prevPreviouslyUsedMemory;
             return false;
         }
         else {
