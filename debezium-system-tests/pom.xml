@@ -74,12 +74,6 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>io.debezium.quarkus</groupId>
-            <artifactId>debezium-quarkus-db2</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -139,6 +133,22 @@
         </plugins>
     </build>
     <profiles>
+        <profile>
+            <id>include-non-core-connectors</id>
+            <activation>
+                <property>
+                    <name>!skipNonCore</name>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.debezium.quarkus</groupId>
+                    <artifactId>debezium-quarkus-db2</artifactId>
+                    <version>${project.version}</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
         <profile>
             <id>assembly</id>
             <activation>
