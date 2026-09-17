@@ -103,23 +103,24 @@ public class RedisSchemaHistoryIT {
 
         Jedis jedis = new Jedis(HostAndPort.from(RedisTestResourceLifecycleManager.getRedisContainerAddress()));
         // wait until the db schema history is written for the first time
-        TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, 1);
+        TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, INIT_HISTORY_SIZE);
 
         // pause container
         Testing.print("Pausing container");
         RedisTestResourceLifecycleManager.pause();
 
-        final JdbcConnection connection = getMySqlConnection();
-        connection.connect();
-        Testing.print("Creating new redis_test table and inserting 5 records to it");
-        connection.execute("CREATE TABLE IF NOT EXISTS inventory.redis_test (id INT PRIMARY KEY)");
-        Testing.print("Table created");
-        connection.close();
-
-        Testing.print("Sleeping for 2 seconds to flush records");
-        Thread.sleep(2000);
-        Testing.print("Unpausing container");
-        RedisTestResourceLifecycleManager.unpause();
+        try (JdbcConnection connection = getMySqlConnection()) {
+            connection.connect();
+            Testing.print("Creating new redis_test table and inserting 5 records to it");
+            connection.execute("CREATE TABLE IF NOT EXISTS inventory.redis_test (id INT PRIMARY KEY)");
+            Testing.print("Table created");
+            Testing.print("Sleeping for 2 seconds to flush records");
+            Thread.sleep(2000);
+        }
+        finally {
+            Testing.print("Unpausing container");
+            RedisTestResourceLifecycleManager.unpause();
+        }
 
         // wait until the db schema history is written for the first time
         TestUtils.awaitStreamLengthGte(jedis, STREAM_NAME, INIT_HISTORY_SIZE + 1);

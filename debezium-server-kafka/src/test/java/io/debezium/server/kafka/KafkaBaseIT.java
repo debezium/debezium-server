@@ -48,6 +48,7 @@ public abstract class KafkaBaseIT {
         final Map<String, Object> configs = new ConcurrentHashMap<>();
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaTestResourceLifecycleManager.getBootstrapServers());
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, "test-" + UUID.randomUUID());
+        configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         consumer = new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer());
     }
