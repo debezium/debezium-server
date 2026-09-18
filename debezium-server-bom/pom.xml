@@ -12,11 +12,20 @@
     <packaging>jar</packaging>
 
     <properties>
-        <version.kinesis>2.53.1</version.kinesis>
+        <version.aws>2.54.20</version.aws>
+        <version.rabbitmq>5.33.1</version.rabbitmq>
+        <version.netty>4.1.138.Final</version.netty>
+        <version.jackson>2.21.5</version.jackson>
+        <version.vertx>4.5.31</version.vertx>
+        <version.lz4>1.11.3</version.lz4>
+        <version.jetty>12.0.36</version.jetty>
+        <version.bouncycastle.lts>2.73.12</version.bouncycastle.lts>
+        <version.okhttp>4.9.2</version.okhttp>
+        <version.kinesis>${version.aws}</version.kinesis>
         <version.zerobus.sdk>1.3.0</version.zerobus.sdk>
         <version.zerobus.protobuf>4.33.2</version.zerobus.protobuf>
-        <version.sqs>2.53.1</version.sqs>
-        <version.sns>2.53.1</version.sns>
+        <version.sqs>${version.aws}</version.sqs>
+        <version.sns>${version.aws}</version.sns>
         <version.pubsub>26.74.0</version.pubsub>
         <version.pulsar>4.2.1</version.pulsar>
         <version.milvus>2.5.4</version.milvus>
@@ -61,6 +70,36 @@
                 <artifactId>kafka-clients</artifactId>
                 <version>${version.kafka}</version>
             </dependency>
+            <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>${version.rabbitmq}</version>
+            </dependency>
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${version.lz4}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-lts8on</artifactId>
+                <version>${version.bouncycastle.lts}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>okhttp</artifactId>
+                <version>${version.okhttp}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${version.jackson}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${version.jackson}</version>
+            </dependency>
 
             <!-- This needs to be defined before Quarkus to guarantee that the
                  right Infinispan dependencies are imported -->
@@ -85,6 +124,43 @@
             </dependency>
 
             <!-- Quarkus dependencies -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${version.netty}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-http</artifactId>
+                <version>${version.jetty}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-io</artifactId>
+                <version>${version.jetty}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty.ee10</groupId>
+                <artifactId>jetty-ee10-servlets</artifactId>
+                <version>${version.jetty}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-stack-depchain</artifactId>
+                <version>${version.vertx}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Align the AWS SDK family, including its shaded Jackson copy. -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${version.aws}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-bom</artifactId>
