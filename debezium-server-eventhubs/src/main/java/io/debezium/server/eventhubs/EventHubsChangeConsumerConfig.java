@@ -29,6 +29,21 @@ public class EventHubsChangeConsumerConfig {
             .withImportance(ConfigDef.Importance.HIGH)
             .withDescription("Name of the Event Hub.");
 
+    public static final Field AUTH_MODE = Field.create("authmode")
+            .withDisplayName("Authentication Mode")
+            .withType(ConfigDef.Type.STRING)
+            .withDefault("connection-string")
+            .withWidth(ConfigDef.Width.MEDIUM)
+            .withImportance(ConfigDef.Importance.HIGH)
+            .withDescription("Authentication mode for Event Hubs. Use 'connection-string' (default) or 'default-azure-credential'.");
+
+    public static final Field FULLY_QUALIFIED_NAMESPACE = Field.create("fullyqualifiednamespace")
+            .withDisplayName("Fully Qualified Namespace")
+            .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.LONG)
+            .withImportance(ConfigDef.Importance.HIGH)
+            .withDescription("Fully qualified Event Hubs namespace (e.g. <namespace>.servicebus.windows.net). Required when authmode is 'default-azure-credential'.");
+
     public static final Field PARTITION_ID = Field.create("partitionid")
             .withDisplayName("Partition ID")
             .withType(ConfigDef.Type.STRING)
@@ -71,6 +86,8 @@ public class EventHubsChangeConsumerConfig {
     // Instance fields
     private String connectionString;
     private String eventHubName;
+    private String authMode;
+    private String fullyQualifiedNamespace;
     private String configuredPartitionId;
     private String configuredPartitionKey;
     private String dynamicPartitionRouting;
@@ -84,6 +101,8 @@ public class EventHubsChangeConsumerConfig {
     protected void init(Configuration config) {
         connectionString = config.getString(CONNECTION_STRING);
         eventHubName = config.getString(HUB_NAME);
+        authMode = config.getString(AUTH_MODE);
+        fullyQualifiedNamespace = config.getString(FULLY_QUALIFIED_NAMESPACE);
         configuredPartitionId = config.getString(PARTITION_ID);
         configuredPartitionKey = config.getString(PARTITION_KEY);
         dynamicPartitionRouting = config.getString(DYNAMIC_PARTITION_ROUTING);
@@ -97,6 +116,14 @@ public class EventHubsChangeConsumerConfig {
 
     public String getEventHubName() {
         return eventHubName;
+    }
+
+    public String getAuthMode() {
+        return authMode;
+    }
+
+    public String getFullyQualifiedNamespace() {
+        return fullyQualifiedNamespace;
     }
 
     public String getConfiguredPartitionId() {

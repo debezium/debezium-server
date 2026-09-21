@@ -22,6 +22,7 @@
         <version.milvus>2.5.4</version.milvus>
         <version.qdrant>1.14.0</version.qdrant>
         <version.eventhubs>5.19.1</version.eventhubs>
+        <version.azure.identity>1.18.6</version.azure.identity>
         <version.pravega>0.13.0</version.pravega>
         <version.nats>2.21.2</version.nats>
         <version.stan>2.2.3</version.stan>
@@ -324,6 +325,11 @@
                 <groupId>com.azure</groupId>
                 <artifactId>azure-messaging-eventhubs</artifactId>
                 <version>${version.eventhubs}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-identity</artifactId>
+                <version>${version.azure.identity}</version>
             </dependency>
             <dependency>
                 <groupId>io.nats</groupId>
