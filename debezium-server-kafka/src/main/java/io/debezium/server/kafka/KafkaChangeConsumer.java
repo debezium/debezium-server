@@ -106,7 +106,7 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumS
                 Headers headers = convertKafkaHeaders(record);
 
                 String topicName = streamNameMapper.map(record.destination());
-                deliveryFutures.add(producer.send(new ProducerRecord<>(topicName, null, null, record.key(), record.value(), headers),
+                deliveryFutures.add(producer.send(new ProducerRecord<>(topicName, record.partition(), null, record.key(), record.value(), headers),
                         (metadata, exception) -> {
                             if (exception != null) {
                                 LOGGER.error("Failed to send record with key '{}' to {}:", asString(record.key()), topicName,
