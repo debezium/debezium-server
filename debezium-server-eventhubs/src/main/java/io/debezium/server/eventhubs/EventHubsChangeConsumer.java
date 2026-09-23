@@ -38,6 +38,8 @@ import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
+import io.debezium.server.eventhubs.EventHubsChangeConsumerConfig.AuthMode;
+import io.debezium.util.Strings;
 
 /**
  * This sink adapter delivers change event messages to Azure Event Hubs
@@ -85,28 +87,23 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         final Config mpConfig = ConfigProvider.getConfig();
 
         // Load configuration
-        io.debezium.config.Configuration configuration = io.debezium.config.Configuration
-                .from(getConfigSubset(mpConfig, PROP_PREFIX));
+        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new EventHubsChangeConsumerConfig(configuration);
 
         configuredPartitionId = config.getConfiguredPartitionId();
         configuredPartitionKey = config.getConfiguredPartitionKey();
         if (configuredPartitionId.isEmpty() && configuredPartitionKey.isEmpty()) {
-            dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy
-                    .fromString(config.getDynamicPartitionRouting());
+            dynamicPartitionRoutingStrategy = DynamicPartitionRoutingStrategy.fromString(config.getDynamicPartitionRouting());
         }
         hashMessageFunction = Optional.ofNullable(config.getHashMessageKeyFunction()).map(HashFunction::fromString);
 
-        if ("default-azure-credential".equals(config.getAuthMode())) {
-            String namespace = config.getFullyQualifiedNamespace();
-            if (namespace == null || namespace.isEmpty()) {
-                throw new DebeziumException(
-                        "Configuration property 'debezium.sink.eventhubs.fullyqualifiednamespace' is required when authmode is 'default-azure-credential'.");
-            }
+        if (config.getAuthMode() == AuthMode.DEFAULT_AZURE_CREDENTIAL && Strings.isNullOrEmpty(config.getFullyQualifiedNamespace())) {
+            throw new DebeziumException(
+                    "Configuration property 'debezium.sink.eventhubs.fullyqualifiednamespace' is required when authmode is 'default-azure-credential'.");
         }
 
         try {
-            if ("default-azure-credential".equals(config.getAuthMode())) {
+            if (config.getAuthMode() == AuthMode.DEFAULT_AZURE_CREDENTIAL) {
                 DefaultAzureCredential credential = new DefaultAzureCredentialBuilder().build();
                 producer = new EventHubClientBuilder()
                         .credential(config.getFullyQualifiedNamespace(), config.getEventHubName(), credential)
@@ -114,12 +111,10 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                 LOGGER.info("Using DefaultAzureCredential for namespace '{}'", config.getFullyQualifiedNamespace());
             }
             else {
-                String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(),
-                        config.getEventHubName());
+                String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(), config.getEventHubName());
                 producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
             }
-            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey,
-                    config.getMaxBatchSize());
+            batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, config.getMaxBatchSize());
         }
         catch (Exception e) {
             throw new DebeziumException(e);
@@ -133,8 +128,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
         if (!configuredPartitionId.isEmpty() && Integer.parseInt(configuredPartitionId) > partitionCount - 1) {
             throw new IndexOutOfBoundsException(
-                    String.format("Target partition id %s does not exist in target EventHub %s", configuredPartitionId,
-                            config.getEventHubName()));
+                    String.format("Target partition id %s does not exist in target EventHub %s", configuredPartitionId, config.getEventHubName()));
         }
     }
 
@@ -176,8 +170,7 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             int start = recordIndex;
             LOGGER.trace("Emitting events starting from index {}", start);
 
-            // The inner loop adds as many records to the batch as possible, keeping track
-            // of the batch size
+            // The inner loop adds as many records to the batch as possible, keeping track of the batch size
             for (; recordIndex < events.records().size(); recordIndex++) {
                 BatchEvent record = events.records().get(recordIndex);
 
@@ -238,11 +231,9 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
                     }
                     else {
                         // Check that the target partition exists.
-                        if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID
-                                || targetPartitionId > partitionCount - 1) {
+                        if (targetPartitionId < BatchManager.BATCH_INDEX_FOR_NO_PARTITION_ID || targetPartitionId > partitionCount - 1) {
                             throw new IndexOutOfBoundsException(
-                                    String.format("Target partition id %d does not exist in target EventHub %s",
-                                            targetPartitionId, config.getEventHubName()));
+                                    String.format("Target partition id %d does not exist in target EventHub %s", targetPartitionId, config.getEventHubName()));
                         }
 
                         batchManager.sendEventToPartitionId(eventData, recordIndex, targetPartitionId);

@@ -7,13 +7,40 @@ package io.debezium.server.eventhubs;
 
 import org.apache.kafka.common.config.ConfigDef;
 
+import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
+import io.debezium.config.EnumeratedValue;
 import io.debezium.config.Field;
 
 /**
  * Configuration fields for {@link EventHubsChangeConsumer}.
  */
 public class EventHubsChangeConsumerConfig {
+
+    public enum AuthMode implements EnumeratedValue {
+        CONNECTION_STRING("connection-string"),
+        DEFAULT_AZURE_CREDENTIAL("default-azure-credential");
+
+        private final String value;
+
+        AuthMode(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String getValue() {
+            return value;
+        }
+
+        public static AuthMode parse(String value) {
+            for (AuthMode mode : values()) {
+                if (mode.getValue().equalsIgnoreCase(value)) {
+                    return mode;
+                }
+            }
+            throw new DebeziumException("Invalid authmode '" + value + "'. Must be one of: connection-string, default-azure-credential.");
+        }
+    }
 
     public static final Field CONNECTION_STRING = Field.create("connectionstring")
             .withDisplayName("Event Hubs Connection String")
@@ -86,7 +113,7 @@ public class EventHubsChangeConsumerConfig {
     // Instance fields
     private String connectionString;
     private String eventHubName;
-    private String authMode;
+    private AuthMode authMode;
     private String fullyQualifiedNamespace;
     private String configuredPartitionId;
     private String configuredPartitionKey;
@@ -101,7 +128,7 @@ public class EventHubsChangeConsumerConfig {
     protected void init(Configuration config) {
         connectionString = config.getString(CONNECTION_STRING);
         eventHubName = config.getString(HUB_NAME);
-        authMode = config.getString(AUTH_MODE);
+        authMode = AuthMode.parse(config.getString(AUTH_MODE));
         fullyQualifiedNamespace = config.getString(FULLY_QUALIFIED_NAMESPACE);
         configuredPartitionId = config.getString(PARTITION_ID);
         configuredPartitionKey = config.getString(PARTITION_KEY);
@@ -118,7 +145,7 @@ public class EventHubsChangeConsumerConfig {
         return eventHubName;
     }
 
-    public String getAuthMode() {
+    public AuthMode getAuthMode() {
         return authMode;
     }
 

@@ -22,7 +22,7 @@ class EventHubsChangeConsumerConfigTest {
 
         EventHubsChangeConsumerConfig consumerConfig = new EventHubsChangeConsumerConfig(config);
 
-        assertThat(consumerConfig.getAuthMode()).isEqualTo("connection-string");
+        assertThat(consumerConfig.getAuthMode()).isEqualTo(EventHubsChangeConsumerConfig.AuthMode.CONNECTION_STRING);
     }
 
     @Test
@@ -35,7 +35,7 @@ class EventHubsChangeConsumerConfigTest {
 
         EventHubsChangeConsumerConfig consumerConfig = new EventHubsChangeConsumerConfig(config);
 
-        assertThat(consumerConfig.getAuthMode()).isEqualTo("default-azure-credential");
+        assertThat(consumerConfig.getAuthMode()).isEqualTo(EventHubsChangeConsumerConfig.AuthMode.DEFAULT_AZURE_CREDENTIAL);
         assertThat(consumerConfig.getFullyQualifiedNamespace()).isEqualTo("mynamespace.servicebus.windows.net");
         assertThat(consumerConfig.getEventHubName()).isEqualTo("myhub");
     }
