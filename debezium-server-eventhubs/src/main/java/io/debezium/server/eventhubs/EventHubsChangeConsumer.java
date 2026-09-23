@@ -21,6 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.azure.core.amqp.exception.AmqpException;
+import com.azure.identity.DefaultAzureCredential;
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.messaging.eventhubs.EventData;
 import com.azure.messaging.eventhubs.EventHubClientBuilder;
 import com.azure.messaging.eventhubs.EventHubProducerClient;
@@ -36,6 +38,8 @@ import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
+import io.debezium.server.eventhubs.EventHubsChangeConsumerConfig.AuthMode;
+import io.debezium.util.Strings;
 
 /**
  * This sink adapter delivers change event messages to Azure Event Hubs
@@ -93,10 +97,23 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
         hashMessageFunction = Optional.ofNullable(config.getHashMessageKeyFunction()).map(HashFunction::fromString);
 
-        String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(), config.getEventHubName());
+        if (config.getAuthMode() == AuthMode.DEFAULT_AZURE_CREDENTIAL && Strings.isNullOrEmpty(config.getFullyQualifiedNamespace())) {
+            throw new DebeziumException(
+                    "Configuration property 'debezium.sink.eventhubs.fullyqualifiednamespace' is required when authmode is 'default-azure-credential'.");
+        }
 
         try {
-            producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
+            if (config.getAuthMode() == AuthMode.DEFAULT_AZURE_CREDENTIAL) {
+                DefaultAzureCredential credential = new DefaultAzureCredentialBuilder().build();
+                producer = new EventHubClientBuilder()
+                        .credential(config.getFullyQualifiedNamespace(), config.getEventHubName(), credential)
+                        .buildProducerClient();
+                LOGGER.info("Using DefaultAzureCredential for namespace '{}'", config.getFullyQualifiedNamespace());
+            }
+            else {
+                String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(), config.getEventHubName());
+                producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
+            }
             batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, config.getMaxBatchSize());
         }
         catch (Exception e) {
@@ -251,6 +268,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         return Field.setOf(
                 EventHubsChangeConsumerConfig.CONNECTION_STRING,
                 EventHubsChangeConsumerConfig.HUB_NAME,
+                EventHubsChangeConsumerConfig.AUTH_MODE,
+                EventHubsChangeConsumerConfig.FULLY_QUALIFIED_NAMESPACE,
                 EventHubsChangeConsumerConfig.PARTITION_ID,
                 EventHubsChangeConsumerConfig.PARTITION_KEY,
                 EventHubsChangeConsumerConfig.DYNAMIC_PARTITION_ROUTING,

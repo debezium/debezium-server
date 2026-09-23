@@ -7,13 +7,40 @@ package io.debezium.server.eventhubs;
 
 import org.apache.kafka.common.config.ConfigDef;
 
+import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
+import io.debezium.config.EnumeratedValue;
 import io.debezium.config.Field;
 
 /**
  * Configuration fields for {@link EventHubsChangeConsumer}.
  */
 public class EventHubsChangeConsumerConfig {
+
+    public enum AuthMode implements EnumeratedValue {
+        CONNECTION_STRING("connection-string"),
+        DEFAULT_AZURE_CREDENTIAL("default-azure-credential");
+
+        private final String value;
+
+        AuthMode(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String getValue() {
+            return value;
+        }
+
+        public static AuthMode parse(String value) {
+            for (AuthMode mode : values()) {
+                if (mode.getValue().equalsIgnoreCase(value)) {
+                    return mode;
+                }
+            }
+            throw new DebeziumException("Invalid authmode '" + value + "'. Must be one of: connection-string, default-azure-credential.");
+        }
+    }
 
     public static final Field CONNECTION_STRING = Field.create("connectionstring")
             .withDisplayName("Event Hubs Connection String")
@@ -28,6 +55,21 @@ public class EventHubsChangeConsumerConfig {
             .withWidth(ConfigDef.Width.MEDIUM)
             .withImportance(ConfigDef.Importance.HIGH)
             .withDescription("Name of the Event Hub.");
+
+    public static final Field AUTH_MODE = Field.create("authmode")
+            .withDisplayName("Authentication Mode")
+            .withType(ConfigDef.Type.STRING)
+            .withDefault("connection-string")
+            .withWidth(ConfigDef.Width.MEDIUM)
+            .withImportance(ConfigDef.Importance.HIGH)
+            .withDescription("Authentication mode for Event Hubs. Use 'connection-string' (default) or 'default-azure-credential'.");
+
+    public static final Field FULLY_QUALIFIED_NAMESPACE = Field.create("fullyqualifiednamespace")
+            .withDisplayName("Fully Qualified Namespace")
+            .withType(ConfigDef.Type.STRING)
+            .withWidth(ConfigDef.Width.LONG)
+            .withImportance(ConfigDef.Importance.HIGH)
+            .withDescription("Fully qualified Event Hubs namespace (e.g. <namespace>.servicebus.windows.net). Required when authmode is 'default-azure-credential'.");
 
     public static final Field PARTITION_ID = Field.create("partitionid")
             .withDisplayName("Partition ID")
@@ -71,6 +113,8 @@ public class EventHubsChangeConsumerConfig {
     // Instance fields
     private String connectionString;
     private String eventHubName;
+    private AuthMode authMode;
+    private String fullyQualifiedNamespace;
     private String configuredPartitionId;
     private String configuredPartitionKey;
     private String dynamicPartitionRouting;
@@ -84,6 +128,8 @@ public class EventHubsChangeConsumerConfig {
     protected void init(Configuration config) {
         connectionString = config.getString(CONNECTION_STRING);
         eventHubName = config.getString(HUB_NAME);
+        authMode = AuthMode.parse(config.getString(AUTH_MODE));
+        fullyQualifiedNamespace = config.getString(FULLY_QUALIFIED_NAMESPACE);
         configuredPartitionId = config.getString(PARTITION_ID);
         configuredPartitionKey = config.getString(PARTITION_KEY);
         dynamicPartitionRouting = config.getString(DYNAMIC_PARTITION_ROUTING);
@@ -97,6 +143,14 @@ public class EventHubsChangeConsumerConfig {
 
     public String getEventHubName() {
         return eventHubName;
+    }
+
+    public AuthMode getAuthMode() {
+        return authMode;
+    }
+
+    public String getFullyQualifiedNamespace() {
+        return fullyQualifiedNamespace;
     }
 
     public String getConfiguredPartitionId() {
