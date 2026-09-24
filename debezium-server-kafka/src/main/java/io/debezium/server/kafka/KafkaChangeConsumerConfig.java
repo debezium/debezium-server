@@ -18,10 +18,16 @@ public class KafkaChangeConsumerConfig {
     public static final Field WAIT_MESSAGE_DELIVERY_TIMEOUT_MS = Field.create("wait.message.delivery.timeout.ms")
             .withDisplayName("Wait message delivery timeout (ms)")
             .withType(ConfigDef.Type.INT)
-            .withDefault(30000)
+            .withDefault(0)
+            .withValidation(Field::isNonNegativeInteger)
             .withWidth(ConfigDef.Width.SHORT)
             .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("Timeout in milliseconds to wait for message delivery confirmation.");
+            .withDescription("Timeout in milliseconds to wait for message delivery confirmation. "
+                    + "A value of 0 (the default) waits indefinitely, deferring entirely to the Kafka producer's own "
+                    + "'delivery.timeout.ms'. If set to a positive value, it should be greater than or equal to the "
+                    + "effective 'delivery.timeout.ms' of the underlying producer (explicit override, or its default) "
+                    + "otherwise this outer wait may time out and report failure while the producer is still "
+                    + "legitimately retrying in the background.");
 
     // Instance field
     private int waitMessageDeliveryTimeout;
