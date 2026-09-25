@@ -81,7 +81,6 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     private final Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
     private final Map<String, ZerobusStreamHandle<?>> envelopeStreams = new LinkedHashMap<>(16, 0.75f, true);
     private ZerobusEnvelopeMapper envelopeMapper;
-    private ZerobusEventFilter envelopeFilter;
     private ZerobusEnvelopeSerializer<?> envelopeSerializer;
 
     /**
@@ -254,21 +253,6 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 continue;
             }
 
-            ZerobusEventFilter.Decision decision;
-            try {
-                decision = envelopeFilter.evaluate(record);
-            }
-            catch (DebeziumException e) {
-                metrics.recordError();
-                throw e;
-            }
-            if (!decision.accepted()) {
-                metrics.recordSkipped();
-                LOGGER.debug("Skipping Zerobus envelope for destination '{}' because filter '{}' did not match",
-                        record.destination(), decision.reason());
-                continue;
-            }
-
             String table = resolveTable(record.destination());
             if (table == null) {
                 metrics.recordSkipped();
@@ -308,7 +292,6 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
             return;
         }
         envelopeMapper = new ZerobusEnvelopeMapper(config);
-        envelopeFilter = new ZerobusEventFilter(config, envelopeMapper);
         envelopeSerializer = ZerobusEnvelopeSerializer.create(config);
     }
 
@@ -635,13 +618,6 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 ZerobusChangeConsumerConfig.JSON_FLEXIBLE_FIELDS_ENCODING,
                 ZerobusChangeConsumerConfig.IDEMPOTENCY_MODE,
                 ZerobusChangeConsumerConfig.TOMBSTONE_HANDLING_MODE,
-                ZerobusChangeConsumerConfig.FILTER_DESTINATION_REGEX,
-                ZerobusChangeConsumerConfig.FILTER_OPERATIONS,
-                ZerobusChangeConsumerConfig.FILTER_HEADER_NAME,
-                ZerobusChangeConsumerConfig.FILTER_HEADER_VALUE_REGEX,
-                ZerobusChangeConsumerConfig.FILTER_VALUE_JSON_POINTER,
-                ZerobusChangeConsumerConfig.FILTER_VALUE_REGEX,
-                ZerobusChangeConsumerConfig.FILTER_MALFORMED_MODE,
                 ZerobusChangeConsumerConfig.MAX_INFLIGHT_RECORDS,
                 ZerobusChangeConsumerConfig.MAX_OPEN_STREAMS,
                 ZerobusChangeConsumerConfig.RECOVERY,
