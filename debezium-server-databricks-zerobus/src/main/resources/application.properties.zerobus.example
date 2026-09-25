@@ -80,8 +80,11 @@ debezium.format.value.schemas.enable=false
 # debezium.sink.zerobus.tombstone.handling.mode=event
 # The default source mode writes a compact SHA-256 identity; source_position remains readable.
 # debezium.sink.zerobus.idempotency.mode=source
-# Filter by Debezium operation code. Tombstones have no Debezium code and use the long name.
-# debezium.sink.zerobus.filter.operations=c,r,u,d,t,m,tombstone
+# Filter events with Debezium's standard mechanisms rather than a sink-specific option:
+#   - skip operations with debezium.source.skipped.operations (c,u,d,t) and skip the initial
+#     snapshot (read events) with debezium.source.snapshot.mode=no_data;
+#   - match on topic/header with the TopicNameMatches / HasHeaderKey predicates, and on a value
+#     field with the FieldValueMatches predicate, composed with the stock Filter transform.
 # A later table-group failure can replay an earlier acknowledged group. Use idempotency_key
 # to deduplicate downstream; source offsets commit only after the complete batch succeeds.
 

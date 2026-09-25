@@ -31,18 +31,4 @@ enum ZerobusOperation {
             default -> CHANGE;
         };
     }
-
-    static ZerobusOperation fromFilterToken(String token) {
-        return switch (token.toLowerCase(Locale.ROOT)) {
-            case "c", "create" -> CREATE;
-            case "r", "read" -> READ;
-            case "u", "update" -> UPDATE;
-            case "d", "delete" -> DELETE;
-            case "t", "truncate" -> TRUNCATE;
-            case "m", "message" -> MESSAGE;
-            case "change" -> CHANGE;
-            case "tombstone" -> TOMBSTONE;
-            default -> throw new IllegalArgumentException("Unsupported operation token: " + token);
-        };
-    }
 }
