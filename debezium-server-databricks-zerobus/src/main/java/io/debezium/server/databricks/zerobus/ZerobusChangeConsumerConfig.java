@@ -5,11 +5,7 @@
  */
 package io.debezium.server.databricks.zerobus;
 
-import java.util.HashSet;
 import java.util.Locale;
-import java.util.Set;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 import org.apache.kafka.common.config.ConfigDef;
 
@@ -31,8 +27,6 @@ public class ZerobusChangeConsumerConfig {
     static final String IDEMPOTENCY_NONE = "none";
     static final String TOMBSTONE_EVENT = "event";
     static final String TOMBSTONE_DROP = "drop";
-    static final String FILTER_MALFORMED_FAIL = "fail";
-    static final String FILTER_MALFORMED_DROP = "drop";
 
     /**
      * The shape of the row the sink writes, which is the data contract of the target table. The two
@@ -189,50 +183,6 @@ public class ZerobusChangeConsumerConfig {
             .withImportance(ConfigDef.Importance.HIGH)
             .withDescription("'event' writes a distinct operation=tombstone envelope; 'drop' intentionally skips it.");
 
-    public static final Field FILTER_DESTINATION_REGEX = Field.create("filter.destination.regex")
-            .withDisplayName("Destination include regex")
-            .withType(ConfigDef.Type.STRING)
-            .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("Optional regular expression that a Debezium destination must match.");
-
-    public static final Field FILTER_OPERATIONS = Field.create("filter.operations")
-            .withDisplayName("Included operations")
-            .withType(ConfigDef.Type.STRING)
-            .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("Optional comma-separated operation allowlist using Debezium codes c, r, u, d, t, or m. "
-                    + "The long aliases create, read, update, delete, truncate, message, change, and tombstone are also accepted.");
-
-    public static final Field FILTER_HEADER_NAME = Field.create("filter.header.name")
-            .withDisplayName("Header filter name")
-            .withType(ConfigDef.Type.STRING)
-            .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("Header name evaluated by filter.header.value.regex.");
-
-    public static final Field FILTER_HEADER_VALUE_REGEX = Field.create("filter.header.value.regex")
-            .withDisplayName("Header value include regex")
-            .withType(ConfigDef.Type.STRING)
-            .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("Optional regular expression matched against the configured header value.");
-
-    public static final Field FILTER_VALUE_JSON_POINTER = Field.create("filter.value.json.pointer")
-            .withDisplayName("Value filter JSON pointer")
-            .withType(ConfigDef.Type.STRING)
-            .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("JSON Pointer selecting the serialized event value evaluated by filter.value.regex.");
-
-    public static final Field FILTER_VALUE_REGEX = Field.create("filter.value.regex")
-            .withDisplayName("Value include regex")
-            .withType(ConfigDef.Type.STRING)
-            .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("Optional regular expression matched against the selected JSON value.");
-
-    public static final Field FILTER_MALFORMED_MODE = Field.create("filter.malformed.mode")
-            .withDisplayName("Malformed value filter handling")
-            .withType(ConfigDef.Type.STRING)
-            .withDefault(FILTER_MALFORMED_FAIL)
-            .withImportance(ConfigDef.Importance.MEDIUM)
-            .withDescription("'fail' stops the batch when a value filter cannot be evaluated; 'drop' skips it.");
-
     public static final Field MAX_INFLIGHT_RECORDS = Field.create("max.inflight.records")
             .withDisplayName("Max in-flight records")
             .withType(ConfigDef.Type.INT)
@@ -308,13 +258,6 @@ public class ZerobusChangeConsumerConfig {
     private final String jsonFlexibleFieldsEncoding;
     private final String idempotencyMode;
     private final String tombstoneHandlingMode;
-    private final String filterDestinationRegex;
-    private final Set<ZerobusOperation> filterOperations;
-    private final String filterHeaderName;
-    private final String filterHeaderValueRegex;
-    private final String filterValueJsonPointer;
-    private final String filterValueRegex;
-    private final String filterMalformedMode;
     private final int maxInflightRecords;
     private final int maxOpenStreams;
     private final Boolean recovery;
@@ -346,13 +289,6 @@ public class ZerobusChangeConsumerConfig {
         this.jsonFlexibleFieldsEncoding = lower(config.getString(JSON_FLEXIBLE_FIELDS_ENCODING));
         this.idempotencyMode = lower(config.getString(IDEMPOTENCY_MODE));
         this.tombstoneHandlingMode = lower(config.getString(TOMBSTONE_HANDLING_MODE));
-        this.filterDestinationRegex = trimToNull(config.getString(FILTER_DESTINATION_REGEX));
-        this.filterOperations = parseOperations(config.getString(FILTER_OPERATIONS));
-        this.filterHeaderName = trimToNull(config.getString(FILTER_HEADER_NAME));
-        this.filterHeaderValueRegex = trimToNull(config.getString(FILTER_HEADER_VALUE_REGEX));
-        this.filterValueJsonPointer = trimToNull(config.getString(FILTER_VALUE_JSON_POINTER));
-        this.filterValueRegex = trimToNull(config.getString(FILTER_VALUE_REGEX));
-        this.filterMalformedMode = lower(config.getString(FILTER_MALFORMED_MODE));
         validateEnvelopeOptions();
         this.maxInflightRecords = config.getInteger(MAX_INFLIGHT_RECORDS);
         this.maxOpenStreams = config.getInteger(MAX_OPEN_STREAMS);
@@ -382,58 +318,6 @@ public class ZerobusChangeConsumerConfig {
         if (!TOMBSTONE_EVENT.equals(tombstoneHandlingMode) && !TOMBSTONE_DROP.equals(tombstoneHandlingMode)) {
             throw new io.debezium.DebeziumException(
                     "Unsupported Zerobus tombstone handling mode '" + tombstoneHandlingMode + "'");
-        }
-        validateRegex(filterDestinationRegex, FILTER_DESTINATION_REGEX.name());
-        validatePair(filterHeaderName, FILTER_HEADER_NAME.name(), filterHeaderValueRegex, FILTER_HEADER_VALUE_REGEX.name());
-        validateRegex(filterHeaderValueRegex, FILTER_HEADER_VALUE_REGEX.name());
-        validatePair(filterValueJsonPointer, FILTER_VALUE_JSON_POINTER.name(), filterValueRegex, FILTER_VALUE_REGEX.name());
-        if (filterValueJsonPointer != null && !filterValueJsonPointer.startsWith("/")) {
-            throw new io.debezium.DebeziumException("Zerobus filter.value.json.pointer must start with '/'");
-        }
-        validateRegex(filterValueRegex, FILTER_VALUE_REGEX.name());
-        if (!FILTER_MALFORMED_FAIL.equals(filterMalformedMode) && !FILTER_MALFORMED_DROP.equals(filterMalformedMode)) {
-            throw new io.debezium.DebeziumException(
-                    "Unsupported Zerobus filter malformed mode '" + filterMalformedMode + "'");
-        }
-    }
-
-    private static Set<ZerobusOperation> parseOperations(String raw) {
-        String value = trimToNull(raw);
-        if (value == null) {
-            return Set.of();
-        }
-        Set<ZerobusOperation> operations = new HashSet<>();
-        for (String token : value.split(",")) {
-            String operation = trimToNull(token);
-            if (operation == null) {
-                continue;
-            }
-            try {
-                operations.add(ZerobusOperation.fromFilterToken(operation));
-            }
-            catch (IllegalArgumentException e) {
-                throw new io.debezium.DebeziumException("Unsupported Zerobus filter operation '" + operation + "'", e);
-            }
-        }
-        return Set.copyOf(operations);
-    }
-
-    private static void validatePair(String first, String firstName, String second, String secondName) {
-        if ((first == null) != (second == null)) {
-            throw new io.debezium.DebeziumException(
-                    "Zerobus " + firstName + " and " + secondName + " must be configured together");
-        }
-    }
-
-    private static void validateRegex(String expression, String fieldName) {
-        if (expression == null) {
-            return;
-        }
-        try {
-            Pattern.compile(expression);
-        }
-        catch (PatternSyntaxException e) {
-            throw new io.debezium.DebeziumException("Invalid Zerobus " + fieldName + " regex '" + expression + "'", e);
         }
     }
 
@@ -498,34 +382,6 @@ public class ZerobusChangeConsumerConfig {
 
     public String getTombstoneHandlingMode() {
         return tombstoneHandlingMode;
-    }
-
-    public String getFilterDestinationRegex() {
-        return filterDestinationRegex;
-    }
-
-    public Set<ZerobusOperation> getFilterOperations() {
-        return filterOperations;
-    }
-
-    public String getFilterHeaderName() {
-        return filterHeaderName;
-    }
-
-    public String getFilterHeaderValueRegex() {
-        return filterHeaderValueRegex;
-    }
-
-    public String getFilterValueJsonPointer() {
-        return filterValueJsonPointer;
-    }
-
-    public String getFilterValueRegex() {
-        return filterValueRegex;
-    }
-
-    public String getFilterMalformedMode() {
-        return filterMalformedMode;
     }
 
     public int getMaxInflightRecords() {
