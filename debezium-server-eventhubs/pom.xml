@@ -35,12 +35,13 @@
         <!-- Target systems -->
         <dependency>
             <groupId>com.azure</groupId>
-            <artifactId>azure-messaging-eventhubs</artifactId>
+            <artifactId>azure-identity</artifactId>
         </dependency>
         <dependency>
             <groupId>com.azure</groupId>
-            <artifactId>azure-identity</artifactId>
+            <artifactId>azure-messaging-eventhubs</artifactId>
         </dependency>
+
 
         <!-- Testing -->
         <dependency>

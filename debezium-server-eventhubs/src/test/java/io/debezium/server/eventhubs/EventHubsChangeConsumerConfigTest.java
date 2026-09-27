@@ -6,9 +6,11 @@
 package io.debezium.server.eventhubs;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
 
 class EventHubsChangeConsumerConfigTest {
@@ -50,5 +52,52 @@ class EventHubsChangeConsumerConfigTest {
         EventHubsChangeConsumerConfig consumerConfig = new EventHubsChangeConsumerConfig(config);
 
         assertThat(consumerConfig.getFullyQualifiedNamespace()).isNull();
+    }
+
+    @Test
+    void defaultAzureCredentialRequiresNamespace() {
+        Configuration config = Configuration.create()
+                .with("authmode", "default-azure-credential")
+                .with("hubname", "myhub")
+                .build();
+
+        assertThatThrownBy(() -> new EventHubsChangeConsumerConfig(config))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("debezium.sink.eventhubs.fullyqualifiednamespace");
+    }
+
+    @Test
+    void defaultAzureCredentialRequiresHubName() {
+        Configuration config = Configuration.create()
+                .with("authmode", "default-azure-credential")
+                .with("fullyqualifiednamespace", "mynamespace.servicebus.windows.net")
+                .build();
+
+        assertThatThrownBy(() -> new EventHubsChangeConsumerConfig(config))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("debezium.sink.eventhubs.hubname");
+    }
+
+    @Test
+    void connectionStringModeRequiresConnectionString() {
+        Configuration config = Configuration.create()
+                .with("hubname", "myhub")
+                .build();
+
+        assertThatThrownBy(() -> new EventHubsChangeConsumerConfig(config))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("debezium.sink.eventhubs.connectionstring");
+    }
+
+    @Test
+    void invalidAuthModeThrows() {
+        Configuration config = Configuration.create()
+                .with("authmode", "bogus")
+                .with("hubname", "myhub")
+                .build();
+
+        assertThatThrownBy(() -> new EventHubsChangeConsumerConfig(config))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("Invalid authmode");
     }
 }

@@ -97,18 +97,16 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
         hashMessageFunction = Optional.ofNullable(config.getHashMessageKeyFunction()).map(HashFunction::fromString);
 
-        if (config.getAuthMode() == AuthMode.DEFAULT_AZURE_CREDENTIAL && Strings.isNullOrEmpty(config.getFullyQualifiedNamespace())) {
-            throw new DebeziumException(
-                    "Configuration property 'debezium.sink.eventhubs.fullyqualifiednamespace' is required when authmode is 'default-azure-credential'.");
-        }
-
         try {
             if (config.getAuthMode() == AuthMode.DEFAULT_AZURE_CREDENTIAL) {
+                if (!Strings.isNullOrEmpty(config.getConnectionString())) {
+                    LOGGER.warn(
+                            "Configuration property 'debezium.sink.eventhubs.connectionstring' is set but will be ignored because authmode is 'default-azure-credential'.");
+                }
                 DefaultAzureCredential credential = new DefaultAzureCredentialBuilder().build();
                 producer = new EventHubClientBuilder()
                         .credential(config.getFullyQualifiedNamespace(), config.getEventHubName(), credential)
                         .buildProducerClient();
-                LOGGER.info("Using DefaultAzureCredential for namespace '{}'", config.getFullyQualifiedNamespace());
             }
             else {
                 String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(), config.getEventHubName());
@@ -120,7 +118,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
             throw new DebeziumException(e);
         }
 
-        LOGGER.info("Using default Event Hubs client for namespace '{}'", producer.getFullyQualifiedNamespace());
+        LOGGER.info("Using Event Hubs client with auth mode '{}' for namespace '{}'",
+                config.getAuthMode().getValue(), producer.getFullyQualifiedNamespace());
 
         // Retrieve available partition count for the EventHub
         partitionCount = (int) producer.getPartitionIds().stream().count();

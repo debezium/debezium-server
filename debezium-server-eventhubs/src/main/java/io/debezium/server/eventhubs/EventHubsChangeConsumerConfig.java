@@ -11,6 +11,7 @@ import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
 import io.debezium.config.EnumeratedValue;
 import io.debezium.config.Field;
+import io.debezium.util.Strings;
 
 /**
  * Configuration fields for {@link EventHubsChangeConsumer}.
@@ -135,6 +136,27 @@ public class EventHubsChangeConsumerConfig {
         dynamicPartitionRouting = config.getString(DYNAMIC_PARTITION_ROUTING);
         maxBatchSize = config.getInteger(MAX_BATCH_SIZE);
         hashMessageKeyFunction = config.getString(HASH_MESSAGE_KEY_FUNCTION);
+
+        validate();
+    }
+
+    private void validate() {
+        if (authMode == AuthMode.CONNECTION_STRING) {
+            if (Strings.isNullOrEmpty(connectionString)) {
+                throw new DebeziumException(
+                        "Configuration property 'debezium.sink.eventhubs.connectionstring' is required when authmode is 'connection-string'.");
+            }
+        }
+        else if (authMode == AuthMode.DEFAULT_AZURE_CREDENTIAL) {
+            if (Strings.isNullOrEmpty(fullyQualifiedNamespace)) {
+                throw new DebeziumException(
+                        "Configuration property 'debezium.sink.eventhubs.fullyqualifiednamespace' is required when authmode is 'default-azure-credential'.");
+            }
+            if (Strings.isNullOrEmpty(eventHubName)) {
+                throw new DebeziumException(
+                        "Configuration property 'debezium.sink.eventhubs.hubname' is required when authmode is 'default-azure-credential'.");
+            }
+        }
     }
 
     public String getConnectionString() {
