@@ -11,7 +11,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 
@@ -23,9 +22,9 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.debezium.config.CommonConnectorConfig;
 import io.debezium.engine.DebeziumEngine;
-import io.debezium.runtime.DebeziumConnectorRegistry;
+import io.debezium.runtime.Debezium;
+import io.debezium.runtime.DebeziumConnectorsRegistry;
 import io.debezium.runtime.DebeziumStatus;
-import io.debezium.runtime.EngineManifest;
 import io.debezium.runtime.events.ConnectorStartedEvent;
 import io.debezium.runtime.events.DebeziumCompletionEvent;
 import io.debezium.testing.testcontainers.PostgresTestResourceLifecycleManager;
@@ -55,7 +54,7 @@ public class DebeziumServerIT {
     TestConsumer testConsumer;
 
     @Inject
-    Instance<DebeziumConnectorRegistry> connectorRegistries;
+    DebeziumConnectorsRegistry connectorsRegistry;
 
     @Inject
     DebeziumMetrics metrics;
@@ -110,10 +109,12 @@ public class DebeziumServerIT {
     public void testDebeziumServerSignals() {
         Testing.Print.enable();
 
-        // wait for the connector to start
+        // wait for the connector to start; each connector extension on the classpath contributes a
+        // registry, but only the extension matching the configured connector.class runs an engine
         Awaitility.await().atMost(Duration.ofSeconds(TestConfigSource.waitForSeconds()))
-                .untilAsserted(() -> Assertions.assertThat(connectorRegistries.stream().findFirst().get().get(new EngineManifest("default")).status())
-                        .isEqualTo(new DebeziumStatus(DebeziumStatus.State.POLLING)));
+                .untilAsserted(() -> Assertions.assertThat(connectorsRegistry.runningEngines())
+                        .extracting(Debezium::status)
+                        .containsExactly(new DebeziumStatus(DebeziumStatus.State.POLLING)));
 
         // prepare signal
         var signal = new DebeziumEngine.Signal(
