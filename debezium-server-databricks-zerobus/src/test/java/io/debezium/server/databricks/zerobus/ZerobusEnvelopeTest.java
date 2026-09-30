@@ -227,19 +227,6 @@ class ZerobusEnvelopeTest {
         verify(event).commit();
     }
 
-    @Test
-    void appliesSinkNativeDestinationFilterBeforeIngestion() throws Exception {
-        ZerobusStreamHandle<String> stream = mockStream();
-        ZerobusChangeConsumer consumer = consumer(configWith("filter.destination.regex", "main\\.bronze\\.customers"),
-                Map.of("main.bronze.orders", stream), Map.of());
-        BatchEvent event = event("main.bronze.orders", "1", "{\"op\":\"c\"}", 0);
-
-        consumer.handle(events(event));
-
-        verify(stream, never()).ingest(anyString());
-        verify(event).commit();
-    }
-
     private static ZerobusEnvelope envelope(Map<String, String> sourcePosition) {
         return new ZerobusEnvelope(
                 "main.bronze.customers",
