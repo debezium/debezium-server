@@ -61,6 +61,11 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-connect-plugins</artifactId>
+        </dependency>
+        
         <!-- Sink dependencies with property-controlled scopes -->
         <dependency>
             <groupId>io.debezium</groupId>
