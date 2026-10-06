@@ -21,7 +21,7 @@
         <version.sqs>${version.aws}</version.sqs>
         <version.sns>${version.aws}</version.sns>
         <version.pubsub>26.74.0</version.pubsub>
-        <version.pulsar>4.2.1</version.pulsar>
+        <version.pulsar>4.2.5</version.pulsar>
         <version.milvus>2.5.17</version.milvus>
         <version.qdrant>1.14.0</version.qdrant>
         <version.eventhubs>5.19.1</version.eventhubs>
