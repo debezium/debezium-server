@@ -13,6 +13,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import io.debezium.doc.FixFor;
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigValue;
 import io.smallrye.config.PropertiesConfigSource;
@@ -83,6 +84,7 @@ public class DebeziumServerConfigSourceFactoryTest {
     }
 
     @Test
+    @FixFor("debezium/dbz#2818")
     public void shouldExpandRemappedValuesOnlyOnce() {
         SmallRyeConfig config = new SmallRyeConfigBuilder()
                 .addDefaultInterceptors()
