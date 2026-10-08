@@ -36,6 +36,7 @@
         <sink.instructlab.scope>compile</sink.instructlab.scope>
         <sink.fluss.scope>compile</sink.fluss.scope>
         <sink.jdbc.scope>compile</sink.jdbc.scope>
+        <sink.elasticsearch.scope>compile</sink.elasticsearch.scope>
         <sink.databricks-zerobus.scope>compile</sink.databricks-zerobus.scope>
 
         <!-- Storage module dependency scopes - default to test -->
@@ -172,6 +173,11 @@
             <artifactId>debezium-server-jdbc</artifactId>
             <scope>${sink.jdbc.scope}</scope>
         </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-elasticsearch</artifactId>
+            <scope>${sink.elasticsearch.scope}</scope>
+        </dependency>
 
         <!-- Storage module and scripting dependencies with property-controlled scopes -->
         <dependency>
@@ -284,6 +290,7 @@
                 <sink.instructlab.scope>test</sink.instructlab.scope>
                 <sink.fluss.scope>test</sink.fluss.scope>
                 <sink.jdbc.scope>test</sink.jdbc.scope>
+                <sink.elasticsearch.scope>test</sink.elasticsearch.scope>
                 <sink.databricks-zerobus.scope>test</sink.databricks-zerobus.scope>
             </properties>
             <dependencies>
@@ -458,6 +465,13 @@
             <id>sink-jdbc</id>
             <properties>
                 <sink.jdbc.scope>compile</sink.jdbc.scope>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>sink-elasticsearch</id>
+            <properties>
+                <sink.elasticsearch.scope>compile</sink.elasticsearch.scope>
             </properties>
         </profile>
 
