@@ -15,6 +15,9 @@ import org.junit.jupiter.api.Test;
 
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigValue;
+import io.smallrye.config.PropertiesConfigSource;
+import io.smallrye.config.SmallRyeConfig;
+import io.smallrye.config.SmallRyeConfigBuilder;
 
 /**
  * Unit tests for the reuse of the sink connection properties for the schema history and offset
@@ -77,6 +80,22 @@ public class DebeziumServerConfigSourceFactoryTest {
         assertThat(result).doesNotContainKey("quarkus.debezium.offset.storage.redis.batch.size");
         // The guard is namespace-specific: schema history is still reused.
         assertThat(result).containsEntry("quarkus.debezium.schema.history.internal.redis.address", "sink-host:6379");
+    }
+
+    @Test
+    public void shouldExpandRemappedValuesOnlyOnce() {
+        SmallRyeConfig config = new SmallRyeConfigBuilder()
+                .addDefaultInterceptors()
+                .withSources(new PropertiesConfigSource(Map.of(
+                        "debezium.transforms", "outbox",
+                        "debezium.transforms.outbox.route.topic.replacement", "outbox.event.\\${routedByValue}",
+                        "debezium.source.topic.prefix", "${prefix}",
+                        "prefix", "inventory"), "test", 300))
+                .withSources(new DebeziumServerConfigSourceFactory())
+                .build();
+
+        assertThat(config.getValue("quarkus.debezium.transforms.outbox.route.topic.replacement", String.class)).isEqualTo("outbox.event.${routedByValue}");
+        assertThat(config.getValue("quarkus.debezium.topic.prefix", String.class)).isEqualTo("inventory");
     }
 
     private static Map<String, String> remap(Map<String, String> input) {
