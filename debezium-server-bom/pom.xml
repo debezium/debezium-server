@@ -29,6 +29,11 @@
         <version.nats>2.26.1</version.nats>
         <version.stan>2.2.3</version.stan>
         <version.fluss>0.9.0-incubating</version.fluss>
+        <!-- Elasticsearch sink: the connector is compiled against the 8.x client line, which addresses
+             8.x clusters natively and 9.x clusters through compatibility headers; the Quarkus BOM would
+             otherwise raise these to the 9.x line, which cannot address an 8.x cluster. -->
+        <version.elasticsearch.java>8.19.21</version.elasticsearch.java>
+        <version.elasticsearch.rest.client>8.19.20</version.elasticsearch.rest.client>
         <version.commons.logging>1.2</version.commons.logging>
         <version.jmx.exporter>1.0.1</version.jmx.exporter>
         <version.otel.agent>2.27.0</version.otel.agent>
@@ -175,6 +180,31 @@
                 <groupId>io.debezium</groupId>
                 <artifactId>debezium-server-jdbc</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.debezium</groupId>
+                <artifactId>debezium-server-elasticsearch</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.debezium</groupId>
+                <artifactId>debezium-connector-elasticsearch</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>co.elastic.clients</groupId>
+                <artifactId>elasticsearch-java</artifactId>
+                <version>${version.elasticsearch.java}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.elasticsearch.client</groupId>
+                <artifactId>elasticsearch-rest-client</artifactId>
+                <version>${version.elasticsearch.rest.client}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.elasticsearch.client</groupId>
+                <artifactId>elasticsearch-rest-client-sniffer</artifactId>
+                <version>${version.elasticsearch.rest.client}</version>
             </dependency>
             <dependency>
                 <groupId>io.debezium</groupId>
