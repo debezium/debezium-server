@@ -38,6 +38,7 @@ import io.debezium.relational.history.SchemaHistory;
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
+import io.smallrye.config.Expressions;
 import io.smallrye.config.common.MapBackedConfigSource;
 
 /**
@@ -72,6 +73,11 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
 
     @Override
     public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
+        // Copy the raw values. The remapped values are expanded when they are read.
+        return Expressions.withoutExpansion(() -> remap(context));
+    }
+
+    private Iterable<ConfigSource> remap(ConfigSourceContext context) {
         Map<String, String> remapped = new HashMap<>();
 
         configToProperties(context, remapped, PROP_SOURCE_PREFIX, QUARKUS_DEBEZIUM_PREFIX, true);
