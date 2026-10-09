@@ -38,7 +38,6 @@ import io.debezium.relational.history.SchemaHistory;
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
-import io.smallrye.config.Expressions;
 import io.smallrye.config.common.MapBackedConfigSource;
 
 /**
@@ -73,11 +72,6 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
 
     @Override
     public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
-        // Copy the raw values. The remapped values are expanded when they are read.
-        return Expressions.withoutExpansion(() -> remap(context));
-    }
-
-    private Iterable<ConfigSource> remap(ConfigSourceContext context) {
         Map<String, String> remapped = new HashMap<>();
 
         configToProperties(context, remapped, PROP_SOURCE_PREFIX, QUARKUS_DEBEZIUM_PREFIX, true);
@@ -155,9 +149,14 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             return Collections.emptyList();
         }
 
-        remapped.replaceAll((k, v) -> v != null && v.isEmpty() ? EMPTY_VALUE_SENTINEL : v);
+        // The values are already expanded. Escape them, so that they are not expanded again when they are read.
+        remapped.replaceAll((k, v) -> v != null && v.isEmpty() ? EMPTY_VALUE_SENTINEL : escape(v));
 
         return List.of(new DebeziumServerConfigSource(remapped));
+    }
+
+    private static String escape(String value) {
+        return value == null ? null : value.replace("$", "$$");
     }
 
     private void configToProperties(ConfigSourceContext context, Map<String, String> mutableMap, String oldPrefix, String newPrefix, boolean overwrite) {
