@@ -149,9 +149,14 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             return Collections.emptyList();
         }
 
-        remapped.replaceAll((k, v) -> v != null && v.isEmpty() ? EMPTY_VALUE_SENTINEL : v);
+        // The values are already expanded. Escape them, so that they are not expanded again when they are read.
+        remapped.replaceAll((k, v) -> v != null && v.isEmpty() ? EMPTY_VALUE_SENTINEL : escape(v));
 
         return List.of(new DebeziumServerConfigSource(remapped));
+    }
+
+    private static String escape(String value) {
+        return value == null ? null : value.replace("$", "$$");
     }
 
     private void configToProperties(ConfigSourceContext context, Map<String, String> mutableMap, String oldPrefix, String newPrefix, boolean overwrite) {
