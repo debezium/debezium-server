@@ -26,7 +26,7 @@
         <version.qdrant>1.14.0</version.qdrant>
         <version.eventhubs>5.19.1</version.eventhubs>
         <version.pravega>0.13.0</version.pravega>
-        <version.nats>2.26.1</version.nats>
+        <version.nats>2.26.4</version.nats>
         <version.stan>2.2.3</version.stan>
         <version.fluss>0.9.0-incubating</version.fluss>
         <version.commons.logging>1.2</version.commons.logging>
