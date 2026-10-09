@@ -91,12 +91,14 @@ public class DebeziumServerConfigSourceFactoryTest {
                 .withSources(new PropertiesConfigSource(Map.of(
                         "debezium.transforms", "outbox",
                         "debezium.transforms.outbox.route.topic.replacement", "outbox.event.\\${routedByValue}",
+                        "debezium.source.database.password", "$${file:secrets.properties:password}",
                         "debezium.source.topic.prefix", "${prefix}",
                         "prefix", "inventory"), "test", 300))
                 .withSources(new DebeziumServerConfigSourceFactory())
                 .build();
 
         assertThat(config.getValue("quarkus.debezium.transforms.outbox.route.topic.replacement", String.class)).isEqualTo("outbox.event.${routedByValue}");
+        assertThat(config.getValue("quarkus.debezium.database.password", String.class)).isEqualTo("${file:secrets.properties:password}");
         assertThat(config.getValue("quarkus.debezium.topic.prefix", String.class)).isEqualTo("inventory");
     }
 
