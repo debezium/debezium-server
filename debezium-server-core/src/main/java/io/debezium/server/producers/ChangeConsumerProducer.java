@@ -58,7 +58,7 @@ public class ChangeConsumerProducer {
     @Produces
     @Unremovable
     @ApplicationScoped
-    public ChangeConsumerHolder produces() {
+    public ChangeConsumerHolder<CapturingEvents<BatchEvent>> produces() {
         final String name = config.getValue(PROP_SINK_TYPE, String.class);
 
         Instance<DebeziumServerConsumer<CapturingEvents<BatchEvent>>> consumerInstance = instance.select(NamedLiteral.of(name));
@@ -76,7 +76,7 @@ public class ChangeConsumerProducer {
         DebeziumServerConsumer<CapturingEvents<BatchEvent>> consumer = consumerInstance.get();
         LOGGER.info("Consumer '{}' instantiated", consumer.getClass().getName());
 
-        return new ChangeConsumerHolder() {
+        return new ChangeConsumerHolder<>() {
             @Override
             public DebeziumServerConsumer<CapturingEvents<BatchEvent>> get() {
                 return consumer;

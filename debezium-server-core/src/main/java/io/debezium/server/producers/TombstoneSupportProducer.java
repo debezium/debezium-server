@@ -5,6 +5,8 @@
  */
 package io.debezium.server.producers;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
@@ -34,7 +36,7 @@ public class TombstoneSupportProducer {
     @Produces
     @Unremovable
     @ApplicationScoped
-    public CapturingTombstoneEvents produces(ChangeConsumerHolder changeConsumerHolder) {
+    public CapturingTombstoneEvents produces(ChangeConsumerHolder<CapturingEvents<BatchEvent>> changeConsumerHolder) {
         return changeConsumerHolder
                 .tombstoneSupport()
                 .map(isSupported -> (CapturingTombstoneEvents) () -> isSupported)
