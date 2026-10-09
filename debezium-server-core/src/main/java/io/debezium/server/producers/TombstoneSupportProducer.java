@@ -5,11 +5,11 @@
  */
 package io.debezium.server.producers;
 
-import io.debezium.runtime.BatchEvent;
-import io.debezium.runtime.CapturingEvents;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.api.ChangeConsumerHolder;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.debezium.engine.capture.CapturingTombstoneEvents;
