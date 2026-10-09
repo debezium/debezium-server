@@ -42,13 +42,13 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultChangeConsumer.class);
 
-    private final ChangeConsumerHolder delegateConsumer;
+    private final ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer;
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
     private final boolean isOpenLineageEnabled;
 
     @Inject
-    public DefaultChangeConsumer(ChangeConsumerHolder delegateConsumer, Config config) {
+    public DefaultChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer, Config config) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();

@@ -30,7 +30,7 @@ public class QuarkusChangeConsumerHolderProducer {
     }
 
     @Produces
-    public ChangeConsumerHolder produces() {
+    public ChangeConsumerHolder<CapturingEvents<BatchEvent>> produces() {
         List<DebeziumServerConsumer<CapturingEvents<BatchEvent>>> consumers = instance.stream().toList();
 
         if (consumers.isEmpty()) {
@@ -41,7 +41,7 @@ public class QuarkusChangeConsumerHolderProducer {
             throw new DebeziumException("Found multiple sink. In bridge mode, you can have only one sink");
         }
 
-        return new ChangeConsumerHolder() {
+        return new ChangeConsumerHolder<>() {
             @Override
             public DebeziumServerConsumer<CapturingEvents<BatchEvent>> get() {
                 return consumers.get(0);
