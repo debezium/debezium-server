@@ -1,0 +1,22 @@
+[
+  {
+    "name": "io.debezium.sink.naming.CollectionNamingStrategy",
+    "queryAllDeclaredMethods": true
+  },
+  {
+    "name": "io.debezium.sink.naming.DefaultCollectionNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "io.debezium.sink.naming.PassthroughCollectionNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "io.debezium.connector.elasticsearch.naming.ElasticsearchCollectionNamingStrategy",
+    "methods": [{ "name": "<init>", "parameterTypes": [] }]
+  },
+  {
+    "name": "io.debezium.connector.elasticsearch.client.ConnectionCredentialsProvider",
+    "queryAllDeclaredMethods": true
+  }
+]
