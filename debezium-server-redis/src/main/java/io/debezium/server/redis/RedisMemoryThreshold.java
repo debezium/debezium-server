@@ -29,13 +29,20 @@ public class RedisMemoryThreshold {
     private long previouslyUsedMemory = 0L;
     private long totalProcessed = 0;
 
+    /**
+     * Consecutive calls that have seen the same 'used_memory'. Reset whenever the reading moves.
+     */
+    private int unchangedReadings = 0;
+
     private RedisClient client;
     private long memoryLimit = 0;
     private long maximumMemory = 0;
+    private final int maxUnchangedReadings;
 
     public RedisMemoryThreshold(RedisClient client, RedisStreamChangeConsumerConfig config) {
         this.client = client;
         this.memoryLimit = 1024L * 1024 * config.getMemoryLimitMb();
+        this.maxUnchangedReadings = config.getMaxUnchangedMemoryReadings();
     }
 
     /**
@@ -49,6 +56,13 @@ public class RedisMemoryThreshold {
      * Redis Enterprise samples the Redis database memory usage in an interval. Since the throughput of Redis is very big,
      * it is impossible to rely on delayed memory usage reading to prevent OOM.
      * In order to protect the Redis database and throttle down the sink we have created this mechanism:...
+     * <p>
+     * The accumulation across unchanged readings is bounded. It continues for at most
+     * {@code debezium.sink.internal.redis.max.unchanged.memory.readings} consecutive calls that see the
+     * same {@code used_memory}, after which the accumulator is held until the reading moves again.
+     * Without that bound a reading that stops moving - as happens when nothing is draining the streams -
+     * makes the estimate grow indefinitely and stops the sink for good while Redis is nearly empty.
+     *
      * @param extraMemory   - Estimated size of a single record.
      * @param bufferSize    - Number of records in a batch.
      * @param bufferFillRate - Rate in which memory can be filled.
@@ -72,14 +86,37 @@ public class RedisMemoryThreshold {
         long extimatedBatchSize = extraMemory * bufferFillRate;
         long usedMemory = memoryTuple.getItem1();
         long prevAccumulatedMemory = accumulatedMemory;
+        long batchMemory = extraMemory * bufferSize;
         long diff = usedMemory - previouslyUsedMemory;
         if (diff == 0L) {
-            accumulatedMemory += extraMemory * bufferSize;
+            // Redis reports 'used_memory' in coarse allocator steps, so an unchanged reading does not
+            // prove nothing was written; the accumulator estimates what was sent but is not visible yet.
+            //
+            // That holds for a short run of identical readings. Beyond 'maxUnchangedReadings' it does
+            // not: a reading that has stopped moving altogether is no longer evidence of anything, and
+            // continuing to add to the estimate lets it grow without bound until it stops the sink for
+            // good while Redis is nearly empty. Hold the accumulator where it is instead - back-pressure
+            // then follows what Redis actually reports.
+            if (unchangedReadings < maxUnchangedReadings) {
+                unchangedReadings++;
+                accumulatedMemory += batchMemory;
+            }
+            else if (unchangedReadings == maxUnchangedReadings) {
+                unchangedReadings++;
+                LOGGER.debug(
+                        "Holding accumulated memory at {} after {} consecutive unchanged readings of {}.",
+                        getSizeInHumanReadableFormat(accumulatedMemory), maxUnchangedReadings,
+                        getSizeInHumanReadableFormat(usedMemory));
+            }
         }
         else {
+            // A changed reading reconciles the estimate: Redis has now accounted for what was written,
+            // so only the batch about to be sent remains unaccounted for.
             previouslyUsedMemory = usedMemory;
-            accumulatedMemory = extraMemory * bufferSize;
+            accumulatedMemory = batchMemory;
+            unchangedReadings = 0;
         }
+
         long estimatedUsedMemory = usedMemory + accumulatedMemory + extimatedBatchSize;
 
         if (estimatedUsedMemory >= maximumMemory) {
@@ -87,6 +124,7 @@ public class RedisMemoryThreshold {
                     "Sink memory threshold percentage was reached. Will retry; "
                             + "(estimated used memory size: {}, maxmemory: {}). Total Processed Records: {}",
                     getSizeInHumanReadableFormat(estimatedUsedMemory), getSizeInHumanReadableFormat(maximumMemory), totalProcessed);
+            // The batch was not sent, so the accumulator may not keep what it added for it.
             accumulatedMemory = prevAccumulatedMemory;
             return false;
         }

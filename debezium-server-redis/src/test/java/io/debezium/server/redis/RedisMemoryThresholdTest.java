@@ -41,6 +41,9 @@ public class RedisMemoryThresholdTest {
     private static final int BUFFER_SIZE = 500;
     private static final int RATE_PER_SECOND = 1000;
 
+    /** Mirrors DEFAULT_MAX_UNCHANGED_MEMORY_READINGS; the tests run on the default. */
+    private static final int MAX_UNCHANGED_READINGS = 3;
+
     private static final String HEARTBEAT_PREFIX = "__debezium-heartbeat";
 
     @Test
@@ -111,9 +114,95 @@ public class RedisMemoryThresholdTest {
         for (int i = 0; i < 8; i++) {
             Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
         }
-        Assertions.assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+        Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
         redisMemoryThreshold.setRedisClient(new RedisClientImpl(_5MB, _20MB));
         Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+    }
+
+    /**
+     * The accumulator exists so that writes Redis has not reported yet still count against the limit,
+     * which is what protects a deployment where 'used_memory' is sampled on an interval. It must keep
+     * doing that for a short run of identical readings.
+     */
+    @Test
+    public void testAccumulatorGrowsWhileTheReadingIsUnchanged() throws Exception {
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_10MB, _20MB));
+
+        redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND);
+        long afterFirst = accumulatedMemory(redisMemoryThreshold);
+
+        redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND);
+        long afterSecond = accumulatedMemory(redisMemoryThreshold);
+
+        Assertions.assertTrue(afterSecond > afterFirst,
+                "the accumulator must still grow across an unchanged reading, otherwise the cross-batch "
+                        + "protection this class exists for is gone");
+    }
+
+    /**
+     * ...but not for ever. Past the configured number of consecutive unchanged readings the reading has
+     * stopped being evidence of anything, and an unbounded accumulator eventually stops the sink for good
+     * while Redis is nearly empty - the failure reported in debezium/dbz#2557.
+     */
+    @Test
+    public void testAccumulatorStopsGrowingPastTheConfiguredBound() throws Exception {
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_10MB, _20MB));
+
+        for (int i = 0; i < MAX_UNCHANGED_READINGS + 1; i++) {
+            redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND);
+        }
+        long atBound = accumulatedMemory(redisMemoryThreshold);
+
+        for (int i = 0; i < 50; i++) {
+            redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND);
+        }
+
+        Assertions.assertEquals(atBound, accumulatedMemory(redisMemoryThreshold),
+                "the accumulator must be held once the reading has repeated " + MAX_UNCHANGED_READINGS + " times");
+    }
+
+    /**
+     * The consequence of the bound: Redis reports half the database free throughout, so the sink has to
+     * keep consuming. On unbounded code the estimate overtakes maxmemory and the sink stops for good.
+     */
+    @Test
+    public void testConsumptionContinuesWhileReportedMemoryStaysConstant() {
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_10MB, _20MB));
+        for (int i = 0; i < 1000; i++) {
+            Assertions.assertTrue(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND),
+                    "Sink stopped consuming at batch " + i + " while Redis still reported 10MB of 20MB used");
+        }
+    }
+
+    /**
+     * A moving reading resets the run, so a workload that keeps Redis reporting fresh figures never
+     * approaches the bound at all.
+     */
+    @Test
+    public void testAccumulatorResetsWhenTheReadingMoves() throws Exception {
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_10MB, _20MB));
+        for (int i = 0; i < MAX_UNCHANGED_READINGS + 5; i++) {
+            redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND);
+        }
+        long whileHeld = accumulatedMemory(redisMemoryThreshold);
+
+        redisMemoryThreshold.setRedisClient(new RedisClientImpl(_5MB, _20MB));
+        redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND);
+
+        Assertions.assertEquals(RECORD_SIZE * BUFFER_SIZE, accumulatedMemory(redisMemoryThreshold),
+                "a changed reading must reset the accumulator to the batch about to be sent");
+        Assertions.assertTrue(whileHeld > RECORD_SIZE * BUFFER_SIZE, "precondition: the accumulator had grown");
+    }
+
+    /**
+     * The bound must not weaken back-pressure. Once Redis itself reports too little headroom for another
+     * batch, the sink stops regardless of what the accumulator holds.
+     */
+    @Test
+    public void testConsumptionStopsWhenReportedMemoryLeavesNoHeadroom() {
+        RedisMemoryThreshold redisMemoryThreshold = memoryThreshold(new RedisClientImpl(_19MB, _20MB));
+        Assertions.assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
+        Assertions.assertFalse(redisMemoryThreshold.checkMemory(RECORD_SIZE, BUFFER_SIZE, RATE_PER_SECOND));
     }
 
     /**
@@ -134,6 +223,12 @@ public class RedisMemoryThresholdTest {
         Configuration config = Configuration.from(Collect.hashMapOf("debezium.sink.redis.address", "localhost",
                 "debezium.sink.redis.rate.per.second", RATE_PER_SECOND));
         return new RedisMemoryThreshold(client, new RedisStreamChangeConsumerConfig(config));
+    }
+
+    private static long accumulatedMemory(RedisMemoryThreshold threshold) throws Exception {
+        Field field = RedisMemoryThreshold.class.getDeclaredField("accumulatedMemory");
+        field.setAccessible(true);
+        return field.getLong(threshold);
     }
 
     private static class RedisClientImpl implements RedisClient {
