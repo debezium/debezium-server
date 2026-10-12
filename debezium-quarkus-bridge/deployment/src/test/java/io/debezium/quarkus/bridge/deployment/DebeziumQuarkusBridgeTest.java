@@ -32,7 +32,7 @@ class DebeziumQuarkusBridgeTest {
     QuarkusChangeConsumer changeConsumer;
 
     @Inject
-    ChangeConsumerHolder changeConsumerHolder;
+    ChangeConsumerHolder<CapturingEvents<BatchEvent>> changeConsumerHolder;
 
     @Inject
     DebeziumSerialization<String, String, String> serialization;
