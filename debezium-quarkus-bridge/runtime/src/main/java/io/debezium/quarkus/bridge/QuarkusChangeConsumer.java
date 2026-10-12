@@ -18,10 +18,10 @@ import io.quarkus.arc.Unremovable;
 @Unremovable
 public class QuarkusChangeConsumer {
 
-    private final ChangeConsumerHolder changeConsumerHolder;
+    private final ChangeConsumerHolder<CapturingEvents<BatchEvent>> changeConsumerHolder;
 
     @Inject
-    public QuarkusChangeConsumer(ChangeConsumerHolder changeConsumerHolder) {
+    public QuarkusChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> changeConsumerHolder) {
         this.changeConsumerHolder = changeConsumerHolder;
     }
 
