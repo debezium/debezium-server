@@ -49,6 +49,24 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private static final Field PROP_SKIP_HEARTBEAT_MESSAGES = Field.create(CONFIGURATION_FIELD_PREFIX_STRING + "skip.heartbeat.messages")
             .withDefault(DEFAULT_SKIP_HEARTBEAT_MESSAGES);
 
+    /**
+     * How many consecutive unchanged {@code used_memory} readings the memory threshold keeps
+     * accumulating over before it stops adding to its estimate.
+     * <p>
+     * Redis reports {@code used_memory} in coarse allocator steps, so a short run of identical
+     * readings is normal, and accumulating across them is what protects against OOM where the
+     * figure is sampled on an interval. A reading that stops moving altogether is not normal,
+     * and without a bound the estimate grows until it stops the sink while Redis is nearly empty.
+     * <p>
+     * Internal, so the bound can be raised for a workload that needs more tolerance without
+     * becoming a documented knob.
+     */
+    private static final int DEFAULT_MAX_UNCHANGED_MEMORY_READINGS = 3;
+    private static final Field PROP_MAX_UNCHANGED_MEMORY_READINGS = Field
+            .createInternal("redis.max.unchanged.memory.readings")
+            .withDefault(DEFAULT_MAX_UNCHANGED_MEMORY_READINGS)
+            .withValidation(RangeValidator.atLeast(1));
+
     private int batchSize;
     private String nullKey;
     private String nullValue;
@@ -58,6 +76,7 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
     private int batchDelay;
     private int bufferFillRate;
     private boolean skipHeartbeatMessages;
+    private int maxUnchangedMemoryReadings;
 
     public RedisStreamChangeConsumerConfig() {
         super();
@@ -77,12 +96,13 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
         memoryLimitMb = config.getInteger(PROP_MEMORY_LIMIT_MB);
         bufferFillRate = config.getInteger(PROP_BUFFER_FILL_RATE);
         skipHeartbeatMessages = config.getBoolean(PROP_SKIP_HEARTBEAT_MESSAGES);
+        maxUnchangedMemoryReadings = config.getInteger(PROP_MAX_UNCHANGED_MEMORY_READINGS);
     }
 
     @Override
     protected List<Field> getAllConfigurationFields() {
         List<Field> fields = Collect.arrayListOf(PROP_BATCH_SIZE, PROP_NULL_KEY, PROP_NULL_VALUE, PROP_MESSAGE_FORMAT,
-                PROP_SKIP_HEARTBEAT_MESSAGES);
+                PROP_SKIP_HEARTBEAT_MESSAGES, PROP_MAX_UNCHANGED_MEMORY_READINGS);
         fields.addAll(super.getAllConfigurationFields());
         return fields;
     }
@@ -121,5 +141,9 @@ public class RedisStreamChangeConsumerConfig extends RedisCommonConfig {
 
     public boolean isSkipHeartbeatMessages() {
         return skipHeartbeatMessages;
+    }
+
+    public int getMaxUnchangedMemoryReadings() {
+        return maxUnchangedMemoryReadings;
     }
 }
