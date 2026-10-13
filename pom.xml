@@ -65,7 +65,6 @@
         <module>debezium-server-bom</module>
         <module>debezium-server-api</module>
         <module>debezium-server-common</module>
-        <module>debezium-quarkus-bridge</module>
         <module>debezium-server-core</module>
         <module>debezium-server-kinesis</module>
         <module>debezium-server-pubsub</module>
