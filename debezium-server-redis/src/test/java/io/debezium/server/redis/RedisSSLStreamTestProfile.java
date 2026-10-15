@@ -5,7 +5,6 @@
  */
 package io.debezium.server.redis;
 
-import java.net.URL;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -19,6 +18,7 @@ public class RedisSSLStreamTestProfile implements QuarkusTestProfile {
     @Override
     public List<TestResourceEntry> testResources() {
         return Arrays.asList(
+                new TestResourceEntry(RedisSSLSystemPropertiesTestResourceLifecycleManager.class),
                 new TestResourceEntry(PostgresTestResourceLifecycleManager.class),
                 new TestResourceEntry(RedisSSLTestResourceLifecycleManager.class));
     }
@@ -26,13 +26,6 @@ public class RedisSSLStreamTestProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
 
         Map<String, String> config = new HashMap<String, String>();
-        URL keyStoreFile = RedisSSLStreamTestProfile.class.getClassLoader().getResource("ssl/client-keystore.p12");
-        URL trustStoreFile = RedisSSLStreamTestProfile.class.getClassLoader().getResource("ssl/client-truststore.p12");
-
-        config.put("javax.net.ssl.keyStore", keyStoreFile.getPath());
-        config.put("javax.net.ssl.trustStore", trustStoreFile.getPath());
-        config.put("javax.net.ssl.keyStorePassword", "secret");
-        config.put("javax.net.ssl.trustStorePassword", "secret");
         config.put("debezium.source.offset.storage", "redis");
         config.put("debezium.source.connector.class", "io.debezium.connector.postgresql.PostgresConnector");
         return config;
