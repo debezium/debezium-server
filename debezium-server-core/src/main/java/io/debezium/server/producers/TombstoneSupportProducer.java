@@ -8,6 +8,8 @@ package io.debezium.server.producers;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
+import io.debezium.runtime.BatchEvent;
+import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.api.ChangeConsumerHolder;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.debezium.engine.capture.CapturingTombstoneEvents;
@@ -34,7 +36,7 @@ public class TombstoneSupportProducer {
     @Produces
     @Unremovable
     @ApplicationScoped
-    public CapturingTombstoneEvents produces(ChangeConsumerHolder changeConsumerHolder) {
+    public CapturingTombstoneEvents produces(ChangeConsumerHolder<CapturingEvents<BatchEvent>> changeConsumerHolder) {
         return changeConsumerHolder
                 .tombstoneSupport()
                 .map(isSupported -> (CapturingTombstoneEvents) () -> isSupported)
