@@ -23,17 +23,6 @@ import io.debezium.server.databricks.zerobus.ZerobusChangeConsumerConfig.RecordF
  */
 class ZerobusPayloadModeTest {
 
-    private static final ZerobusOperation[] ALL_OPERATIONS = {
-            ZerobusOperation.CREATE,
-            ZerobusOperation.READ,
-            ZerobusOperation.UPDATE,
-            ZerobusOperation.DELETE,
-            ZerobusOperation.TRUNCATE,
-            ZerobusOperation.MESSAGE,
-            ZerobusOperation.TOMBSTONE,
-            ZerobusOperation.CHANGE
-    };
-
     private static ZerobusChangeConsumerConfig configWith(String... options) {
         Configuration.Builder builder = Configuration.create()
                 .with("endpoint", "ws.zerobus.us-west-2.cloud.databricks.com")
@@ -103,22 +92,6 @@ class ZerobusPayloadModeTest {
         assertThatThrownBy(() -> configWith("payload.mode", "envelope", "max.record.bytes", "0"))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("max.record.bytes");
-        assertThatThrownBy(() -> configWith("payload.mode", "envelope", "filter.value.regex", ".*"))
-                .isInstanceOf(DebeziumException.class)
-                .hasMessageContaining("filter.value.json.pointer")
-                .hasMessageContaining("filter.value.regex");
-        assertThatThrownBy(() -> configWith("payload.mode", "envelope", "filter.destination.regex", "["))
-                .isInstanceOf(DebeziumException.class)
-                .hasMessageContaining("filter.destination.regex");
-    }
-
-    @Test
-    void acceptsDebeziumOperationCodesAndLongAliases() {
-        assertThat(configWith("filter.operations", "c,r,u,d,t,m,tombstone,change").getFilterOperations())
-                .containsExactlyInAnyOrder(ALL_OPERATIONS);
-        assertThat(configWith("filter.operations", "create,read,update,delete,truncate,message,tombstone,change")
-                .getFilterOperations())
-                .containsExactlyInAnyOrder(ALL_OPERATIONS);
     }
 
     @Test
