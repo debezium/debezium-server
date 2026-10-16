@@ -38,6 +38,7 @@ import io.debezium.relational.history.SchemaHistory;
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
+import io.smallrye.config.Expressions;
 import io.smallrye.config.common.MapBackedConfigSource;
 
 /**
@@ -72,6 +73,15 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
 
     @Override
     public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
+        // The sink type is part of the remapped property names, thus it must be expanded here.
+        ConfigValue sinkType = context.getValue(PROP_SINK_TYPE);
+        String sink = sinkType != null ? sinkType.getValue() : null;
+
+        // Copy the raw values. The remapped values are expanded when they are read, when all config sources are available.
+        return Expressions.withoutExpansion(() -> remap(context, sink));
+    }
+
+    private Iterable<ConfigSource> remap(ConfigSourceContext context, String sink) {
         Map<String, String> remapped = new HashMap<>();
 
         configToProperties(context, remapped, PROP_SOURCE_PREFIX, QUARKUS_DEBEZIUM_PREFIX, true);
@@ -81,10 +91,12 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
         configToProperties(context, remapped, PROP_KEY_FORMAT_PREFIX, QUARKUS_KEY_CONVERTER_PREFIX, true);
         configToProperties(context, remapped, PROP_VALUE_FORMAT_PREFIX, QUARKUS_VALUE_CONVERTER_PREFIX, true);
         configToProperties(context, remapped, PROP_HEADER_FORMAT_PREFIX, QUARKUS_HEADER_CONVERTER_PREFIX, true);
-        ConfigValue sink = context.getValue(PROP_SINK_TYPE);
-        if (sink != null && sink.getValue() != null) {
-            remapped.put(QUARKUS_DEBEZIUM_PREFIX + "name", sink.getValue());
-            String sinkPrefix = PROP_SINK_PREFIX + sink.getValue() + ".";
+        ConfigValue rawSinkType = context.getValue(PROP_SINK_TYPE);
+        if (rawSinkType != null && rawSinkType.getValue() != null) {
+            remapped.put(QUARKUS_DEBEZIUM_PREFIX + "name", rawSinkType.getValue());
+        }
+        if (sink != null) {
+            String sinkPrefix = PROP_SINK_PREFIX + sink + ".";
 
             // The sink connection properties are reused for the schema history and offset storage
             // namespaces as a convenience when the same technology is used for both the sink and the
@@ -93,12 +105,12 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             // user's explicit storage configuration (e.g. when the sink and storage use different
             // property names for the same concept) or leak sink-specific properties into the storage
             // namespaces where they have no meaning.
-            String schemaHistoryPrefix = QUARKUS_DEBEZIUM_PREFIX + SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink.getValue() + ".";
+            String schemaHistoryPrefix = QUARKUS_DEBEZIUM_PREFIX + SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink + ".";
             if (!hasPropertyWithPrefix(context, remapped, schemaHistoryPrefix)) {
                 configToProperties(context, remapped, sinkPrefix, schemaHistoryPrefix, false);
             }
 
-            String offsetStoragePrefix = QUARKUS_DEBEZIUM_PREFIX + PROP_OFFSET_STORAGE_PREFIX + sink.getValue() + ".";
+            String offsetStoragePrefix = QUARKUS_DEBEZIUM_PREFIX + PROP_OFFSET_STORAGE_PREFIX + sink + ".";
             if (!hasPropertyWithPrefix(context, remapped, offsetStoragePrefix)) {
                 configToProperties(context, remapped, sinkPrefix, offsetStoragePrefix, false);
             }
@@ -149,14 +161,9 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             return Collections.emptyList();
         }
 
-        // The values are already expanded. Escape them, so that they are not expanded again when they are read.
-        remapped.replaceAll((k, v) -> v != null && v.isEmpty() ? EMPTY_VALUE_SENTINEL : escape(v));
+        remapped.replaceAll((k, v) -> v != null && v.isEmpty() ? EMPTY_VALUE_SENTINEL : v);
 
         return List.of(new DebeziumServerConfigSource(remapped));
-    }
-
-    private static String escape(String value) {
-        return value == null ? null : value.replace("$", "$$");
     }
 
     private void configToProperties(ConfigSourceContext context, Map<String, String> mutableMap, String oldPrefix, String newPrefix, boolean overwrite) {
@@ -200,8 +207,10 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
     }
 
     static class DebeziumServerConfigSource extends MapBackedConfigSource {
+        static final String NAME = "DebeziumServerConfigSource";
+
         DebeziumServerConfigSource(Map<String, String> properties) {
-            super("DebeziumServerConfigSource", properties, ORDINAL);
+            super(NAME, properties, ORDINAL);
         }
     }
 }
