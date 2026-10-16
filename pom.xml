@@ -75,6 +75,7 @@
         <module>debezium-server-eventhubs</module>
         <module>debezium-server-http</module>
         <module>debezium-server-jdbc</module>
+        <module>debezium-server-elasticsearch</module>
         <module>debezium-server-redis</module>
         <module>debezium-server-dist</module>
         <module>debezium-server-kafka</module>
@@ -123,6 +124,12 @@
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-qdrant</artifactId>
+                <version>${version.testcontainers}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-elasticsearch</artifactId>
                 <version>${version.testcontainers}</version>
                 <scope>test</scope>
             </dependency>
