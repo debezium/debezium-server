@@ -9,14 +9,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
+import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import io.debezium.doc.FixFor;
 import io.smallrye.config.ConfigSourceContext;
+import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
 import io.smallrye.config.EnvConfigSource;
 import io.smallrye.config.PropertiesConfigSource;
@@ -123,6 +126,8 @@ public class DebeziumServerConfigSourceFactoryTest {
             "\\$",
             "^\\d+$",
             "C:\\temp",
+            "C:\\\\$Recycle",
+            "a\\\\${prefix}",
             "${prefix}\\"
     })
     public void shouldReadRemappedValueAsOriginalValue(String value) {
@@ -164,15 +169,33 @@ public class DebeziumServerConfigSourceFactoryTest {
 
     @Test
     @FixFor("debezium/dbz#2818")
-    public void shouldResolveReferenceToBridgedProperty() {
-        SmallRyeConfig config = config(Map.of(
-                "debezium.source.offset.flush.interval.ms", "${quarkus.debezium.offset.flush.interval.ms:1000}",
-                "quarkus.debezium.snapshot.fetch.size", "${debezium.source.snapshot.fetch.size:500}"));
+    public void shouldExpandRemappedValuesWithLaterConfigSource() {
+        SmallRyeConfig config = new SmallRyeConfigBuilder()
+                .addDefaultInterceptors()
+                .addDiscoveredInterceptors()
+                .withConverters(new EmptyStringConverter[]{ new EmptyStringConverter() })
+                .withSources(new PropertiesConfigSource(Map.of(
+                        "debezium.sink.type", "${SINK_TYPE}",
+                        "debezium.source.database.user", "${DBZ_USER}",
+                        "debezium.source.database.password", "${DBZ_PASSWORD:fallback}",
+                        "debezium.source.database.dbname", "$${DBZ_DB}",
+                        "debezium.source.table.include.list", "${DBZ_TABLES:}",
+                        "debezium.source.column.include.list", "${DBZ_COLUMNS:}"), "test", 300))
+                // Sources from another factory are not visible to the factory context, as with kubernetes-config secrets.
+                .withSources(new LaterConfigSourceFactory(Map.of(
+                        "SINK_TYPE", "redis",
+                        "DBZ_USER", "dbz",
+                        "DBZ_PASSWORD", "dbz-password",
+                        "DBZ_TABLES", "inventory.customers")))
+                .withSources(new DebeziumServerConfigSourceFactory())
+                .build();
 
-        assertThat(config.getValue("debezium.source.offset.flush.interval.ms", String.class)).isEqualTo("1000");
-        assertThat(config.getValue("quarkus.debezium.offset.flush.interval.ms", String.class)).isEqualTo("1000");
-        assertThat(config.getValue("quarkus.debezium.snapshot.fetch.size", String.class)).isEqualTo("500");
-        assertThat(config.getValue("debezium.source.snapshot.fetch.size", String.class)).isEqualTo("500");
+        assertThat(config.getValue("quarkus.debezium.name", String.class)).isEqualTo("redis");
+        assertThat(config.getValue("quarkus.debezium.database.user", String.class)).isEqualTo("dbz");
+        assertThat(config.getValue("quarkus.debezium.database.password", String.class)).isEqualTo("dbz-password");
+        assertThat(config.getValue("quarkus.debezium.database.dbname", String.class)).isEqualTo("${DBZ_DB}");
+        assertThat(config.getValue("quarkus.debezium.table.include.list", String.class)).isEqualTo("inventory.customers");
+        assertThat(config.getValue("quarkus.debezium.column.include.list", String.class)).isEmpty();
     }
 
     private static SmallRyeConfig config(Map<String, String> properties) {
@@ -182,6 +205,7 @@ public class DebeziumServerConfigSourceFactoryTest {
     private static SmallRyeConfig config(Map<String, String> properties, Map<String, String> env) {
         return new SmallRyeConfigBuilder()
                 .addDefaultInterceptors()
+                .addDiscoveredInterceptors()
                 .withConverters(new EmptyStringConverter[]{ new EmptyStringConverter() })
                 .withSources(new PropertiesConfigSource(properties, "test", 300))
                 .withSources(new EnvConfigSource(env, 300))
@@ -194,6 +218,20 @@ public class DebeziumServerConfigSourceFactoryTest {
         new DebeziumServerConfigSourceFactory().getConfigSources(new MapConfigSourceContext(input))
                 .forEach(source -> result.putAll(source.getProperties()));
         return result;
+    }
+
+    private static final class LaterConfigSourceFactory implements ConfigSourceFactory {
+
+        private final Map<String, String> properties;
+
+        LaterConfigSourceFactory(Map<String, String> properties) {
+            this.properties = properties;
+        }
+
+        @Override
+        public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
+            return List.of(new PropertiesConfigSource(properties, "later", 270));
+        }
     }
 
     /**
