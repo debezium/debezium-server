@@ -142,4 +142,12 @@ public class BaseChangeConsumer {
         }
         return result;
     }
+
+    /**
+     * Whether the header converter serializes headers with their schemas, i.e. the
+     * {@code debezium.format.header.schemas.enable} setting. Defaults to {@code true} when unset.
+     */
+    protected static boolean isHeaderSchemasEnabled(Config config) {
+        return config.getOptionalValue("debezium.format.header.schemas.enable", Boolean.class).orElse(true);
+    }
 }
