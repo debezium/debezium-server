@@ -9,12 +9,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
+import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import io.debezium.doc.FixFor;
 import io.smallrye.config.ConfigSourceContext;
+import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
+import io.smallrye.config.EnvConfigSource;
+import io.smallrye.config.PropertiesConfigSource;
+import io.smallrye.config.SmallRyeConfig;
+import io.smallrye.config.SmallRyeConfigBuilder;
 
 /**
  * Unit tests for the reuse of the sink connection properties for the schema history and offset
@@ -79,11 +89,149 @@ public class DebeziumServerConfigSourceFactoryTest {
         assertThat(result).containsEntry("quarkus.debezium.schema.history.internal.redis.address", "sink-host:6379");
     }
 
+    @Test
+    @FixFor("debezium/dbz#2818")
+    public void shouldExpandRemappedValuesOnlyOnce() {
+        SmallRyeConfig config = config(Map.of(
+                "debezium.transforms", "outbox",
+                "debezium.transforms.outbox.route.topic.replacement", "outbox.event.\\${routedByValue}",
+                "debezium.source.database.password", "$${file:secrets.properties:password}",
+                "debezium.source.topic.prefix", "${prefix}",
+                "prefix", "inventory"));
+
+        assertThat(config.getValue("quarkus.debezium.transforms.outbox.route.topic.replacement", String.class)).isEqualTo("outbox.event.${routedByValue}");
+        assertThat(config.getValue("quarkus.debezium.database.password", String.class)).isEqualTo("${file:secrets.properties:password}");
+        assertThat(config.getValue("quarkus.debezium.topic.prefix", String.class)).isEqualTo("inventory");
+    }
+
+    @ParameterizedTest
+    @FixFor("debezium/dbz#2818")
+    @ValueSource(strings = {
+            "outbox.event.\\${routedByValue}",
+            "outbox.event.$${routedByValue}",
+            "outbox.event.$\\$${routedByValue}",
+            "$${file:secrets.properties:password}",
+            "${prefix}",
+            "${prefix}.${prefix}",
+            "${missing:fallback}",
+            "${missing:${prefix}}",
+            "${prefix:}.events",
+            "price$5",
+            "price$",
+            "a$$b",
+            "a$$$b",
+            "a$$$$b",
+            "$}",
+            "$:",
+            "\\$",
+            "^\\d+$",
+            "C:\\temp",
+            "C:\\\\$Recycle",
+            "a\\\\${prefix}",
+            "${prefix}\\"
+    })
+    public void shouldReadRemappedValueAsOriginalValue(String value) {
+        SmallRyeConfig config = config(Map.of(
+                "debezium.source.remapped", value,
+                "quarkus.debezium.bridged", value,
+                "debezium.transforms", "outbox",
+                "debezium.transforms.outbox.remapped", value,
+                "prefix", "inventory"),
+                Map.of("DEBEZIUM_SOURCE_FROMENV", value));
+
+        assertThat(config.getValue("quarkus.debezium.remapped", String.class)).isEqualTo(config.getValue("debezium.source.remapped", String.class));
+        assertThat(config.getValue("debezium.source.bridged", String.class)).isEqualTo(config.getValue("quarkus.debezium.bridged", String.class));
+        assertThat(config.getValue("quarkus.debezium.transforms.outbox.remapped", String.class))
+                .isEqualTo(config.getValue("debezium.transforms.outbox.remapped", String.class));
+        assertThat(config.getValue("quarkus.debezium.fromenv", String.class)).isEqualTo(config.getValue("debezium.source.fromenv", String.class));
+    }
+
+    @Test
+    @FixFor("debezium/dbz#2818")
+    public void shouldReuseSinkPropertiesWhenSinkTypeIsExpression() {
+        SmallRyeConfig config = config(Map.of(
+                "debezium.sink.type", "${sink}",
+                "sink", "redis",
+                "debezium.sink.redis.address", "localhost:6379"));
+
+        assertThat(config.getValue("quarkus.debezium.name", String.class)).isEqualTo("redis");
+        assertThat(config.getValue("quarkus.debezium.schema.history.internal.redis.address", String.class)).isEqualTo("localhost:6379");
+        assertThat(config.getValue("quarkus.debezium.offset.storage.redis.address", String.class)).isEqualTo("localhost:6379");
+    }
+
+    @Test
+    @FixFor("debezium/dbz#2818")
+    public void shouldPreserveEmptyValueFromExpression() {
+        SmallRyeConfig config = config(Map.of("debezium.source.table.include.list", "${tables:}"));
+
+        assertThat(config.getValue("quarkus.debezium.table.include.list", String.class)).isEmpty();
+    }
+
+    @Test
+    @FixFor("debezium/dbz#2818")
+    public void shouldExpandRemappedValuesWithLaterConfigSource() {
+        SmallRyeConfig config = new SmallRyeConfigBuilder()
+                .addDefaultInterceptors()
+                .addDiscoveredInterceptors()
+                .withConverters(new EmptyStringConverter[]{ new EmptyStringConverter() })
+                .withSources(new PropertiesConfigSource(Map.of(
+                        "debezium.sink.type", "${SINK_TYPE}",
+                        "debezium.source.database.user", "${DBZ_USER}",
+                        "debezium.source.database.password", "${DBZ_PASSWORD:fallback}",
+                        "debezium.source.database.dbname", "$${DBZ_DB}",
+                        "debezium.source.table.include.list", "${DBZ_TABLES:}",
+                        "debezium.source.column.include.list", "${DBZ_COLUMNS:}"), "test", 300))
+                // Sources from another factory are not visible to the factory context, as with kubernetes-config secrets.
+                .withSources(new LaterConfigSourceFactory(Map.of(
+                        "SINK_TYPE", "redis",
+                        "DBZ_USER", "dbz",
+                        "DBZ_PASSWORD", "dbz-password",
+                        "DBZ_TABLES", "inventory.customers")))
+                .withSources(new DebeziumServerConfigSourceFactory())
+                .build();
+
+        assertThat(config.getValue("quarkus.debezium.name", String.class)).isEqualTo("redis");
+        assertThat(config.getValue("quarkus.debezium.database.user", String.class)).isEqualTo("dbz");
+        assertThat(config.getValue("quarkus.debezium.database.password", String.class)).isEqualTo("dbz-password");
+        assertThat(config.getValue("quarkus.debezium.database.dbname", String.class)).isEqualTo("${DBZ_DB}");
+        assertThat(config.getValue("quarkus.debezium.table.include.list", String.class)).isEqualTo("inventory.customers");
+        assertThat(config.getValue("quarkus.debezium.column.include.list", String.class)).isEmpty();
+    }
+
+    private static SmallRyeConfig config(Map<String, String> properties) {
+        return config(properties, Map.of());
+    }
+
+    private static SmallRyeConfig config(Map<String, String> properties, Map<String, String> env) {
+        return new SmallRyeConfigBuilder()
+                .addDefaultInterceptors()
+                .addDiscoveredInterceptors()
+                .withConverters(new EmptyStringConverter[]{ new EmptyStringConverter() })
+                .withSources(new PropertiesConfigSource(properties, "test", 300))
+                .withSources(new EnvConfigSource(env, 300))
+                .withSources(new DebeziumServerConfigSourceFactory())
+                .build();
+    }
+
     private static Map<String, String> remap(Map<String, String> input) {
         Map<String, String> result = new HashMap<>();
         new DebeziumServerConfigSourceFactory().getConfigSources(new MapConfigSourceContext(input))
                 .forEach(source -> result.putAll(source.getProperties()));
         return result;
+    }
+
+    private static final class LaterConfigSourceFactory implements ConfigSourceFactory {
+
+        private final Map<String, String> properties;
+
+        LaterConfigSourceFactory(Map<String, String> properties) {
+            this.properties = properties;
+        }
+
+        @Override
+        public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
+            return List.of(new PropertiesConfigSource(properties, "later", 270));
+        }
     }
 
     /**
