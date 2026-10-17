@@ -40,6 +40,7 @@ import com.google.pubsub.v1.PubsubMessage;
 
 import io.debezium.DebeziumException;
 import io.debezium.Module;
+import io.debezium.annotation.VisibleForTesting;
 import io.debezium.config.Field;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
@@ -67,7 +68,12 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
         Publisher get(String topicName);
     }
 
-    private PubSubLiteChangeConsumerConfig config;
+    @VisibleForTesting
+    PubSubLiteChangeConsumerConfig config;
+
+    @VisibleForTesting
+    boolean headerSchemasEnabled = true;
+
     private PublisherBuilder publisherBuilder;
     private final Map<String, Publisher> publishers = new HashMap<>();
 
@@ -82,6 +88,7 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
         // Load configuration
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new PubSubLiteChangeConsumerConfig(configuration);
+        this.headerSchemasEnabled = isHeaderSchemasEnabled(mpConfig);
 
         String projectId = (config.getProjectId() != null) ? config.getProjectId() : ServiceOptions.getDefaultProjectId();
         String region = config.getRegion();
@@ -152,7 +159,8 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
 
     }
 
-    private PubsubMessage buildPubSubMessage(BatchEvent record) {
+    @VisibleForTesting
+    PubsubMessage buildPubSubMessage(BatchEvent record) {
 
         final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
 
@@ -175,9 +183,36 @@ public class PubSubLiteChangeConsumer extends BaseChangeConsumer implements Debe
             pubsubMessage.setData(ByteString.copyFrom((byte[]) record.value()));
         }
 
-        pubsubMessage.putAllAttributes(convertHeaders(record));
+        pubsubMessage.putAllAttributes(resolveAttributes(record));
 
         return pubsubMessage.build();
+    }
+
+    /**
+     * Resolves the Pub/Sub Lite message attributes based on {@code debezium.format.header.schemas.enable};
+     * when schemas are disabled the raw Connect headers are used to avoid JSON-quoted values.
+     */
+    private Map<String, String> resolveAttributes(BatchEvent record) {
+        return headerSchemasEnabled ? convertHeaders(record) : extractRawHeaders(record);
+    }
+
+    /**
+     * Extracts raw Connect header values from the {@code SourceRecord}, bypassing the converter.
+     *
+     * <p>{@code convertHeaders} reads headers already serialized by the header converter (a JSON string
+     * wrapped in quotes when schemas are disabled); this reads the plain Java values instead, skipping
+     * {@code null} values.
+     */
+    private Map<String, String> extractRawHeaders(BatchEvent record) {
+        Map<String, String> result = new HashMap<>();
+        if (record.record() != null && record.record().headers() != null) {
+            record.record().headers().forEach(header -> {
+                if (header.value() != null) {
+                    result.put(header.key(), asString(header.value()));
+                }
+            });
+        }
+        return result;
     }
 
     @Override
