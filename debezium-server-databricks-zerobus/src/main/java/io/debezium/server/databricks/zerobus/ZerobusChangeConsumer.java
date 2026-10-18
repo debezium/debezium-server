@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import io.debezium.openlineage.dataset.DatasetMetadata.DataStore;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -61,7 +62,7 @@ import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 @Named("zerobus")
 @Dependent
 public class ZerobusChangeConsumer extends BaseChangeConsumer
-        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink, DataStore.Provider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZerobusChangeConsumer.class);
 
@@ -631,5 +632,10 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
         return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+    }
+
+    @Override
+    public Optional<DataStore> get() {
+        return Optional.of(DataStore.DATABASE);
     }
 }

@@ -24,6 +24,11 @@
             <artifactId>debezium-server-core</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-openlineage-api</artifactId>
+        </dependency>
+
         <!-- Kafka client provides AuthenticateCallbackHandler / OAuthBearer SPI (Kafka route) -->
         <dependency>
             <groupId>org.apache.kafka</groupId>

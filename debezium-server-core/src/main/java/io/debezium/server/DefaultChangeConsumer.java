@@ -7,7 +7,6 @@ package io.debezium.server;
 
 import static io.debezium.openlineage.OpenLineageConfig.OPEN_LINEAGE_INTEGRATION_ENABLED;
 import static io.debezium.openlineage.dataset.DatasetMetadata.STREAM_DATASET_TYPE;
-import static io.debezium.openlineage.dataset.DatasetMetadata.DataStore.KAFKA;
 import static io.debezium.openlineage.dataset.DatasetMetadata.DatasetKind.OUTPUT;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_TYPE;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SOURCE_PREFIX;
@@ -45,22 +44,19 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
     private final ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer;
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
-    private final boolean isOpenLineageEnabled;
+    private final Optional<DatasetMetadata.DataStore.Provider> openlineageDatastoreProvider;
 
     @Inject
     public DefaultChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer, Config config) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();
-        this.isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, boolean.class).orElse(false);
+        this.openlineageDatastoreProvider = getOpenLineageDatastoreProvider(delegateConsumer, config);
     }
 
     @Capturing
     public void handleBatch(CapturingEvents<BatchEvent> events)
             throws InterruptedException {
-
-        final String sink = config.getValue(PROP_SINK_TYPE, String.class);
-
         try {
             this.delegateConsumer.get().handle(events);
         }
@@ -68,13 +64,8 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
             throw new DebeziumException("Error while executing batch", e);
         }
 
-        if (isOpenLineageEnabled) {
-            Optional<DatasetMetadata.DataStore> dataStore = getDataStore(sink);
-            dataStore.ifPresentOrElse(
-                    extractLineageMetadata(events),
-                    () -> LOGGER.warn("Current {} sink is not supported to emit OpenLineage output dataset", sink));
-        }
-
+        openlineageDatastoreProvider.flatMap(DatasetMetadata.DataStore.Provider::get)
+                .ifPresent(extractLineageMetadata(events));
     }
 
     private Consumer<DatasetMetadata.DataStore> extractLineageMetadata(CapturingEvents<BatchEvent> events) {
@@ -92,11 +83,19 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
         });
     }
 
-    private Optional<DatasetMetadata.DataStore> getDataStore(String sink) {
-        return switch (sink) {
-            case "kafka" -> Optional.of(KAFKA);
-            default -> Optional.empty();
-        };
+    private Optional<DatasetMetadata.DataStore.Provider> getOpenLineageDatastoreProvider(ChangeConsumerHolder delegateConsumer, Config config) {
+        boolean isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, boolean.class).orElse(false);
+        if (isOpenLineageEnabled) {
+            if (delegateConsumer.get() instanceof DatasetMetadata.DataStore.Provider provider) {
+                return Optional.of(provider);
+            }
+            else {
+                String sink = config.getValue(PROP_SINK_TYPE, String.class);
+                LOGGER.warn("Current {} sink does not support emitting OpenLineage output dataset", sink);
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
     }
 
 }
