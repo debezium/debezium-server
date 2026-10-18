@@ -13,11 +13,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.debezium</groupId>
-            <artifactId>debezium-server-api</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
         </dependency>
