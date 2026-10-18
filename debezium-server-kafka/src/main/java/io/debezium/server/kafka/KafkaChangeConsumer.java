@@ -8,11 +8,13 @@ package io.debezium.server.kafka;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.openlineage.dataset.DatasetMetadata;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -45,7 +47,8 @@ import io.debezium.server.api.DebeziumServerSink;
 
 @Named("kafka")
 @Dependent
-public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
+public class KafkaChangeConsumer extends BaseChangeConsumer
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink, DatasetMetadata.DataStore.Provider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaChangeConsumer.class);
 
@@ -166,5 +169,10 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumS
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
         return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+    }
+
+    @Override
+    public Optional<DatasetMetadata.DataStore> get() {
+        return Optional.of(DatasetMetadata.DataStore.KAFKA);
     }
 }
