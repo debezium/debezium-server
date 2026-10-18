@@ -636,6 +636,6 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
     @Override
     public Optional<DataStore> get() {
-        return Optional.of(DataStore.DATABASE);
+        return Optional.of(DataStore.SINK_PROVIDED);
     }
 }
