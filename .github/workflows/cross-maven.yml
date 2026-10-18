@@ -70,10 +70,38 @@ jobs:
           repository: debezium/debezium
           ref: ${{ github.base_ref }}
           path: core
+      - name: Check if pull request branch exists in debezium-quarkus repository
+        id: quarkus_branch
+        env:
+          branch_name: ${{ github.head_ref }}
+        run: |
+            next_url="https://api.github.com/repos/debezium/debezium-quarkus/pulls?per_page=100&sort=updated"
+            branch_found=false
+            while [ -n "$next_url" ] && ! $branch_found; do
+                response=$(curl -si -X "GET" --url "$next_url")
+                next_url=$(echo "$response" | grep -oP '(?<=<)[^>]*(?=>; rel="next")' || true)
+                echo "$response" | sed -n '/\[/,$ p' | jq -r '.[] | .head.ref' > /tmp/quarkus_pulls_page.txt
+
+                while IFS=" " read -r BRANCH; do
+                  if [ "$branch_name" = "$BRANCH" ]; then
+                    branch_found=true
+                    echo "BRANCH_FOUND=true" >> $GITHUB_OUTPUT
+                  fi
+                done < /tmp/quarkus_pulls_page.txt
+            done
+      - name: Checkout quarkus extensions repository with pull request branch
+        if: ${{ steps.quarkus_branch.outputs.BRANCH_FOUND == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event.pull_request.user.login }}/debezium-quarkus
+          ref: ${{ github.head_ref }}
+          path: debezium-quarkus
       - name: Checkout quarkus extensions repository with default base branch
+        if: ${{ steps.quarkus_branch.outputs.BRANCH_FOUND != 'true' }}
         uses: actions/checkout@v7
         with:
           repository: debezium/debezium-quarkus
+          ref: ${{ github.base_ref }}
           path: debezium-quarkus
       - name: Checkout db2 repository with default base branch
         uses: actions/checkout@v7
