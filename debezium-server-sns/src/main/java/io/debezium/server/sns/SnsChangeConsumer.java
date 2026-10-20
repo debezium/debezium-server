@@ -9,7 +9,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,7 +20,6 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 
-import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -31,7 +29,6 @@ import org.slf4j.LoggerFactory;
 import io.debezium.DebeziumException;
 import io.debezium.Module;
 import io.debezium.config.Field;
-import io.debezium.engine.ChangeEvent;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
 import io.debezium.runtime.BatchEvent;
@@ -206,7 +203,7 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumSer
                 .message(messageBody);
 
         // Forward headers as MessageAttributes
-        Map<String, String> headers = extractRawHeaders(event);
+        Map<String, String> headers = convertRawHeaders(event);
         if (!headers.isEmpty()) {
             Map<String, MessageAttributeValue> attributes = headers.entrySet().stream()
                     .collect(Collectors.toMap(
@@ -264,24 +261,6 @@ public class SnsChangeConsumer extends BaseChangeConsumer implements DebeziumSer
         }
         // Non-string Connect type, fall back to the converter-serialized output
         return asString(event.value());
-    }
-
-    /**
-     * Extracts raw Connect header values from the {@link SourceRecord}, bypassing the converter.
-     *
-     * <p>The inherited {@code convertHeaders} reads from the {@link ChangeEvent}, where headers
-     * are already serialized by the header converter (e.g., {@code JsonConverter} wrapping each
-     * value in {@code {"schema":...,"payload":"..."}}). This method reads directly from the
-     * {@link SourceRecord}, where header values are still plain Java objects
-     * (typically Strings for the Outbox Event Router).
-     */
-    private Map<String, String> extractRawHeaders(BatchEvent record) {
-        Map<String, String> result = new HashMap<>();
-        for (Header header : record.record().headers()) {
-            Object value = header.value();
-            result.put(header.key(), value != null ? value.toString() : "");
-        }
-        return result;
     }
 
     private void validatePayloadSize(String messageBody, String destination) {
