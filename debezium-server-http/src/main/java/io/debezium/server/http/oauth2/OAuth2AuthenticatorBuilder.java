@@ -61,24 +61,10 @@ public class OAuth2AuthenticatorBuilder {
                 .ifPresent(builder::setScope);
 
         config.getOptionalValue(propPrefix + PROP_CLIENT_AUTH_METHOD, String.class)
-                .ifPresent(method -> {
-                    switch (method.toLowerCase()) {
-                        case "client_secret_basic" -> builder.setClientAuthMethod(OAuth2Authenticator.ClientAuthMethod.CLIENT_SECRET_BASIC);
-                        case "client_secret_post" -> builder.setClientAuthMethod(OAuth2Authenticator.ClientAuthMethod.CLIENT_SECRET_POST);
-                        default -> throw new DebeziumException("Unknown OAuth2 client auth method: '" + method
-                                + "'. Supported values: client_secret_basic, client_secret_post");
-                    }
-                });
+                .ifPresent(builder::setClientAuthMethod);
 
         config.getOptionalValue(propPrefix + PROP_HTTP_METHOD, String.class)
-                .ifPresent(method -> {
-                    switch (method.toUpperCase()) {
-                        case "POST" -> builder.setTokenHttpMethod(OAuth2Authenticator.TokenHttpMethod.POST);
-                        case "GET" -> builder.setTokenHttpMethod(OAuth2Authenticator.TokenHttpMethod.GET);
-                        default -> throw new DebeziumException("Unknown OAuth2 token HTTP method: '" + method
-                                + "'. Supported values: POST, GET");
-                    }
-                });
+                .ifPresent(builder::setTokenHttpMethod);
 
         // Collect any additional params with the oauth2.params. prefix
         String fullParamsPrefix = propPrefix + PROP_ADDITIONAL_PARAMS_PREFIX;
@@ -118,8 +104,28 @@ public class OAuth2AuthenticatorBuilder {
         return this;
     }
 
+    public OAuth2AuthenticatorBuilder setClientAuthMethod(String method) {
+        switch (method.toLowerCase()) {
+            case "client_secret_basic" -> setClientAuthMethod(OAuth2Authenticator.ClientAuthMethod.CLIENT_SECRET_BASIC);
+            case "client_secret_post" -> setClientAuthMethod(OAuth2Authenticator.ClientAuthMethod.CLIENT_SECRET_POST);
+            default -> throw new DebeziumException("Unknown OAuth2 client auth method: '" + method
+                    + "'. Supported values: client_secret_basic, client_secret_post");
+        }
+        return this;
+    }
+
     public OAuth2AuthenticatorBuilder setTokenHttpMethod(OAuth2Authenticator.TokenHttpMethod tokenHttpMethod) {
         this.tokenHttpMethod = tokenHttpMethod;
+        return this;
+    }
+
+    public OAuth2AuthenticatorBuilder setTokenHttpMethod(String method) {
+        switch (method.toUpperCase()) {
+            case "POST" -> setTokenHttpMethod(OAuth2Authenticator.TokenHttpMethod.POST);
+            case "GET" -> setTokenHttpMethod(OAuth2Authenticator.TokenHttpMethod.GET);
+            default -> throw new DebeziumException("Unknown OAuth2 token HTTP method: '" + method
+                    + "'. Supported values: POST, GET");
+        }
         return this;
     }
 

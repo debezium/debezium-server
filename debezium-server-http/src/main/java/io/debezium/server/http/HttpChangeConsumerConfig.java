@@ -6,6 +6,8 @@
 package io.debezium.server.http;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.apache.kafka.common.config.ConfigDef;
 
@@ -132,26 +134,45 @@ public class HttpChangeConsumerConfig {
             .withDescription("JWT refresh token expiration time in minutes.");
 
     // OAuth2 Authentication fields
-    public static final Field OAUTH2_CLIENT_ID = Field.create("authentication.oauth2.client-id")
+    public static final Field OAUTH2_CLIENT_ID = Field.create("authentication.oauth2.client_id")
             .withDisplayName("OAuth2 client ID")
             .withType(ConfigDef.Type.STRING)
             .withWidth(ConfigDef.Width.MEDIUM)
             .withImportance(ConfigDef.Importance.HIGH)
+            .withDeprecatedAliases("authentication.oauth2.client-id")
             .withDescription("Client ID for OAuth2 authentication.");
 
-    public static final Field OAUTH2_CLIENT_SECRET = Field.create("authentication.oauth2.client-secret")
+    public static final Field OAUTH2_CLIENT_SECRET = Field.create("authentication.oauth2.client_secret")
             .withDisplayName("OAuth2 client secret")
             .withType(ConfigDef.Type.PASSWORD)
             .withWidth(ConfigDef.Width.MEDIUM)
             .withImportance(ConfigDef.Importance.HIGH)
+            .withDeprecatedAliases("authentication.oauth2.client-secret")
             .withDescription("Client secret for OAuth2 authentication.");
 
-    public static final Field OAUTH2_TOKEN_URL = Field.create("authentication.oauth2.token-url")
+    public static final Field OAUTH2_TOKEN_URL = Field.create("authentication.oauth2.token_url")
             .withDisplayName("OAuth2 token URL")
             .withType(ConfigDef.Type.STRING)
             .withWidth(ConfigDef.Width.LONG)
             .withImportance(ConfigDef.Importance.HIGH)
+            .withDeprecatedAliases("authentication.oauth2.token-url")
             .withDescription("Token endpoint URL for OAuth2 authentication.");
+
+    public static final Field OAUTH2_CLIENT_AUTH_METHOD = Field.create("authentication.oauth2.client_auth_method")
+            .withDisplayName("OAuth2 client auth method")
+            .withType(ConfigDef.Type.STRING)
+            .withDefault("client_secret_basic")
+            .withWidth(ConfigDef.Width.MEDIUM)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("How client credentials are sent to the token endpoint. Valid values: 'client_secret_basic', 'client_secret_post'.");
+
+    public static final Field OAUTH2_TOKEN_HTTP_METHOD = Field.create("authentication.oauth2.token_url.http_method")
+            .withDisplayName("OAuth2 token HTTP method")
+            .withType(ConfigDef.Type.STRING)
+            .withDefault("POST")
+            .withWidth(ConfigDef.Width.SHORT)
+            .withImportance(ConfigDef.Importance.MEDIUM)
+            .withDescription("HTTP method for the token request. Valid values: 'POST', 'GET'.");
 
     public static final Field OAUTH2_SCOPE = Field.create("authentication.oauth2.scope")
             .withDisplayName("OAuth2 scope")
@@ -188,6 +209,9 @@ public class HttpChangeConsumerConfig {
     private String oauth2ClientId;
     private String oauth2ClientSecret;
     private String oauth2TokenUrl;
+    private String oauth2ClientAuthMethod;
+    private String oauth2TokenHttpMethod;
+    private Map<String, String> oauth2Params;
     private String oauth2Scope;
     private String webhookSecret;
 
@@ -215,8 +239,27 @@ public class HttpChangeConsumerConfig {
         oauth2ClientId = config.getString(OAUTH2_CLIENT_ID);
         oauth2ClientSecret = config.getString(OAUTH2_CLIENT_SECRET);
         oauth2TokenUrl = config.getString(OAUTH2_TOKEN_URL);
+        oauth2ClientAuthMethod = config.getString(OAUTH2_CLIENT_AUTH_METHOD);
+        oauth2TokenHttpMethod = config.getString(OAUTH2_TOKEN_HTTP_METHOD);
+        oauth2Params = oauth2Params(config);
         oauth2Scope = config.getString(OAUTH2_SCOPE);
         webhookSecret = config.getString(WEBHOOK_SECRET);
+    }
+
+    private static Map<String, String> oauth2Params(Configuration config) {
+        final Map<String, String> params = new LinkedHashMap<>();
+        final String prefix = "authentication.oauth2.params.";
+        for (String key : config.keys()) {
+            if (!key.startsWith(prefix)) {
+                continue;
+            }
+            final String name = key.substring(prefix.length());
+            final String paramValue = config.getString(key);
+            if (paramValue != null) {
+                params.put(name, paramValue);
+            }
+        }
+        return params;
     }
 
     public String getUrl() {
@@ -293,5 +336,17 @@ public class HttpChangeConsumerConfig {
 
     public String getOauth2Scope() {
         return oauth2Scope;
+    }
+
+    public String getOauth2ClientAuthMethod() {
+        return oauth2ClientAuthMethod;
+    }
+
+    public String getOauth2TokenHttpMethod() {
+        return oauth2TokenHttpMethod;
+    }
+
+    public Map<String, String> getOauth2Params() {
+        return oauth2Params;
     }
 }

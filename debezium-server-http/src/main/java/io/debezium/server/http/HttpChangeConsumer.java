@@ -281,10 +281,15 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumSe
                     .setClientId(config.getOauth2ClientId())
                     .setClientSecret(config.getOauth2ClientSecret())
                     .setTokenUri(new java.net.URI(config.getOauth2TokenUrl()))
+                    .setClientAuthMethod(config.getOauth2ClientAuthMethod())
+                    .setTokenHttpMethod(config.getOauth2TokenHttpMethod())
                     .setHttpClient(client);
 
             if (config.getOauth2Scope() != null) {
                 builder.setScope(config.getOauth2Scope());
+            }
+            for (Map.Entry<String, String> param : config.getOauth2Params().entrySet()) {
+                builder.addAdditionalParam(param.getKey(), param.getValue());
             }
 
             return builder.build();
@@ -371,6 +376,8 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumSe
                 HttpChangeConsumerConfig.OAUTH2_CLIENT_ID,
                 HttpChangeConsumerConfig.OAUTH2_CLIENT_SECRET,
                 HttpChangeConsumerConfig.OAUTH2_TOKEN_URL,
+                HttpChangeConsumerConfig.OAUTH2_CLIENT_AUTH_METHOD,
+                HttpChangeConsumerConfig.OAUTH2_TOKEN_HTTP_METHOD,
                 HttpChangeConsumerConfig.OAUTH2_SCOPE,
                 HttpChangeConsumerConfig.WEBHOOK_SECRET);
     }
