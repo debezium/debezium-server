@@ -51,6 +51,7 @@ import com.google.pubsub.v1.PubsubMessage;
 
 import io.debezium.DebeziumException;
 import io.debezium.Module;
+import io.debezium.annotation.VisibleForTesting;
 import io.debezium.config.Field;
 import io.debezium.metadata.ComponentMetadata;
 import io.debezium.metadata.ComponentMetadataFactory;
@@ -83,9 +84,13 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         Publisher get(ProjectTopicName topicName);
     }
 
-    private PubSubChangeConsumerConfig config;
-    private String projectId;
+    @VisibleForTesting
+    PubSubChangeConsumerConfig config;
 
+    @VisibleForTesting
+    boolean headerSchemasEnabled = true;
+
+    private String projectId;
     private final Map<String, Publisher> publishers = new HashMap<>();
     private PublisherBuilder publisherBuilder;
 
@@ -104,6 +109,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
         // Load configuration
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new PubSubChangeConsumerConfig(configuration);
+        this.headerSchemasEnabled = isHeaderSchemasEnabled(mpConfig);
 
         projectId = (config.getProjectId() != null) ? config.getProjectId() : ServiceOptions.getDefaultProjectId();
 
@@ -254,7 +260,8 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
     }
 
-    private PubsubMessage buildPubSubMessage(BatchEvent record) {
+    @VisibleForTesting
+    PubsubMessage buildPubSubMessage(BatchEvent record) {
 
         final PubsubMessage.Builder pubsubMessage = PubsubMessage.newBuilder();
 
@@ -282,7 +289,7 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
             pubsubMessage.setData(ByteString.copyFrom((byte[]) record.value()));
         }
 
-        pubsubMessage.putAllAttributes(convertHeaders(record));
+        pubsubMessage.putAllAttributes(resolveHeaders(record, headerSchemasEnabled));
 
         return pubsubMessage.build();
     }
