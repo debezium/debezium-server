@@ -14,7 +14,7 @@
     <properties>
         <version.aws>2.54.20</version.aws>
         <version.rabbitmq>5.34.0</version.rabbitmq>
-        <version.lz4>1.11.3</version.lz4>
+        <version.lz4>1.11.4</version.lz4>
         <version.kinesis>${version.aws}</version.kinesis>
         <version.zerobus.sdk>1.3.0</version.zerobus.sdk>
         <version.zerobus.protobuf>4.33.2</version.zerobus.protobuf>
