@@ -178,7 +178,10 @@ public class DebeziumServerConfigSourceFactoryTest {
                         "debezium.sink.type", "${SINK_TYPE}",
                         "debezium.source.database.user", "${DBZ_USER}",
                         "debezium.source.database.password", "${DBZ_PASSWORD:fallback}",
+                        "debezium.source.database.hostname", "${DBZ_HOSTNAME:fallback}",
                         "debezium.source.database.dbname", "$${DBZ_DB}",
+                        "debezium.source.schema.include.list", "\\${DBZ_SCHEMAS}",
+                        "debezium.source.table.exclude.list", "$\\$${DBZ_TABLES}",
                         "debezium.source.table.include.list", "${DBZ_TABLES:}",
                         "debezium.source.column.include.list", "${DBZ_COLUMNS:}"), "test", 300))
                 // Sources from another factory are not visible to the factory context, as with kubernetes-config secrets.
@@ -186,6 +189,8 @@ public class DebeziumServerConfigSourceFactoryTest {
                         "SINK_TYPE", "redis",
                         "DBZ_USER", "dbz",
                         "DBZ_PASSWORD", "dbz-password",
+                        "DBZ_DB", "inventory",
+                        "DBZ_SCHEMAS", "inventory",
                         "DBZ_TABLES", "inventory.customers")))
                 .withSources(new DebeziumServerConfigSourceFactory())
                 .build();
@@ -193,7 +198,10 @@ public class DebeziumServerConfigSourceFactoryTest {
         assertThat(config.getValue("quarkus.debezium.name", String.class)).isEqualTo("redis");
         assertThat(config.getValue("quarkus.debezium.database.user", String.class)).isEqualTo("dbz");
         assertThat(config.getValue("quarkus.debezium.database.password", String.class)).isEqualTo("dbz-password");
+        assertThat(config.getValue("quarkus.debezium.database.hostname", String.class)).isEqualTo("fallback");
         assertThat(config.getValue("quarkus.debezium.database.dbname", String.class)).isEqualTo("${DBZ_DB}");
+        assertThat(config.getValue("quarkus.debezium.schema.include.list", String.class)).isEqualTo("${DBZ_SCHEMAS}");
+        assertThat(config.getValue("quarkus.debezium.table.exclude.list", String.class)).isEqualTo("$${DBZ_TABLES}");
         assertThat(config.getValue("quarkus.debezium.table.include.list", String.class)).isEqualTo("inventory.customers");
         assertThat(config.getValue("quarkus.debezium.column.include.list", String.class)).isEmpty();
     }
