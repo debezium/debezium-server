@@ -5,9 +5,7 @@
  */
 package io.debezium.server.api;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
 import io.debezium.common.annotation.Incubating;
 import io.debezium.metadata.ComponentMetadataProvider;
