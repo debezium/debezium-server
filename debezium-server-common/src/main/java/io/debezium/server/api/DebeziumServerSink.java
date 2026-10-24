@@ -5,11 +5,14 @@
  */
 package io.debezium.server.api;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import io.debezium.common.annotation.Incubating;
 import io.debezium.metadata.ComponentMetadataProvider;
 import io.debezium.metadata.ConfigDescriptor;
+import io.debezium.config.Configuration;
 import io.debezium.server.ConnectionValidationResult;
 
 /**
@@ -48,6 +51,8 @@ public interface DebeziumServerSink extends ConfigDescriptor, ComponentMetadataP
     default void configure(org.eclipse.microprofile.config.Config config) throws Exception {
         // Default implementation does nothing - sinks override this method
     }
+
+    Configuration getConfiguration();
 
     /**
      * Closes the sink and releases all resources.

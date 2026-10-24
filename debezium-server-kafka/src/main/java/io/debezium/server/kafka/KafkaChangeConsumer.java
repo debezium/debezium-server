@@ -14,6 +14,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.config.Configuration;
 import io.debezium.openlineage.dataset.DatasetMetadata;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -59,6 +60,7 @@ public class KafkaChangeConsumer extends BaseChangeConsumer
     private static final String PROP_PREFIX_PRODUCER = PROP_PREFIX + "producer.";
 
     private KafkaChangeConsumerConfig config;
+    private Configuration sinkConfig;
 
     private KafkaProducer<Object, Object> producer;
 
@@ -79,9 +81,15 @@ public class KafkaChangeConsumer extends BaseChangeConsumer
         // Load configuration
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new KafkaChangeConsumerConfig(configuration);
+        this.sinkConfig = configuration;
 
         producer = new KafkaProducer<>(getConfigSubset(mpConfig, PROP_PREFIX_PRODUCER));
         LOGGER.info("consumer started...");
+    }
+
+    @Override
+    public Configuration getConfiguration() {
+        return this.sinkConfig;
     }
 
     @PreDestroy
@@ -172,7 +180,7 @@ public class KafkaChangeConsumer extends BaseChangeConsumer
     }
 
     @Override
-    public Optional<DatasetMetadata.DataStore> get() {
-        return Optional.of(DatasetMetadata.DataStore.KAFKA);
+    public DatasetMetadata.DataStore get() {
+        return DatasetMetadata.DataStore.KAFKA;
     }
 }
