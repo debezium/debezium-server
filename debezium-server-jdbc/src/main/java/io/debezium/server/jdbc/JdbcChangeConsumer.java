@@ -87,6 +87,7 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
         DebeziumException putException = null;
         try {
             task.put(sinkRecords);
+            task.flush(Map.of());
         }
         catch (Exception e) {
             LOGGER.error("JdbcSinkTask failed", e);
@@ -123,6 +124,7 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
 
         if (task != null) {
             try {
+                task.flush(Map.of());
                 task.stop();
             }
             catch (Exception e) {
