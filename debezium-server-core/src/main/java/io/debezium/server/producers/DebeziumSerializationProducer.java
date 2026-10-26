@@ -47,7 +47,7 @@ import io.quarkus.runtime.Startup;
  * {@code binary}, {@code simplestring}, {@code connect}, {@code clientprovided}
  * <p>
  * Supported formats for headers:
- * {@code json}, {@code jsonbytearray}, {@code connect}, {@code clientprovided}
+ * {@code json}, {@code jsonbytearray}, {@code connect}, {@code clientprovided}, {@code simplestring}
  * <p>
  * If an unknown format is specified, a {@link DebeziumException} is thrown at application startup.
  *
@@ -148,6 +148,9 @@ public class DebeziumSerializationProducer {
         }
         if (FORMAT_CLIENT_PROVIDED.equals(formatName)) {
             return ClientProvided.class;
+        }
+        if (FORMAT_STRING.equals(formatName)) {
+            return SimpleString.class;
         }
 
         throw new DebeziumException("Unknown format '" + formatName + "' for option " + "'" + PROP_HEADER_FORMAT + "'");
