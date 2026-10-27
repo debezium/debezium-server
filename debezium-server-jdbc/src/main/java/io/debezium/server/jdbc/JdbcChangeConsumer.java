@@ -125,6 +125,11 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
         if (task != null) {
             try {
                 task.flush(Map.of());
+            }
+            catch (Exception e) {
+                LOGGER.warn("Failed to flush the remaining buffer on shutdown", e);
+            }
+            try {
                 task.stop();
             }
             catch (Exception e) {
