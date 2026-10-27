@@ -13,6 +13,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
@@ -29,6 +30,7 @@ import io.quarkus.test.junit.TestProfile;
 @TestProfile(DebeziumServerSchemaRegistryProfile.class)
 @EnabledIfSystemProperty(named = "debezium.format.key", matches = "protobuf")
 @EnabledIfSystemProperty(named = "debezium.format.value", matches = "protobuf")
+@Disabled("The Confluent Protobuf converter is not compatible with Kafka 4.4.0; re-enable once the Confluent and protobuf upgrades land")
 public class DebeziumServerWithSchemaRegistryIT {
 
     private static final int MESSAGE_COUNT = 4;
