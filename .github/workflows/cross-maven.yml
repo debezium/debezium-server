@@ -8,6 +8,7 @@
 # If a `pull_request` with same branch name is present in the Debezium's upstream core repository, then the core build of this `pull_request`
 # will be based on `pull_request` branch of user's Debezium core repository.
 # Otherwise the core build of this `pull_request` will be based on the `main` branch of Debezium's upstream core repository.
+# The same branch matching is applied to the debezium-quarkus and debezium-connector-elasticsearch repositories.
 
 name: Cross Maven CI
 
@@ -103,6 +104,41 @@ jobs:
           repository: debezium/debezium-quarkus
           ref: ${{ github.base_ref }}
           path: debezium-quarkus
+      - name: Check if pull request branch exists in debezium-connector-elasticsearch repository
+        id: elasticsearch_branch
+        env:
+          branch_name: ${{ github.head_ref }}
+        run: |
+            next_url="https://api.github.com/repos/debezium/debezium-connector-elasticsearch/pulls?per_page=100&sort=updated"
+            branch_found=false
+            while [ -n "$next_url" ] && ! $branch_found; do
+                response=$(curl -si -X "GET" --url "$next_url")
+                next_url=$(echo "$response" | grep -oP '(?<=<)[^>]*(?=>; rel="next")' || true)
+                echo "$response" | sed -n '/\[/,$ p' | jq -r '.[] | "\(.head.ref) \(.head.repo.full_name)"' > /tmp/elasticsearch_pulls_page.txt
+
+                while IFS=" " read -r BRANCH REPOSITORY; do
+                  if [ "$branch_name" = "$BRANCH" ]; then
+                    branch_found=true
+                    echo "BRANCH_FOUND=true" >> $GITHUB_OUTPUT
+                    echo "REPOSITORY=$REPOSITORY" >> $GITHUB_OUTPUT
+                    break
+                  fi
+                done < /tmp/elasticsearch_pulls_page.txt
+            done
+      - name: Checkout elasticsearch connector repository with pull request branch
+        if: ${{ steps.elasticsearch_branch.outputs.BRANCH_FOUND == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.elasticsearch_branch.outputs.REPOSITORY }}
+          ref: ${{ github.head_ref }}
+          path: elasticsearch
+      - name: Checkout elasticsearch connector repository with default base branch
+        if: ${{ steps.elasticsearch_branch.outputs.BRANCH_FOUND != 'true' }}
+        uses: actions/checkout@v7
+        with:
+          repository: debezium/debezium-connector-elasticsearch
+          ref: ${{ github.base_ref }}
+          path: elasticsearch
       - name: Checkout db2 repository with default base branch
         uses: actions/checkout@v7
         with:
@@ -130,6 +166,8 @@ jobs:
         run: ./server/mvnw clean install -f db2/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build informix
         run: ./server/mvnw clean install -f informix/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+      - name: Maven build elasticsearch connector
+        run: ./server/mvnw clean install -f elasticsearch/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build Quarkus Extensions
         run: ./server/mvnw clean install -f debezium-quarkus/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build Debezium Server
