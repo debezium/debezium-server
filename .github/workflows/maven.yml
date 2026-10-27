@@ -42,6 +42,11 @@ jobs:
         with:
           repository: debezium/debezium-quarkus
           path: debezium-quarkus
+      - name: Checkout Elasticsearch connector repository
+        uses: actions/checkout@v7
+        with:
+          repository: debezium/debezium-connector-elasticsearch
+          path: elasticsearch
       - name: Checkout Debezium Server
         uses: actions/checkout@v7
         with:
@@ -63,6 +68,8 @@ jobs:
         run: ./server/mvnw clean install -f db2/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build informix
         run: ./server/mvnw clean install -f informix/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+      - name: Maven build elasticsearch connector
+        run: ./server/mvnw clean install -f elasticsearch/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build extensions
         run: ./server/mvnw clean install -f debezium-quarkus/pom.xml -DskipTests -DskipITs -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
       - name: Maven build Debezium Server
