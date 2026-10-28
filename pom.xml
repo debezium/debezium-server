@@ -21,6 +21,8 @@
     </scm>
 
     <properties>
+        <confluent>true</confluent>
+
         <!-- Support all log levels in Debezium Server -->
         <quarkus.log.min-level>TRACE</quarkus.log.min-level>
 
