@@ -8,11 +8,14 @@ package io.debezium.server.kafka;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.debezium.config.Configuration;
+import io.debezium.openlineage.dataset.DatasetMetadata;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -45,7 +48,8 @@ import io.debezium.server.api.DebeziumServerSink;
 
 @Named("kafka")
 @Dependent
-public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
+public class KafkaChangeConsumer extends BaseChangeConsumer
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink, DatasetMetadata.DataStore.Provider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaChangeConsumer.class);
 
@@ -56,6 +60,7 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumS
     private static final String PROP_PREFIX_PRODUCER = PROP_PREFIX + "producer.";
 
     private KafkaChangeConsumerConfig config;
+    private Configuration sinkConfig;
 
     private KafkaProducer<Object, Object> producer;
 
@@ -76,9 +81,15 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumS
         // Load configuration
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new KafkaChangeConsumerConfig(configuration);
+        this.sinkConfig = configuration;
 
         producer = new KafkaProducer<>(getConfigSubset(mpConfig, PROP_PREFIX_PRODUCER));
         LOGGER.info("consumer started...");
+    }
+
+    @Override
+    public Configuration getConfiguration() {
+        return this.sinkConfig;
     }
 
     @PreDestroy
@@ -166,5 +177,10 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumS
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
         return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+    }
+
+    @Override
+    public DatasetMetadata.DataStore get() {
+        return DatasetMetadata.DataStore.KAFKA;
     }
 }
