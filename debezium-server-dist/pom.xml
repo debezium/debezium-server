@@ -66,7 +66,16 @@
             <groupId>io.debezium</groupId>
             <artifactId>debezium-connect-plugins</artifactId>
         </dependency>
-        
+
+        <!-- Apicurio registry serde, required by the built-in `avro`/`apicurio` format.
+             Bundled in the JVM distribution only: incompatible with the native
+             distribution, so it is not added there. -->
+        <dependency>
+            <groupId>io.apicurio</groupId>
+            <artifactId>apicurio-registry-utils-converter</artifactId>
+            <version>${version.apicurio}</version>
+        </dependency>
+
         <!-- Sink dependencies with property-controlled scopes -->
         <dependency>
             <groupId>io.debezium</groupId>
