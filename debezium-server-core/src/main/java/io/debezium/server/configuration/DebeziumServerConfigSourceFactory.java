@@ -28,8 +28,11 @@ import static io.debezium.server.configuration.DebeziumProperties.QUARKUS_VALUE_
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
@@ -74,13 +77,44 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
     public Iterable<ConfigSource> getConfigSources(ConfigSourceContext context) {
         Map<String, String> remapped = new HashMap<>();
 
-        configToProperties(context, remapped, PROP_SOURCE_PREFIX, QUARKUS_DEBEZIUM_PREFIX, true);
-        configToProperties(context, remapped, PROP_FORMAT_PREFIX, QUARKUS_KEY_CONVERTER_PREFIX, true);
-        configToProperties(context, remapped, PROP_FORMAT_PREFIX, QUARKUS_VALUE_CONVERTER_PREFIX, true);
-        configToProperties(context, remapped, PROP_FORMAT_PREFIX, QUARKUS_HEADER_CONVERTER_PREFIX, true);
-        configToProperties(context, remapped, PROP_KEY_FORMAT_PREFIX, QUARKUS_KEY_CONVERTER_PREFIX, true);
-        configToProperties(context, remapped, PROP_VALUE_FORMAT_PREFIX, QUARKUS_VALUE_CONVERTER_PREFIX, true);
-        configToProperties(context, remapped, PROP_HEADER_FORMAT_PREFIX, QUARKUS_HEADER_CONVERTER_PREFIX, true);
+        // Get property names as a mutable set to remove properties as they get processed, avoiding duplication
+        Set<String> remainingPropertyNames = new LinkedHashSet<>();
+        Map<String, String> normalizedNames = new HashMap<>();
+        Iterator<String> allNames = context.iterateNames();
+        while (allNames.hasNext()) {
+            String propName = allNames.next();
+            remainingPropertyNames.add(propName);
+            normalizedNames.put(propName, normalizePropertyName(propName));
+        }
+
+        // Handle source properties first
+        configToProperties(context, remapped,
+                new ConfigToPropertiesMapping(PROP_SOURCE_PREFIX, QUARKUS_DEBEZIUM_PREFIX, remainingPropertyNames, normalizedNames, true, true));
+
+        // Handle granular (debezium.format.key|value|header.*) props first and remove from the potential names
+        configToProperties(context, remapped,
+                new ConfigToPropertiesMapping(PROP_KEY_FORMAT_PREFIX, QUARKUS_KEY_CONVERTER_PREFIX, remainingPropertyNames, normalizedNames, true, true));
+        configToProperties(context, remapped,
+                new ConfigToPropertiesMapping(PROP_VALUE_FORMAT_PREFIX, QUARKUS_VALUE_CONVERTER_PREFIX, remainingPropertyNames, normalizedNames, true, true));
+        configToProperties(context, remapped,
+                new ConfigToPropertiesMapping(PROP_HEADER_FORMAT_PREFIX, QUARKUS_HEADER_CONVERTER_PREFIX, remainingPropertyNames, normalizedNames, true, true));
+
+        // Remove the format-selector properties (debezium.format.key/value/header = avro|json|...) so that
+        // the generic debezium.format.* pass below does not propagate them as nonsensical converter
+        // sub-properties (e.g. key.converter.key = avro, header.converter.value = avro).
+        // Their values have already been consumed above via getFormat() / getHeaderFormat() in the engine.
+        removePropertyName(remainingPropertyNames, normalizedNames, DebeziumProperties.PROP_KEY_FORMAT);
+        removePropertyName(remainingPropertyNames, normalizedNames, DebeziumProperties.PROP_VALUE_FORMAT);
+        removePropertyName(remainingPropertyNames, normalizedNames, DebeziumProperties.PROP_HEADER_FORMAT);
+
+        // Handle the remaining generic (debezium.format.*) props. Don't remove them so that they can apply to key, value and header
+        configToProperties(context, remapped,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, QUARKUS_KEY_CONVERTER_PREFIX, remainingPropertyNames, normalizedNames, false, false));
+        configToProperties(context, remapped,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, QUARKUS_VALUE_CONVERTER_PREFIX, remainingPropertyNames, normalizedNames, false, false));
+        configToProperties(context, remapped,
+                new ConfigToPropertiesMapping(PROP_FORMAT_PREFIX, QUARKUS_HEADER_CONVERTER_PREFIX, remainingPropertyNames, normalizedNames, false, false));
+
         ConfigValue sink = context.getValue(PROP_SINK_TYPE);
         if (sink != null && sink.getValue() != null) {
             remapped.put(QUARKUS_DEBEZIUM_PREFIX + "name", sink.getValue());
@@ -95,27 +129,32 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
             // namespaces where they have no meaning.
             String schemaHistoryPrefix = QUARKUS_DEBEZIUM_PREFIX + SchemaHistory.CONFIGURATION_FIELD_PREFIX_STRING + sink.getValue() + ".";
             if (!hasPropertyWithPrefix(context, remapped, schemaHistoryPrefix)) {
-                configToProperties(context, remapped, sinkPrefix, schemaHistoryPrefix, false);
+                configToProperties(context, remapped,
+                        new ConfigToPropertiesMapping(sinkPrefix, schemaHistoryPrefix, remainingPropertyNames, normalizedNames, false, false));
             }
 
             String offsetStoragePrefix = QUARKUS_DEBEZIUM_PREFIX + PROP_OFFSET_STORAGE_PREFIX + sink.getValue() + ".";
             if (!hasPropertyWithPrefix(context, remapped, offsetStoragePrefix)) {
-                configToProperties(context, remapped, sinkPrefix, offsetStoragePrefix, false);
+                configToProperties(context, remapped,
+                        new ConfigToPropertiesMapping(sinkPrefix, offsetStoragePrefix, remainingPropertyNames, normalizedNames, false, true));
             }
         }
 
         var transforms = context.getValue(PROP_TRANSFORMS);
         if (transforms != null && transforms.getValue() != null) {
             remapped.put(QUARKUS_DEBEZIUM_PREFIX + "transforms", transforms.getValue());
-            configToProperties(context, remapped, PROP_TRANSFORMS_PREFIX, QUARKUS_DEBEZIUM_PREFIX + "transforms.", true);
+            configToProperties(context, remapped,
+                    new ConfigToPropertiesMapping(PROP_TRANSFORMS_PREFIX, QUARKUS_DEBEZIUM_PREFIX + "transforms.", remainingPropertyNames, normalizedNames, true, true));
         }
 
         var predicates = context.getValue(PROP_PREDICATES);
         if (predicates != null && predicates.getValue() != null) {
             remapped.put(QUARKUS_DEBEZIUM_PREFIX + "predicates", predicates.getValue());
-            configToProperties(context, remapped, PROP_PREDICATES_PREFIX, QUARKUS_DEBEZIUM_PREFIX + "predicates.", true);
+            configToProperties(context, remapped,
+                    new ConfigToPropertiesMapping(PROP_PREDICATES_PREFIX, QUARKUS_DEBEZIUM_PREFIX + "predicates.", remainingPropertyNames, normalizedNames, true, true));
         }
 
+        // The remaining loop handles datasource bridging and the reverse mapping (quarkus.debezium.* -> debezium.source.*)
         Iterator<String> names = context.iterateNames();
         while (names.hasNext()) {
             String name = names.next();
@@ -154,27 +193,107 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
         return List.of(new DebeziumServerConfigSource(remapped));
     }
 
-    private void configToProperties(ConfigSourceContext context, Map<String, String> mutableMap, String oldPrefix, String newPrefix, boolean overwrite) {
-        context.iterateNames().forEachRemaining(name -> {
-            String updatedPropertyName = null;
+    /**
+     * Encapsulates property mapping configuration with mutable state (property names and normalized names cache).
+     * This is not a pure value object since it holds mutable collections that are modified during iteration.
+     */
+    private static final class ConfigToPropertiesMapping {
+        final String oldPrefix;
+        final String newPrefix;
+        final Set<String> propertyNames;
+        final Map<String, String> normalizedNames;
+        final boolean overwrite;
+        final boolean removeProcessedPropertyNames;
 
-            if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
-                updatedPropertyName = name.replace("_", ".").toLowerCase();
+        private ConfigToPropertiesMapping(String oldPrefix, String newPrefix, Set<String> propertyNames,
+                                          Map<String, String> normalizedNames, boolean overwrite, boolean removeProcessedPropertyNames) {
+            this.oldPrefix = oldPrefix;
+            this.newPrefix = newPrefix;
+            this.propertyNames = propertyNames;
+            this.normalizedNames = normalizedNames;
+            this.overwrite = overwrite;
+            this.removeProcessedPropertyNames = removeProcessedPropertyNames;
+        }
+
+    }
+
+    private void configToProperties(ConfigSourceContext context, Map<String, String> mutableMap, ConfigToPropertiesMapping mapping) {
+
+        // Use iterator to safely remove items while iterating
+        Iterator<String> iterator = mapping.propertyNames.iterator();
+        while (iterator.hasNext()) {
+            String name = iterator.next();
+            boolean processed = false;
+
+            String normalizedName = mapping.normalizedNames.get(name);
+            if (normalizedName != null && normalizedName.startsWith(mapping.oldPrefix)) {
+                String finalPropertyName = mapping.newPrefix + normalizedName.substring(mapping.oldPrefix.length());
+                if (mapping.overwrite || !mutableMap.containsKey(finalPropertyName)) {
+                    mutableMap.put(finalPropertyName, resolvePropertyValue(context, name, normalizedName));
+                }
+                processed = true;
+            }
+            else if (name.startsWith(mapping.oldPrefix)) {
+                String finalPropertyName = mapping.newPrefix + name.substring(mapping.oldPrefix.length());
+                if (mapping.overwrite || !mutableMap.containsKey(finalPropertyName)) {
+                    mutableMap.put(finalPropertyName, resolvePropertyValue(context, name, normalizedName));
+                }
+                processed = true;
             }
 
-            if (updatedPropertyName != null && updatedPropertyName.startsWith(oldPrefix)) {
-                String finalPropertyName = newPrefix + updatedPropertyName.substring(oldPrefix.length());
-                if (overwrite || !mutableMap.containsKey(finalPropertyName)) {
-                    mutableMap.put(finalPropertyName, context.getValue(name).getValueOrDefault(""));
+            // Remove processed properties to avoid duplicate processing
+            if (processed && mapping.removeProcessedPropertyNames) {
+                iterator.remove();
+            }
+        }
+    }
+
+    private void removePropertyName(Set<String> propertyNames, Map<String, String> normalizedNames, String propertyName) {
+        propertyNames.removeIf(name -> propertyName.equals(normalizedNames.get(name)));
+    }
+
+    private String resolvePropertyValue(ConfigSourceContext context, String originalName, String normalizedName) {
+        // Prefer canonical normalized lookup so source precedence is handled by config resolution.
+        if (normalizedName != null) {
+            ConfigValue normalizedValue = context.getValue(normalizedName);
+            if (normalizedValue != null && normalizedValue.getValue() != null) {
+                return normalizedValue.getValue();
+            }
+        }
+
+        ConfigValue originalValue = context.getValue(originalName);
+        if (originalValue != null && originalValue.getValue() != null) {
+            return originalValue.getValue();
+        }
+
+        // Fall back to the raw value (possibly null) so missing values fail loudly rather than defaulting to "".
+        return originalValue != null ? originalValue.getValue() : null;
+    }
+
+    private String normalizePropertyName(String name) {
+        if (SHELL_PROPERTY_NAME_PATTERN.matcher(name).matches()) {
+            // Handle MicroProfile escaping: __ encodes a literal underscore, _ encodes a dot
+            StringBuilder normalized = new StringBuilder(name.length());
+            int i = 0;
+            while (i < name.length()) {
+                if (i + 1 < name.length() && name.charAt(i) == '_' && name.charAt(i + 1) == '_') {
+                    // Double underscore → literal underscore
+                    normalized.append('_');
+                    i += 2;
+                }
+                else if (name.charAt(i) == '_') {
+                    // Single underscore → dot
+                    normalized.append('.');
+                    i++;
+                }
+                else {
+                    normalized.append(name.charAt(i));
+                    i++;
                 }
             }
-            else if (name.startsWith(oldPrefix)) {
-                String finalPropertyName = newPrefix + name.substring(oldPrefix.length());
-                if (overwrite || !mutableMap.containsKey(finalPropertyName)) {
-                    mutableMap.put(finalPropertyName, context.getValue(name).getValue());
-                }
-            }
-        });
+            return normalized.toString().toLowerCase(Locale.ROOT);
+        }
+        return name;
     }
 
     private static boolean hasPropertyWithPrefix(ConfigSourceContext context, Map<String, String> properties, String prefix) {
