@@ -21,9 +21,6 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Named;
 
-import org.apache.kafka.connect.header.Header;
-import org.apache.kafka.connect.header.Headers;
-import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.pulsar.client.api.BatcherBuilder;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
@@ -45,10 +42,8 @@ import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
-import io.opentelemetry.api.GlobalOpenTelemetry;
-import io.opentelemetry.context.Context;
+import io.debezium.server.tracing.TracingUtil;
 import io.opentelemetry.context.Scope;
-import io.opentelemetry.context.propagation.TextMapGetter;
 
 /**
  * Implementation of the consumer that delivers the messages into a Pulsar destination.
@@ -70,24 +65,6 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
     private static final String PROP_PRODUCER_PREFIX = PROP_PREFIX + "producer.";
 
     private static final AtomicBoolean hasFailed = new AtomicBoolean(false);
-
-    private static final TextMapGetter<Headers> HEADERS_GETTER = new TextMapGetter<>() {
-        @Override
-        public Iterable<String> keys(Headers headers) {
-            final List<String> keys = new ArrayList<>();
-            headers.forEach(header -> keys.add(header.key()));
-            return keys;
-        }
-
-        @Override
-        public String get(Headers headers, String key) {
-            if (headers == null) {
-                return null;
-            }
-            final Header header = headers.lastWithName(key);
-            return header == null || header.value() == null ? null : header.value().toString();
-        }
-    };
 
     public interface ProducerBuilder {
         Producer<Object> get(String topicName, Object value);
@@ -210,7 +187,7 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                     .value(record.value());
 
             // We will wait for the producers to flush instead of waiting for these individually
-            try (Scope ignored = tracingContext(record).makeCurrent()) {
+            try (Scope ignored = TracingUtil.tracingContext(record).makeCurrent()) {
                 message.sendAsync()
                         .whenComplete((messageId, exception) -> {
                             if (exception == null) {
@@ -247,16 +224,6 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
             LOGGER.error("Failed to send batch", exception);
             throw new DebeziumException(exception);
         }
-    }
-
-    private static Context tracingContext(BatchEvent record) {
-        final SourceRecord sourceRecord = record.record();
-        if (sourceRecord == null) {
-            return Context.current();
-        }
-        return GlobalOpenTelemetry.getPropagators()
-                .getTextMapPropagator()
-                .extract(Context.current(), sourceRecord.headers(), HEADERS_GETTER);
     }
 
     @Override
