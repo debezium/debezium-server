@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import io.debezium.config.Configuration;
+import io.debezium.openlineage.dataset.DatasetMetadata.DataStore;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
@@ -61,7 +63,7 @@ import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 @Named("zerobus")
 @Dependent
 public class ZerobusChangeConsumer extends BaseChangeConsumer
-        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink {
+        implements DebeziumServerConsumer<CapturingEvents<BatchEvent>>, DebeziumServerSink, DataStore.Provider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ZerobusChangeConsumer.class);
 
@@ -69,6 +71,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
     private final ComponentMetadataFactory componentMetadataFactory = new ComponentMetadataFactory();
 
+    private Configuration sinkConfig;
     private ZerobusChangeConsumerConfig config;
     private ZerobusSdk sdk;
     private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("grpc");
@@ -97,6 +100,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         final Config mpConfig = ConfigProvider.getConfig();
         io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
         this.config = new ZerobusChangeConsumerConfig(configuration);
+        this.sinkConfig = configuration;
 
         configureEnvelopePath();
 
@@ -130,6 +134,11 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 : config;
         return Optional.of(capabilityConfig.getPayloadMode() == ZerobusChangeConsumerConfig.PayloadMode.ENVELOPE
                 && ZerobusChangeConsumerConfig.TOMBSTONE_EVENT.equals(capabilityConfig.getTombstoneHandlingMode()));
+    }
+
+    @Override
+    public Configuration getConfiguration() {
+        return sinkConfig;
     }
 
     @PreDestroy
@@ -631,5 +640,10 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
         return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+    }
+
+    @Override
+    public DataStore get() {
+        return DataStore.DATABASE;
     }
 }
