@@ -9,6 +9,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import jakarta.enterprise.inject.Vetoed;
+
 import org.junit.jupiter.api.Test;
 
 import io.debezium.runtime.events.DebeziumCompletionEvent;
@@ -66,6 +68,7 @@ public class DefaultDebeziumServerLifecycleTest {
         };
     }
 
+    @Vetoed
     private static final class RecordingDebeziumServerLifecycle extends DefaultDebeziumServerLifecycle {
 
         final AtomicInteger exitCode = new AtomicInteger(-1);
