@@ -6,6 +6,7 @@
 package io.debezium.server.lifecycle;
 
 import io.debezium.runtime.events.DebeziumCompletionEvent;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.Quarkus;
 
 /**
@@ -18,18 +19,22 @@ import io.quarkus.runtime.Quarkus;
 public interface DebeziumServerLifecycle {
 
     /**
-     * Triggers the asynchronous JVM shutdown with the given exit code. Exposed as a separate
-     * method so tests can assert the shutdown decision without terminating the test JVM.
+     * Triggers the asynchronous JVM shutdown with the given exit code, but only when running as
+     * a real process ({@link LaunchMode#NORMAL}); in dev and test mode it is a no-op so the dev
+     * server and the test suite are not torn down. Exposed as a separate method so tests can
+     * assert the shutdown decision without terminating the test JVM.
      *
      * @param code the process exit code to report
      */
     default void exit(int code) {
-        Quarkus.asyncExit(code);
+        if (LaunchMode.current() == LaunchMode.NORMAL) {
+            Quarkus.asyncExit(code);
+        }
     }
 
     /**
-     * Observes the terminal engine completion event and, when the engine completed with a
-     * failure, optionally shuts the server down.
+     * Observes the terminal engine completion event and optionally shuts the server down,
+     * reporting exit code {@code 0} on a normal completion and a non-zero code on failure.
      *
      * @param event the completion event fired once when the engine stops; carries the
      *            success flag, message and failure cause
