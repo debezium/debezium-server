@@ -73,7 +73,7 @@ public class DefaultDebeziumServerLifecycleTest {
 
         final AtomicInteger exitCode = new AtomicInteger(-1);
 
-        public RecordingDebeziumServerLifecycle(DebeziumServerConfig config) {
+        RecordingDebeziumServerLifecycle(DebeziumServerConfig config) {
             super(config);
         }
 
