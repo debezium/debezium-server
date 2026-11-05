@@ -20,6 +20,8 @@ public class DefaultDebeziumServerLifecycle implements DebeziumServerLifecycle {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultDebeziumServerLifecycle.class);
 
+    private static final int SUCCESS_EXIT_CODE = 0;
+
     private static final int FAILURE_EXIT_CODE = 1;
 
     private final DebeziumServerConfig config;
@@ -31,18 +33,21 @@ public class DefaultDebeziumServerLifecycle implements DebeziumServerLifecycle {
 
     @Override
     public void onCompletion(@Observes DebeziumCompletionEvent event) {
+        int exitCode = event.isSuccess() ? SUCCESS_EXIT_CODE : FAILURE_EXIT_CODE;
+
         if (event.isSuccess()) {
-            return;
-        }
-
-        LOGGER.error("Debezium engine completed with a failure: {}", event.getMessage(), event.getError());
-
-        if (config.exitOnError()) {
-            LOGGER.error("Shutting down Debezium Server with exit code {}", FAILURE_EXIT_CODE);
-            exit(FAILURE_EXIT_CODE);
+            LOGGER.info("Debezium engine completed normally");
         }
         else {
-            LOGGER.warn("'debezium.exit.on.error' is disabled; the process stays alive and '/q/health/live' will report DOWN");
+            LOGGER.error("Debezium engine completed with a failure: {}", event.getMessage(), event.getError());
+        }
+
+        if (config.shutdownOnCompletion()) {
+            LOGGER.info("Shutting down Debezium Server with exit code {}", exitCode);
+            exit(exitCode);
+        }
+        else {
+            LOGGER.warn("'debezium.shutdown.on.completion' is disabled; the process stays alive after the engine stopped");
         }
     }
 

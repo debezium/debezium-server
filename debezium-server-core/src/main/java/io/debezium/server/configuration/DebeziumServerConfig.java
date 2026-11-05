@@ -13,9 +13,9 @@ import io.smallrye.config.WithName;
 public interface DebeziumServerConfig {
     Api api();
 
-    @WithName("exit.on.error")
+    @WithName("shutdown.on.completion")
     @WithDefault("true")
-    boolean exitOnError();
+    boolean shutdownOnCompletion();
 
     interface Api {
         @WithDefault("false")
