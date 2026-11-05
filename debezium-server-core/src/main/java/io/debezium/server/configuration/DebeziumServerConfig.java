@@ -7,10 +7,15 @@ package io.debezium.server.configuration;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
+import io.smallrye.config.WithName;
 
 @ConfigMapping(prefix = "debezium")
 public interface DebeziumServerConfig {
     Api api();
+
+    @WithName("exit.on.error")
+    @WithDefault("true")
+    boolean exitOnError();
 
     interface Api {
         @WithDefault("false")
