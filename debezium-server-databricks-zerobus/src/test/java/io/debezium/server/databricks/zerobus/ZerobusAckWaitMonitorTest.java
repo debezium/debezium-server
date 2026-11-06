@@ -64,24 +64,14 @@ class ZerobusAckWaitMonitorTest {
 
     @Test
     void thresholdZeroDisablesTheLogLinesButNotTheDurationGauge() throws Exception {
+        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
+
         monitor.await(TABLE, 3, 0, () -> {
             Thread.sleep(100);
             assertThat(metrics.getCurrentFlushDurationMillis()).isGreaterThanOrEqualTo(50);
         });
 
         verifyNoInteractions(logger);
-        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
-    }
-
-    @Test
-    void reportsTheDurationOfTheWaitInProgressAndZeroWhenIdle() throws Exception {
-        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
-
-        monitor.await(TABLE, 3, 0, () -> {
-            Thread.sleep(100);
-            assertThat(metrics.getCurrentFlushDurationMillis()).isGreaterThanOrEqualTo(50);
-        });
-
         assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
     }
 
