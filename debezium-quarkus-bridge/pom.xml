@@ -11,7 +11,7 @@
 
     <groupId>io.debezium.quarkus</groupId>
     <artifactId>debezium-quarkus-bridge-parent</artifactId>
-  <version>3.7.1.Final</version>
+  <version>3.7.2-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Debezium Quarkus Bridge - Parent</name>
 
