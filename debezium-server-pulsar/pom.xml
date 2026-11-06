@@ -30,6 +30,11 @@
         <dependency>
             <groupId>io.debezium</groupId>
             <artifactId>debezium-server-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-server-observability</artifactId>
         </dependency>
 
         <!-- Target systems -->
