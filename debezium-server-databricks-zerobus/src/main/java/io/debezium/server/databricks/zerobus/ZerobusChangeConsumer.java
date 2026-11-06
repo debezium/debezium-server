@@ -70,7 +70,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     private ZerobusChangeConsumerConfig config;
     private ZerobusSdk sdk;
     private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("grpc");
-    private final ZerobusAckWaitMonitor ackWaits = new ZerobusAckWaitMonitor(metrics, LOGGER);
+    private final ZerobusAckWaitMonitor ackWaits = new ZerobusAckWaitMonitor(LOGGER);
     private long batchesSinceLog = 0;
 
     // One stream per target table (Zerobus: 1 stream = 1 table). Access-ordered so that iteration
@@ -215,15 +215,22 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         // drop them (breaking the at-least-once guarantee).
         if (!pendingPerTable.isEmpty()) {
             final long flushStartNanos = System.nanoTime();
-            for (Map.Entry<String, Integer> pending : pendingPerTable.entrySet()) {
-                final String table = pending.getKey();
-                try {
-                    ackWaits.await(table, pending.getValue(), config.getFlushWarnThresholdMs(), () -> streams.get(table).flush());
+            // The wait in progress spans the whole loop, like the flush duration recorded below, so the two can be compared.
+            metrics.ackWaitStarted();
+            try {
+                for (Map.Entry<String, Integer> pending : pendingPerTable.entrySet()) {
+                    final String table = pending.getKey();
+                    try {
+                        ackWaits.await(table, pending.getValue(), config.getFlushWarnThresholdMs(), () -> streams.get(table).flush());
+                    }
+                    catch (Exception e) {
+                        metrics.recordError();
+                        throw new DebeziumException("Failed to flush Zerobus stream for table '" + table + "'", e);
+                    }
                 }
-                catch (Exception e) {
-                    metrics.recordError();
-                    throw new DebeziumException("Failed to flush Zerobus stream for table '" + table + "'", e);
-                }
+            }
+            finally {
+                metrics.ackWaitEnded();
             }
             metrics.flushed((System.nanoTime() - flushStartNanos) / 1_000_000L);
         }
@@ -300,7 +307,14 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     private void writeEnvelopeGroup(String table, List<ZerobusEnvelope> records) {
         try {
             long started = System.nanoTime();
-            ingestEnvelopeGroup(envelopeSerializer, table, records);
+            // Same scope as the flush duration recorded below: one table group.
+            metrics.ackWaitStarted();
+            try {
+                ingestEnvelopeGroup(envelopeSerializer, table, records);
+            }
+            finally {
+                metrics.ackWaitEnded();
+            }
             metrics.flushed((System.nanoTime() - started) / 1_000_000L);
             for (ZerobusEnvelope record : records) {
                 metrics.recordIngested(metricOperation(record.operation()),

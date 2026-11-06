@@ -24,15 +24,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 
-import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
-
 class ZerobusAckWaitMonitorTest {
 
     private static final String TABLE = "main.default.customers";
 
-    private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("grpc");
     private final Logger logger = mock(Logger.class);
-    private final ZerobusAckWaitMonitor monitor = new ZerobusAckWaitMonitor(metrics, logger);
+    private final ZerobusAckWaitMonitor monitor = new ZerobusAckWaitMonitor(logger);
 
     @AfterEach
     void stopWatchdog() {
@@ -63,24 +60,39 @@ class ZerobusAckWaitMonitorTest {
     }
 
     @Test
-    void thresholdZeroDisablesTheLogLinesButNotTheDurationGauge() throws Exception {
-        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
-
-        monitor.await(TABLE, 3, 0, () -> {
-            Thread.sleep(100);
-            assertThat(metrics.getCurrentFlushDurationMillis()).isGreaterThanOrEqualTo(50);
-        });
+    void thresholdZeroDisablesTheLogLines() throws Exception {
+        monitor.await(TABLE, 3, 0, () -> Thread.sleep(100));
 
         verifyNoInteractions(logger);
-        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
     }
 
     @Test
-    void clearsTheWaitInProgressWhenTheAcknowledgementFails() {
-        assertThatThrownBy(() -> monitor.await(TABLE, 3, 20, () -> {
+    void propagatesTheFailureOfTheAcknowledgement() {
+        assertThatThrownBy(() -> monitor.await(TABLE, 3, 60_000, () -> {
             throw new IllegalStateException("boom");
         })).isInstanceOf(IllegalStateException.class).hasMessage("boom");
 
-        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
+        verifyNoInteractions(logger);
+    }
+
+    @Test
+    void neverWarnsOnceTheWaitHasFinished() {
+        // A watchdog run that starts after the acknowledgement must not report the batch as unacknowledged.
+        ZerobusAckWaitMonitor.WaitWatch watch = new ZerobusAckWaitMonitor.WaitWatch(TABLE, 3, 20, logger);
+
+        assertThat(watch.finish()).isFalse();
+        watch.run();
+
+        verifyNoInteractions(logger);
+    }
+
+    @Test
+    void reportsThatItWarnedWhenTheWarningCameFirst() {
+        ZerobusAckWaitMonitor.WaitWatch watch = new ZerobusAckWaitMonitor.WaitWatch(TABLE, 3, 20, logger);
+
+        watch.run();
+
+        assertThat(watch.finish()).isTrue();
+        verify(logger).warn(anyString(), eq(3), eq(TABLE), anyLong(), eq(20L));
     }
 }

@@ -244,9 +244,10 @@ public class ZerobusChangeConsumerConfig {
             .withType(ConfigDef.Type.INT)
             .withDefault(30000)
             .withImportance(ConfigDef.Importance.LOW)
+            .withValidation(Field::isNonNegativeInteger)
             .withDescription("Time, in milliseconds, after which a wait for Zerobus to acknowledge the records of a batch "
                     + "is logged at WARN, and logged again every time this interval elapses while the wait continues. "
-                    + "The wait in progress is also exposed over JMX. 0 disables the warning.");
+                    + "The wait in progress is also exposed over JMX. 0 disables the warning; negative values are rejected.");
 
     public static final Field METRICS_LOG_INTERVAL = Field.create("metrics.log.interval")
             .withDisplayName("Metrics log interval (batches)")
@@ -311,6 +312,10 @@ public class ZerobusChangeConsumerConfig {
         this.recoveryTimeoutMs = optionalInteger(config, RECOVERY_TIMEOUT_MS);
         this.flushTimeoutMs = optionalInteger(config, FLUSH_TIMEOUT_MS);
         this.flushWarnThresholdMs = config.getInteger(FLUSH_WARN_THRESHOLD_MS);
+        if (flushWarnThresholdMs < 0) {
+            throw new io.debezium.DebeziumException("Zerobus flush.warn.threshold.ms must not be negative, but is " + flushWarnThresholdMs
+                    + "; use 0 to disable the warning");
+        }
         this.metricsLogInterval = config.getInteger(METRICS_LOG_INTERVAL);
     }
 
