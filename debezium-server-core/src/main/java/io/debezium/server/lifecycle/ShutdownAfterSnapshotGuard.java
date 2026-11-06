@@ -9,6 +9,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 import io.debezium.DebeziumException;
+import io.debezium.util.Strings;
 
 /**
  * Decides when an {@code initial_only} snapshot has been fully delivered, so the engine can be stopped.
@@ -53,14 +54,15 @@ public class ShutdownAfterSnapshotGuard {
      * @param shutdownOnCompletion the value of {@code debezium.shutdown.on.completion}
      */
     public static void requireSupportedConfiguration(String snapshotMode, int tasksMax, String databaseNames, boolean shutdownOnCompletion) {
-        if (!"initial_only".equals(snapshotMode)) {
+        if (!"initial_only".equalsIgnoreCase(snapshotMode)) {
             throw new DebeziumException("'debezium.shutdown.after.snapshot' requires 'debezium.source.snapshot.mode=initial_only', "
                     + "but the snapshot mode is '" + snapshotMode + "'");
         }
         if (tasksMax > 1) {
             throw new DebeziumException("'debezium.shutdown.after.snapshot' supports a single task, but 'debezium.source.tasks.max' is " + tasksMax);
         }
-        if (databaseNames != null && databaseNames.contains(",")) {
+        // Parsed like the connectors do, so a trailing or doubled comma does not count as another database.
+        if (Strings.setOfTrimmed(databaseNames, name -> name.isEmpty() ? null : name).size() > 1) {
             throw new DebeziumException("'debezium.shutdown.after.snapshot' supports a single database, but 'debezium.source.database.names' is '"
                     + databaseNames + "'");
         }
