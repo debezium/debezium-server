@@ -17,7 +17,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import org.apache.kafka.connect.header.ConnectHeaders;
@@ -54,7 +53,7 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
 
     @Inject
     public DefaultChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer, Config config,
-                                 DebeziumServerConfig serverConfig, Instance<ShutdownAfterSnapshotGuard> shutdownAfterSnapshotGuard) {
+                                 DebeziumServerConfig serverConfig) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();
@@ -62,13 +61,11 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
         if (serverConfig.shutdownAfterSnapshot()) {
             ShutdownAfterSnapshotGuard.requireSupportedConfiguration(
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "snapshot.mode", String.class).orElse("initial"),
+                    config.getOptionalValue(PROP_SOURCE_PREFIX + "notification.enabled.channels", String.class).orElse(null),
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "tasks.max", Integer.class).orElse(1),
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "database.names", String.class).orElse(null),
                     serverConfig.shutdownOnCompletion());
-            if (!shutdownAfterSnapshotGuard.isResolvable()) {
-                throw new DebeziumException("'debezium.shutdown.after.snapshot' requires the Debezium JMX metrics, which are not available in this build");
-            }
-            this.shutdownAfterSnapshotGuard = shutdownAfterSnapshotGuard.get();
+            this.shutdownAfterSnapshotGuard = new ShutdownAfterSnapshotGuard();
         }
         else {
             this.shutdownAfterSnapshotGuard = null;
@@ -95,8 +92,10 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
                     () -> LOGGER.warn("Current {} sink is not supported to emit OpenLineage output dataset", sink));
         }
 
-        // Only after the sink handled this batch: the engine stops here and commits the offsets of the delivered records.
-        if (shutdownAfterSnapshotGuard != null && shutdownAfterSnapshotGuard.isSnapshotDelivered()) {
+        // Only after the sink handled this batch: the engine stops here and commits the offsets of the delivered records,
+        // including the one of the notification, which is the offset of the completed snapshot.
+        if (shutdownAfterSnapshotGuard != null
+                && events.records().stream().anyMatch(record -> shutdownAfterSnapshotGuard.isEndOfInitialSnapshot(record.record()))) {
             LOGGER.info("Initial snapshot delivered to the sink, stopping the engine");
             throw new StopEngineException("Initial snapshot delivered, stopping the engine");
         }

@@ -8,96 +8,119 @@ package io.debezium.server.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Map;
 
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.Test;
 
 import io.debezium.DebeziumException;
+import io.debezium.pipeline.notification.Notification;
+import io.debezium.schema.SchemaFactory;
+import io.debezium.schema.SchemaNameAdjuster;
 
 class ShutdownAfterSnapshotGuardTest {
 
-    @Test
-    void shouldNotBeDeliveredWhileSnapshotIsRunning() {
-        final ShutdownAfterSnapshotGuard guard = new ShutdownAfterSnapshotGuard(() -> false, () -> 0);
+    private final ShutdownAfterSnapshotGuard guard = new ShutdownAfterSnapshotGuard();
 
-        assertThat(guard.isSnapshotDelivered()).isFalse();
+    @Test
+    void shouldRecognizeTheCompletedInitialSnapshot() {
+        assertThat(guard.isEndOfInitialSnapshot(notification("Initial Snapshot", "COMPLETED"))).isTrue();
     }
 
     @Test
-    void shouldNotBeDeliveredWhileRecordsRemainInTheQueue() {
-        final ShutdownAfterSnapshotGuard guard = new ShutdownAfterSnapshotGuard(() -> true, () -> 3);
-
-        assertThat(guard.isSnapshotDelivered()).isFalse();
+    void shouldRecognizeTheSkippedInitialSnapshot() {
+        assertThat(guard.isEndOfInitialSnapshot(notification("Initial Snapshot", "SKIPPED"))).isTrue();
     }
 
     @Test
-    void shouldBeDeliveredWhenSnapshotCompletedAndQueueIsEmpty() {
-        final ShutdownAfterSnapshotGuard guard = new ShutdownAfterSnapshotGuard(() -> true, () -> 0);
-
-        assertThat(guard.isSnapshotDelivered()).isTrue();
+    void shouldIgnoreTheOtherInitialSnapshotNotifications() {
+        assertThat(guard.isEndOfInitialSnapshot(notification("Initial Snapshot", "STARTED"))).isFalse();
+        assertThat(guard.isEndOfInitialSnapshot(notification("Initial Snapshot", "IN_PROGRESS"))).isFalse();
+        assertThat(guard.isEndOfInitialSnapshot(notification("Initial Snapshot", "TABLE_SCAN_COMPLETED"))).isFalse();
     }
 
     @Test
-    void shouldReadSnapshotFlagBeforeQueue() {
-        // The flag must be read first: a queue read before the snapshot completed could be empty while records are still to come.
-        final List<String> reads = new ArrayList<>();
-        final ShutdownAfterSnapshotGuard guard = new ShutdownAfterSnapshotGuard(() -> {
-            reads.add("snapshot");
-            return true;
-        }, () -> {
-            reads.add("queue");
-            return 0;
-        });
-
-        guard.isSnapshotDelivered();
-
-        assertThat(reads).containsExactly("snapshot", "queue");
+    void shouldIgnoreTheNotificationsOfOtherSnapshots() {
+        assertThat(guard.isEndOfInitialSnapshot(notification("Incremental Snapshot", "COMPLETED"))).isFalse();
     }
 
     @Test
-    void shouldAcceptInitialOnlyWithASingleTaskAndDatabase() {
-        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, null, true);
-        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, "inventory", true);
+    void shouldIgnoreChangeEvents() {
+        final Schema schema = SchemaBuilder.struct().name("testc.inventory.customers.Value").field("type", Schema.STRING_SCHEMA).build();
+        final SourceRecord event = new SourceRecord(Map.of(), Map.of(), "testc.inventory.customers", schema, new Struct(schema).put("type", "COMPLETED"));
+
+        assertThat(guard.isEndOfInitialSnapshot(event)).isFalse();
+        assertThat(guard.isEndOfInitialSnapshot(null)).isFalse();
+    }
+
+    @Test
+    void shouldAcceptInitialOnlyWithTheSinkChannelASingleTaskAndDatabase() {
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "sink", 1, null, true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "log, sink", 1, "inventory", true);
     }
 
     @Test
     void shouldAcceptTheSnapshotModeInAnyCase() {
-        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("INITIAL_ONLY", 1, null, true);
-        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("Initial_Only", 1, null, true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("INITIAL_ONLY", "sink", 1, null, true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("Initial_Only", "sink", 1, null, true);
     }
 
     @Test
     void shouldIgnoreEmptyItemsInDatabaseNames() {
-        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, "inventory,", true);
-        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, " inventory , , ", true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "sink", 1, "inventory,", true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "sink", 1, " inventory , , ", true);
     }
 
     @Test
     void shouldRejectModesWhichStream() {
-        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial", 1, null, true))
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial", "sink", 1, null, true))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("initial_only");
     }
 
     @Test
+    void shouldRequireTheSinkNotificationChannel() {
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", null, 1, null, true))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("notification.enabled.channels");
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "log,jmx", 1, null, true))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("notification.enabled.channels");
+    }
+
+    @Test
     void shouldRejectSeveralTasks() {
-        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 2, null, true))
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "sink", 2, null, true))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("tasks.max");
     }
 
     @Test
     void shouldRejectSeveralDatabases() {
-        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, "db1,db2", true))
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "sink", 1, "db1,db2", true))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("database.names");
     }
 
     @Test
     void shouldRequireShutdownOnCompletion() {
-        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, null, false))
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", "sink", 1, null, false))
                 .isInstanceOf(DebeziumException.class)
                 .hasMessageContaining("shutdown.on.completion");
+    }
+
+    /** Builds a notification record the way the {@code sink} notification channel does. */
+    private static SourceRecord notification(String aggregateType, String type) {
+        final Schema valueSchema = SchemaFactory.get().notificationValueSchema(SchemaNameAdjuster.NO_OP);
+        final Struct value = new Struct(valueSchema)
+                .put(Notification.ID_KEY, "id")
+                .put(Notification.TYPE, type)
+                .put(Notification.AGGREGATE_TYPE, aggregateType)
+                .put(Notification.ADDITIONAL_DATA, Map.of())
+                .put(Notification.TIMESTAMP, System.currentTimeMillis());
+        return new SourceRecord(Map.of(), Map.of(), "testc.notifications", valueSchema, value);
     }
 }

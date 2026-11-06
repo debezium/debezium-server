@@ -5,37 +5,43 @@
  */
 package io.debezium.server.lifecycle;
 
-import java.util.function.BooleanSupplier;
-import java.util.function.IntSupplier;
+import java.util.Set;
+
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.source.SourceRecord;
 
 import io.debezium.DebeziumException;
+import io.debezium.pipeline.notification.InitialSnapshotNotificationService;
+import io.debezium.pipeline.notification.Notification;
+import io.debezium.pipeline.notification.SnapshotStatus;
+import io.debezium.pipeline.spi.SnapshotResult;
+import io.debezium.schema.SchemaFactory;
 import io.debezium.util.Strings;
 
 /**
- * Decides when an {@code initial_only} snapshot has been fully delivered, so the engine can be stopped.
+ * Recognizes the notification that ends an {@code initial_only} snapshot, so the engine can be stopped once it has been delivered.
  * <p>
- * The snapshot completes only after its last record was enqueued, and {@code initial_only} never streams, so no record is
- * enqueued after completion. Therefore, if the snapshot is completed and the queue is empty, every record was already taken
- * from the queue, and the consumer is the only thread taking records. Calling this from the consumer, after the batch was
- * delivered, means nothing is pending and nothing is in flight.
+ * With the {@code sink} notification channel, the connector enqueues each notification as a record in the same queue as the
+ * change events. The initial snapshot {@code COMPLETED} notification is enqueued after the last snapshot event, and it carries
+ * the offset of the completed snapshot, so when it reaches the consumer every snapshot event has been handed to the sink
+ * before it. On a restart after a completed snapshot, the connector sends {@code SKIPPED} instead, through the same path.
  */
 public class ShutdownAfterSnapshotGuard {
 
-    private final BooleanSupplier snapshotCompleted;
-    private final IntSupplier queueSize;
-
-    public ShutdownAfterSnapshotGuard(BooleanSupplier snapshotCompleted, IntSupplier queueSize) {
-        this.snapshotCompleted = snapshotCompleted;
-        this.queueSize = queueSize;
-    }
+    private static final String SINK_CHANNEL = "sink";
+    private static final Set<String> FINAL_STATUSES = Set.of(SnapshotStatus.COMPLETED.name(), SnapshotResult.SnapshotResultStatus.SKIPPED.name());
 
     /**
-     * @return {@code true} when the snapshot completed and no record is left in the queue. The snapshot flag is read first:
-     *         reading the queue before it could miss records enqueued while the snapshot was still running.
+     * @param record a record of a batch that the sink has handled
+     * @return {@code true} if the record is the notification that the initial snapshot was completed or skipped
      */
-    public boolean isSnapshotDelivered() {
-        final boolean completed = snapshotCompleted.getAsBoolean();
-        return completed && queueSize.getAsInt() == 0;
+    public boolean isEndOfInitialSnapshot(SourceRecord record) {
+        if (record == null || !SchemaFactory.get().isNotificationSchema(record.valueSchema()) || !(record.value() instanceof Struct)) {
+            return false;
+        }
+        final Struct notification = (Struct) record.value();
+        return InitialSnapshotNotificationService.INITIAL_SNAPSHOT.equals(notification.getString(Notification.AGGREGATE_TYPE))
+                && FINAL_STATUSES.contains(notification.getString(Notification.TYPE));
     }
 
     /**
@@ -43,20 +49,27 @@ public class ShutdownAfterSnapshotGuard {
      * documented:
      * <ul>
      * <li>a snapshot mode which keeps streaming would lose the stream, which the user has to ask for explicitly;</li>
-     * <li>with several tasks or databases, the snapshot metrics and the queue of a single one are read, so the server could stop
-     * while another one is still taking its snapshot;</li>
+     * <li>without the {@code sink} notification channel, the notification that ends the snapshot never reaches the consumer;</li>
+     * <li>with several tasks or databases, the first one to finish its snapshot would stop the server while another one is
+     * still taking its snapshot;</li>
      * <li>without {@code debezium.shutdown.on.completion}, the engine would stop but the process would keep running.</li>
      * </ul>
      *
      * @param snapshotMode the value of {@code debezium.source.snapshot.mode}
+     * @param notificationChannels the value of {@code debezium.source.notification.enabled.channels}, or {@code null} if not set
      * @param tasksMax the value of {@code debezium.source.tasks.max}
      * @param databaseNames the value of {@code debezium.source.database.names}, or {@code null} if not set
      * @param shutdownOnCompletion the value of {@code debezium.shutdown.on.completion}
      */
-    public static void requireSupportedConfiguration(String snapshotMode, int tasksMax, String databaseNames, boolean shutdownOnCompletion) {
+    public static void requireSupportedConfiguration(String snapshotMode, String notificationChannels, int tasksMax, String databaseNames,
+                                                     boolean shutdownOnCompletion) {
         if (!"initial_only".equalsIgnoreCase(snapshotMode)) {
             throw new DebeziumException("'debezium.shutdown.after.snapshot' requires 'debezium.source.snapshot.mode=initial_only', "
                     + "but the snapshot mode is '" + snapshotMode + "'");
+        }
+        if (!Strings.setOfTrimmed(notificationChannels, channel -> channel.isEmpty() ? null : channel).contains(SINK_CHANNEL)) {
+            throw new DebeziumException("'debezium.shutdown.after.snapshot' requires the 'sink' notification channel in "
+                    + "'debezium.source.notification.enabled.channels', together with 'debezium.source.notification.sink.topic.name'");
         }
         if (tasksMax > 1) {
             throw new DebeziumException("'debezium.shutdown.after.snapshot' supports a single task, but 'debezium.source.tasks.max' is " + tasksMax);

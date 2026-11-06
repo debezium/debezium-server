@@ -49,7 +49,7 @@ public class DebeziumServerShutdownAfterSnapshotIT {
     void onCompletion(@Observes DebeziumCompletionEvent event) {
         // The offsets are stored before the completion callback runs: record what the file holds at that moment.
         try {
-            SNAPSHOT_STORED_AT_COMPLETION.set(ShutdownAfterSnapshotSupport.snapshotCompletedInOffsets());
+            SNAPSHOT_STORED_AT_COMPLETION.set(ShutdownAfterSnapshotSupport.completedSnapshotInOffsets());
         }
         catch (Exception e) {
             SNAPSHOT_STORED_AT_COMPLETION.set(false);
@@ -63,7 +63,11 @@ public class DebeziumServerShutdownAfterSnapshotIT {
 
         assertThat(COMPLETIONS).hasSize(1);
         assertThat(COMPLETIONS.get(0).isSuccess()).isTrue();
-        assertThat(testConsumer.getValues()).hasSize((int) ShutdownAfterSnapshotSupport.expectedRows());
+        final List<Object> values = List.copyOf(testConsumer.getValues());
+        assertThat(values.stream().filter(value -> !ShutdownAfterSnapshotSupport.isNotification(value)))
+                .hasSize((int) ShutdownAfterSnapshotSupport.expectedRows());
+        // The notification that ends the snapshot comes after every snapshot event, and it is the last value delivered.
+        assertThat(values.get(values.size() - 1).toString()).contains("Initial Snapshot").contains("COMPLETED");
         assertThat(SNAPSHOT_STORED_AT_COMPLETION.get()).isTrue();
     }
 }

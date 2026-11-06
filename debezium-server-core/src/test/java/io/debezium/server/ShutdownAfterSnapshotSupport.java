@@ -44,17 +44,26 @@ final class ShutdownAfterSnapshotSupport {
     /**
      * The file offset store keeps a Java-serialized map of partition and offset bytes.
      *
-     * @return {@code true} if one of the stored offsets records a completed snapshot
+     * @return {@code true} if an offset is stored and none of the stored offsets belongs to a snapshot that is still in progress
      */
-    static boolean snapshotCompletedInOffsets() throws Exception {
+    @SuppressWarnings("unchecked")
+    static boolean completedSnapshotInOffsets() throws Exception {
         if (!Files.exists(TestConfigSource.OFFSET_STORE_PATH)) {
             return false;
         }
         try (ObjectInputStream in = new ObjectInputStream(Files.newInputStream(TestConfigSource.OFFSET_STORE_PATH))) {
             final Map<byte[], byte[]> offsets = (Map<byte[], byte[]>) in.readObject();
-            return offsets.values().stream()
+            return !offsets.isEmpty() && offsets.values().stream()
                     .map(value -> new String(value, StandardCharsets.UTF_8))
-                    .anyMatch(json -> json.contains("\"snapshot_completed\":true"));
+                    .noneMatch(json -> json.contains("\"snapshot\":true"));
         }
+    }
+
+    /**
+     * @param value a value delivered to the test consumer
+     * @return {@code true} if the value is a notification sent through the {@code sink} channel
+     */
+    static boolean isNotification(Object value) {
+        return value != null && value.toString().contains("\"aggregate_type\"");
     }
 }
