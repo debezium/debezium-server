@@ -56,15 +56,36 @@ class ShutdownAfterSnapshotGuardTest {
     }
 
     @Test
-    void shouldAcceptInitialOnly() {
-        ShutdownAfterSnapshotGuard.requireInitialOnly("initial_only");
+    void shouldAcceptInitialOnlyWithASingleTaskAndDatabase() {
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, null, true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, "inventory", true);
     }
 
     @Test
     void shouldRejectModesWhichStream() {
-        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireInitialOnly("initial"))
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial", 1, null, true))
                 .isInstanceOf(DebeziumException.class)
-                .hasMessageContaining("requires 'debezium.source.snapshot.mode=initial_only'")
-                .hasMessageContaining("'initial'");
+                .hasMessageContaining("initial_only");
+    }
+
+    @Test
+    void shouldRejectSeveralTasks() {
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 2, null, true))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("tasks.max");
+    }
+
+    @Test
+    void shouldRejectSeveralDatabases() {
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, "db1,db2", true))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("database.names");
+    }
+
+    @Test
+    void shouldRequireShutdownOnCompletion() {
+        assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, null, false))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("shutdown.on.completion");
     }
 }

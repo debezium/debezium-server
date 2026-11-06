@@ -60,7 +60,11 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
         this.datasetDataExtractor = new DatasetDataExtractor();
         this.isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, boolean.class).orElse(false);
         if (serverConfig.shutdownAfterSnapshot()) {
-            ShutdownAfterSnapshotGuard.requireInitialOnly(config.getOptionalValue(PROP_SOURCE_PREFIX + "snapshot.mode", String.class).orElse("initial"));
+            ShutdownAfterSnapshotGuard.requireSupportedConfiguration(
+                    config.getOptionalValue(PROP_SOURCE_PREFIX + "snapshot.mode", String.class).orElse("initial"),
+                    config.getOptionalValue(PROP_SOURCE_PREFIX + "tasks.max", Integer.class).orElse(1),
+                    config.getOptionalValue(PROP_SOURCE_PREFIX + "database.names", String.class).orElse(null),
+                    serverConfig.shutdownOnCompletion());
             if (!debeziumMetrics.isResolvable()) {
                 throw new DebeziumException("'debezium.shutdown.after.snapshot' requires the Debezium JMX metrics, which are not available in this build");
             }
