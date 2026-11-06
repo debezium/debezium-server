@@ -6,12 +6,10 @@
 package io.debezium.server.databricks.zerobus;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -72,6 +70,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
     private ZerobusChangeConsumerConfig config;
     private ZerobusSdk sdk;
     private final ZerobusSinkMetrics metrics = new ZerobusSinkMetrics("grpc");
+    private final ZerobusAckWaitMonitor ackWaits = new ZerobusAckWaitMonitor(metrics, LOGGER);
     private long batchesSinceLog = 0;
 
     // One stream per target table (Zerobus: 1 stream = 1 table). Access-ordered so that iteration
@@ -140,6 +139,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         if (sdk != null) {
             sdk.close();
         }
+        ackWaits.close();
         metrics.setConnected(false);
         metrics.unregister();
         LOGGER.info("Zerobus gRPC sink closed");
@@ -171,8 +171,9 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
         // Track only the streams that actually received a record in this batch, so we flush those
         // rather than every open stream: with N tables but only a few touched per batch, flushing
-        // all N would add avoidable round-trips.
-        final Set<String> touchedTables = new HashSet<>();
+        // all N would add avoidable round-trips. The count per table is the number of records the
+        // flush of that stream has to acknowledge, which is reported if the wait runs long.
+        final Map<String, Integer> pendingPerTable = new LinkedHashMap<>();
 
         // Metadata of the records handed to the SDK, counted only once the flush below makes them
         // durable. Counting at ingestion time would over-report: a record enqueued on a stream whose
@@ -187,7 +188,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 LOGGER.debug("Ingesting into {}: {}", table, json);
                 try {
                     stream(table).ingest(json);
-                    touchedTables.add(table);
+                    pendingPerTable.merge(table, 1, Integer::sum);
                     ingestedOperations.add(operationOf(record));
                     final long sourceTsMs = sourceTsMsOf(record);
                     if (sourceTsMs >= 0) {
@@ -212,11 +213,12 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         // The commit must happen after the flush: committing first would advance the source offset
         // while the ingested records are still buffered, so a crash between commit and flush would
         // drop them (breaking the at-least-once guarantee).
-        if (!touchedTables.isEmpty()) {
+        if (!pendingPerTable.isEmpty()) {
             final long flushStartNanos = System.nanoTime();
-            for (String table : touchedTables) {
+            for (Map.Entry<String, Integer> pending : pendingPerTable.entrySet()) {
+                final String table = pending.getKey();
                 try {
-                    streams.get(table).flush();
+                    ackWaits.await(table, pending.getValue(), config.getFlushWarnThresholdMs(), () -> streams.get(table).flush());
                 }
                 catch (Exception e) {
                     metrics.recordError();
@@ -333,7 +335,8 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         for (P payload : payloads) {
             lastOffset = stream.ingest(payload);
         }
-        stream.waitForOffset(lastOffset);
+        final long offsetToAwait = lastOffset;
+        ackWaits.await(table, payloads.size(), config.getFlushWarnThresholdMs(), () -> stream.waitForOffset(offsetToAwait));
     }
 
     private void validatePayloadSize(ZerobusEnvelope record, int payloadBytes) {
@@ -625,6 +628,7 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 ZerobusChangeConsumerConfig.RECOVERY_BACKOFF_MS,
                 ZerobusChangeConsumerConfig.RECOVERY_TIMEOUT_MS,
                 ZerobusChangeConsumerConfig.FLUSH_TIMEOUT_MS,
+                ZerobusChangeConsumerConfig.FLUSH_WARN_THRESHOLD_MS,
                 ZerobusChangeConsumerConfig.METRICS_LOG_INTERVAL);
     }
 

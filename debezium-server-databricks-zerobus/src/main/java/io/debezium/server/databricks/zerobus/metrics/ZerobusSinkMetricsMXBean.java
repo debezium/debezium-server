@@ -37,6 +37,7 @@ public interface ZerobusSinkMetricsMXBean {
     String METRIC_MILLISECONDS_SINCE_LAST_EVENT = "MilliSecondsSinceLastEvent";
     String METRIC_LAST_FLUSH_DURATION_MILLIS = "LastFlushDurationMillis";
     String METRIC_MAX_FLUSH_DURATION_MILLIS = "MaxFlushDurationMillis";
+    String METRIC_CURRENT_FLUSH_DURATION_MILLIS = "CurrentFlushDurationMillis";
     String METRIC_CONNECTED = "Connected";
     String METRIC_ROUTE = "Route";
 
@@ -118,6 +119,14 @@ public interface ZerobusSinkMetricsMXBean {
      * @return the longest flush/POST/acknowledgement duration observed, in milliseconds
      */
     long getMaxFlushDurationMillis();
+
+    /**
+     * @return how long the flush in progress has been waiting for Zerobus to acknowledge the records of a
+     *         batch, in milliseconds; {@code 0} when no wait is in progress. A value that keeps growing means
+     *         the offsets of that batch are not committed yet. Only the gRPC route reports a wait in progress;
+     *         the REST and Kafka routes keep this at {@code 0}.
+     */
+    long getCurrentFlushDurationMillis();
 
     /**
      * @return whether the sink currently holds a usable connection to Zerobus. Mirrors
