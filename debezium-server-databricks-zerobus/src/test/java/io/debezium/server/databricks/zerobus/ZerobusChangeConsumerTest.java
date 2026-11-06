@@ -5,9 +5,13 @@
  */
 package io.debezium.server.databricks.zerobus;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -17,10 +21,12 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
 
 import io.debezium.DebeziumException;
+import io.debezium.config.Configuration;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
@@ -150,6 +156,115 @@ class ZerobusChangeConsumerTest {
         verify(metrics).recordError();
     }
 
+    @Test
+    void reportsTheTypedFlushInProgressThroughTheDurationGauge() throws Exception {
+        ZerobusStreamHandle<String> stream = mockStream();
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
+        ZerobusSinkMetrics metrics = (ZerobusSinkMetrics) get(consumer, "metrics");
+        AtomicLong duringFlush = new AtomicLong(-1L);
+        doAnswer(invocation -> {
+            Thread.sleep(100);
+            duringFlush.set(metrics.getCurrentFlushDurationMillis());
+            return null;
+        }).when(stream).flush();
+
+        consumer.handle(events(event("{\"id\":1}", "main.default.customers")));
+
+        assertThat(duringFlush.get()).isGreaterThanOrEqualTo(50);
+        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
+    }
+
+    @Test
+    void watchesTheTypedFlushPerTableWithItsPendingRecordCountAndTheConfiguredThreshold() throws Exception {
+        ZerobusStreamHandle<String> stream = mockStream();
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
+        ZerobusAckWaitMonitor monitor = mock(ZerobusAckWaitMonitor.class);
+        set(consumer, "ackWaits", monitor);
+
+        consumer.handle(events(event("{\"id\":1}", "main.default.customers"), event("{\"id\":2}", "main.default.customers")));
+
+        verify(monitor).await(eq("main.default.customers"), eq(2), eq(30000L), any());
+    }
+
+    @Test
+    void watchesTheEnvelopeAcknowledgementWaitPerTable() throws Exception {
+        ZerobusStreamHandle<String> stream = mockStream();
+        ZerobusChangeConsumer consumer = envelopeConsumerWithStream("main.default.customers", stream);
+        ZerobusAckWaitMonitor monitor = mock(ZerobusAckWaitMonitor.class);
+        // Run the wait the sink hands to the monitor, so the stream still sees it.
+        doAnswer(invocation -> {
+            invocation.<ZerobusAckWaitMonitor.Acknowledgement> getArgument(3).await();
+            return null;
+        }).when(monitor).await(any(), anyInt(), anyLong(), any());
+        set(consumer, "ackWaits", monitor);
+
+        consumer.handle(events(event("{\"id\":1}", "main.default.customers"), event("{\"id\":2}", "main.default.customers")));
+
+        verify(stream).waitForOffset(anyLong());
+        verify(monitor).await(eq("main.default.customers"), eq(2), eq(30000L), any());
+    }
+
+    @Test
+    void exposesTheFlushWarnThresholdAsAConfigField() {
+        io.debezium.config.Field.Set fields = new ZerobusChangeConsumer().getConfigFields();
+
+        assertThat(fields.asArray()).extracting("name").contains("flush.warn.threshold.ms");
+    }
+
+    @Test
+    void reportsTheWaitInProgressAcrossAllTablesOfATypedBatch() throws Exception {
+        ZerobusStreamHandle<String> customers = mockStream();
+        ZerobusStreamHandle<String> orders = mockStream();
+        ZerobusChangeConsumer consumer = consumerWithStreams(Map.of("main.default.customers", customers, "main.default.orders", orders));
+        ZerobusSinkMetrics metrics = (ZerobusSinkMetrics) get(consumer, "metrics");
+        AtomicLong duringSecondFlush = new AtomicLong(-1L);
+        AtomicLong firstFlushes = new AtomicLong();
+        org.mockito.stubbing.Answer<Void> flush = invocation -> {
+            if (firstFlushes.getAndIncrement() == 0) {
+                Thread.sleep(100);
+            }
+            else {
+                duringSecondFlush.set(metrics.getCurrentFlushDurationMillis());
+            }
+            return null;
+        };
+        doAnswer(flush).when(customers).flush();
+        doAnswer(flush).when(orders).flush();
+
+        consumer.handle(events(event("{\"id\":1}", "main.default.customers"), event("{\"id\":2}", "main.default.orders")));
+
+        // Like LastFlushDurationMillis, the value covers the whole loop, so it does not restart for the second table.
+        assertThat(duringSecondFlush.get()).isGreaterThanOrEqualTo(50);
+        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
+    }
+
+    @Test
+    void clearsTheWaitInProgressWhenATypedFlushFails() throws Exception {
+        ZerobusStreamHandle<String> stream = mockStream();
+        ZerobusChangeConsumer consumer = consumerWithStream("main.default.customers", stream);
+        ZerobusSinkMetrics metrics = (ZerobusSinkMetrics) get(consumer, "metrics");
+        doThrow(new RuntimeException("boom")).when(stream).flush();
+
+        assertThatThrownBy(() -> consumer.handle(events(event("{\"id\":1}", "main.default.customers"))))
+                .isInstanceOf(DebeziumException.class);
+
+        assertThat(metrics.getCurrentFlushDurationMillis()).isZero();
+    }
+
+    @Test
+    void rejectsANegativeFlushWarnThreshold() {
+        Configuration cfg = Configuration.create()
+                .with("endpoint", "unused.example.com")
+                .with("workspace.url", "https://dbc.example.com")
+                .with("client.id", "c").with("client.secret", "s")
+                .with("flush.warn.threshold.ms", "-30000")
+                .build();
+
+        assertThatThrownBy(() -> new ZerobusChangeConsumerConfig(cfg))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("flush.warn.threshold.ms");
+    }
+
     // --- helpers -------------------------------------------------------------
 
     /** Builds a consumer with a configured default table and a pre-seeded stream map (no SDK call). */
@@ -166,6 +281,38 @@ class ZerobusChangeConsumerTest {
         set(consumer, "config", new ZerobusChangeConsumerConfig(cfg));
 
         Map<String, ZerobusStreamHandle<String>> streams = (Map<String, ZerobusStreamHandle<String>>) get(consumer, "streams");
+        streams.put(table, stream);
+        return consumer;
+    }
+
+    /** Builds a consumer without a default table, whose stream map is pre-seeded with one stream per target table. */
+    @SuppressWarnings("unchecked")
+    private ZerobusChangeConsumer consumerWithStreams(Map<String, ZerobusStreamHandle<String>> streamsByTable) throws Exception {
+        ZerobusChangeConsumer consumer = new ZerobusChangeConsumer();
+        Configuration cfg = Configuration.create()
+                .with("endpoint", "unused.example.com")
+                .with("workspace.url", "https://dbc.example.com")
+                .with("client.id", "c").with("client.secret", "s")
+                .build();
+        set(consumer, "config", new ZerobusChangeConsumerConfig(cfg));
+        Map<String, ZerobusStreamHandle<String>> streams = (Map<String, ZerobusStreamHandle<String>>) get(consumer, "streams");
+        streams.putAll(streamsByTable);
+        return consumer;
+    }
+
+    /** Builds a consumer in envelope mode whose envelope stream map is pre-seeded with the given stream. */
+    @SuppressWarnings("unchecked")
+    private ZerobusChangeConsumer envelopeConsumerWithStream(String table, ZerobusStreamHandle<String> stream) throws Exception {
+        ZerobusChangeConsumer consumer = new ZerobusChangeConsumer();
+        Configuration cfg = Configuration.create()
+                .with("endpoint", "unused.example.com")
+                .with("workspace.url", "https://dbc.example.com")
+                .with("client.id", "c").with("client.secret", "s")
+                .with("payload.mode", "envelope")
+                .build();
+        set(consumer, "config", new ZerobusChangeConsumerConfig(cfg));
+        consumer.configureEnvelopePath();
+        Map<String, ZerobusStreamHandle<?>> streams = (Map<String, ZerobusStreamHandle<?>>) get(consumer, "envelopeStreams");
         streams.put(table, stream);
         return consumer;
     }

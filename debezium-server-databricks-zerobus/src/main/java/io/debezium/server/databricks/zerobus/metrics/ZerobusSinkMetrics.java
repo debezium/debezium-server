@@ -55,6 +55,7 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
     private final AtomicLong lastEventTsMs = new AtomicLong(-1L);
     private final AtomicLong lastFlushDurationMillis = new AtomicLong();
     private final AtomicLong maxFlushDurationMillis = new AtomicLong();
+    private final AtomicLong ackWaitStartedMs = new AtomicLong(-1L);
     private volatile boolean connected;
 
     public ZerobusSinkMetrics(String route) {
@@ -159,6 +160,20 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
         totalFlushes.incrementAndGet();
     }
 
+    /**
+     * Marks the start of a wait for Zerobus to acknowledge the records of a batch, so that
+     * {@link #getCurrentFlushDurationMillis()} reports the wait while it is still in progress. Every call
+     * must be paired with {@link #ackWaitEnded()}, including when the wait fails.
+     */
+    public void ackWaitStarted() {
+        ackWaitStartedMs.set(clock.getAsLong());
+    }
+
+    /** Marks the end of the wait started by {@link #ackWaitStarted()}, whether it succeeded or failed. */
+    public void ackWaitEnded() {
+        ackWaitStartedMs.set(-1L);
+    }
+
     public void streamOpened() {
         activeStreams.incrementAndGet();
     }
@@ -171,11 +186,12 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
     public void logMetricsSummary() {
         LOGGER.info("Zerobus sink metrics [{}]: ingested={} (c={} u={} d={} r={}) skipped={} errors={} "
                 + "flushes={} activeStreams={} connected={} behindSourceMs={} sinceLastEventMs={} "
-                + "lastFlushMs={} maxFlushMs={}",
+                + "lastFlushMs={} maxFlushMs={} currentFlushMs={}",
                 route, getTotalRecordsIngested(), getTotalInserts(), getTotalUpdates(), getTotalDeletes(),
                 getTotalReads(), getTotalRecordsSkipped(), getTotalErrors(), getTotalFlushes(),
                 getActiveStreams(), isConnected(), getMilliSecondsBehindSource(),
-                getMilliSecondsSinceLastEvent(), getLastFlushDurationMillis(), getMaxFlushDurationMillis());
+                getMilliSecondsSinceLastEvent(), getLastFlushDurationMillis(), getMaxFlushDurationMillis(),
+                getCurrentFlushDurationMillis());
     }
 
     // -- MXBean getters -------------------------------------------------------------------------
@@ -256,6 +272,15 @@ public class ZerobusSinkMetrics implements ZerobusSinkMetricsMXBean {
     @Override
     public long getMaxFlushDurationMillis() {
         return maxFlushDurationMillis.get();
+    }
+
+    @Override
+    public long getCurrentFlushDurationMillis() {
+        final long started = ackWaitStartedMs.get();
+        if (started < 0) {
+            return 0L;
+        }
+        return Math.max(0L, clock.getAsLong() - started);
     }
 
     @Override

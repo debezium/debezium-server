@@ -239,6 +239,16 @@ public class ZerobusChangeConsumerConfig {
             .withDescription("Time, in milliseconds, that a flush waits for the records in the stream to be "
                     + "acknowledged. When this option is not set, the SDK default applies.");
 
+    public static final Field FLUSH_WARN_THRESHOLD_MS = Field.create("flush.warn.threshold.ms")
+            .withDisplayName("Flush warning threshold")
+            .withType(ConfigDef.Type.INT)
+            .withDefault(30000)
+            .withImportance(ConfigDef.Importance.LOW)
+            .withValidation(Field::isNonNegativeInteger)
+            .withDescription("Time, in milliseconds, after which a wait for Zerobus to acknowledge the records of a batch "
+                    + "is logged at WARN, and logged again every time this interval elapses while the wait continues. "
+                    + "The wait in progress is also exposed over JMX. 0 disables the warning; negative values are rejected.");
+
     public static final Field METRICS_LOG_INTERVAL = Field.create("metrics.log.interval")
             .withDisplayName("Metrics log interval (batches)")
             .withType(ConfigDef.Type.INT)
@@ -265,6 +275,7 @@ public class ZerobusChangeConsumerConfig {
     private final Integer recoveryBackoffMs;
     private final Integer recoveryTimeoutMs;
     private final Integer flushTimeoutMs;
+    private final int flushWarnThresholdMs;
     private final int metricsLogInterval;
 
     public ZerobusChangeConsumerConfig(Configuration config) {
@@ -300,6 +311,11 @@ public class ZerobusChangeConsumerConfig {
         this.recoveryBackoffMs = optionalInteger(config, RECOVERY_BACKOFF_MS);
         this.recoveryTimeoutMs = optionalInteger(config, RECOVERY_TIMEOUT_MS);
         this.flushTimeoutMs = optionalInteger(config, FLUSH_TIMEOUT_MS);
+        this.flushWarnThresholdMs = config.getInteger(FLUSH_WARN_THRESHOLD_MS);
+        if (flushWarnThresholdMs < 0) {
+            throw new io.debezium.DebeziumException("Zerobus flush.warn.threshold.ms must not be negative, but is " + flushWarnThresholdMs
+                    + "; use 0 to disable the warning");
+        }
         this.metricsLogInterval = config.getInteger(METRICS_LOG_INTERVAL);
     }
 
@@ -415,6 +431,11 @@ public class ZerobusChangeConsumerConfig {
     /** @return the flush timeout, or {@code null} to keep the SDK default */
     public Integer getFlushTimeoutMs() {
         return flushTimeoutMs;
+    }
+
+    /** @return the wait, in milliseconds, after which an acknowledgement wait is logged, or {@code 0} to disable it */
+    public int getFlushWarnThresholdMs() {
+        return flushWarnThresholdMs;
     }
 
     public int getMetricsLogInterval() {
