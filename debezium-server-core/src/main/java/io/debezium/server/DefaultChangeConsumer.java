@@ -54,7 +54,7 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
 
     @Inject
     public DefaultChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer, Config config,
-                                 DebeziumServerConfig serverConfig, Instance<DebeziumMetrics> debeziumMetrics) {
+                                 DebeziumServerConfig serverConfig, Instance<ShutdownAfterSnapshotGuard> shutdownAfterSnapshotGuard) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();
@@ -65,11 +65,10 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "tasks.max", Integer.class).orElse(1),
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "database.names", String.class).orElse(null),
                     serverConfig.shutdownOnCompletion());
-            if (!debeziumMetrics.isResolvable()) {
+            if (!shutdownAfterSnapshotGuard.isResolvable()) {
                 throw new DebeziumException("'debezium.shutdown.after.snapshot' requires the Debezium JMX metrics, which are not available in this build");
             }
-            final DebeziumMetrics metrics = debeziumMetrics.get();
-            this.shutdownAfterSnapshotGuard = new ShutdownAfterSnapshotGuard(metrics::snapshotCompleted, metrics::streamingQueueCurrentSize);
+            this.shutdownAfterSnapshotGuard = shutdownAfterSnapshotGuard.get();
         }
         else {
             this.shutdownAfterSnapshotGuard = null;
