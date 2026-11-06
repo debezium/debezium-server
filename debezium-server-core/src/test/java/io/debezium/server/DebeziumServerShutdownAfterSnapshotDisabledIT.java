@@ -17,6 +17,7 @@ import jakarta.inject.Inject;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.debezium.runtime.events.DebeziumCompletionEvent;
@@ -33,6 +34,8 @@ import io.quarkus.test.junit.TestProfile;
 @QuarkusTestResource(value = FreshOffsetsResource.class, restrictToAnnotatedClass = true)
 @TestProfile(ShutdownAfterSnapshotDisabledProfile.class)
 @EnabledIfSystemProperty(named = "test.apicurio", matches = "false", disabledReason = "Shutdown tests don't run with apicurio profile.")
+@DisabledIfSystemProperty(named = "debezium.format.key", matches = "protobuf")
+@DisabledIfSystemProperty(named = "debezium.format.value", matches = "protobuf")
 public class DebeziumServerShutdownAfterSnapshotDisabledIT {
 
     static final List<DebeziumCompletionEvent> COMPLETIONS = Collections.synchronizedList(new ArrayList<>());
