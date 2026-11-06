@@ -38,15 +38,35 @@ public class ShutdownAfterSnapshotGuard {
     }
 
     /**
-     * Fails fast when {@code debezium.shutdown.after.snapshot} is enabled with a snapshot mode which keeps streaming. Such a mode
-     * would lose the stream, which the user has to ask for explicitly.
+     * Fails fast when {@code debezium.shutdown.after.snapshot} is enabled with a configuration in which it would not work as
+     * documented:
+     * <ul>
+     * <li>a snapshot mode which keeps streaming would lose the stream, which the user has to ask for explicitly;</li>
+     * <li>with several tasks or databases, the snapshot metrics and the queue of a single one are read, so the server could stop
+     * while another one is still taking its snapshot;</li>
+     * <li>without {@code debezium.shutdown.on.completion}, the engine would stop but the process would keep running.</li>
+     * </ul>
      *
      * @param snapshotMode the value of {@code debezium.source.snapshot.mode}
+     * @param tasksMax the value of {@code debezium.source.tasks.max}
+     * @param databaseNames the value of {@code debezium.source.database.names}, or {@code null} if not set
+     * @param shutdownOnCompletion the value of {@code debezium.shutdown.on.completion}
      */
-    public static void requireInitialOnly(String snapshotMode) {
+    public static void requireSupportedConfiguration(String snapshotMode, int tasksMax, String databaseNames, boolean shutdownOnCompletion) {
         if (!"initial_only".equals(snapshotMode)) {
             throw new DebeziumException("'debezium.shutdown.after.snapshot' requires 'debezium.source.snapshot.mode=initial_only', "
                     + "but the snapshot mode is '" + snapshotMode + "'");
+        }
+        if (tasksMax > 1) {
+            throw new DebeziumException("'debezium.shutdown.after.snapshot' supports a single task, but 'debezium.source.tasks.max' is " + tasksMax);
+        }
+        if (databaseNames != null && databaseNames.contains(",")) {
+            throw new DebeziumException("'debezium.shutdown.after.snapshot' supports a single database, but 'debezium.source.database.names' is '"
+                    + databaseNames + "'");
+        }
+        if (!shutdownOnCompletion) {
+            throw new DebeziumException("'debezium.shutdown.after.snapshot' requires 'debezium.shutdown.on.completion=true', "
+                    + "otherwise the process keeps running after the engine stops");
         }
     }
 }
