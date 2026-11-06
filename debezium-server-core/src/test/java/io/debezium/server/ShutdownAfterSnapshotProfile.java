@@ -19,6 +19,8 @@ public class ShutdownAfterSnapshotProfile implements QuarkusTestProfile {
         return Map.of(
                 "debezium.shutdown.after.snapshot", "true",
                 "debezium.source.snapshot.mode", "initial_only",
-                "debezium.source.max.batch.size", "1");
+                "debezium.source.max.batch.size", "1",
+                "debezium.source.notification.enabled.channels", "sink",
+                "debezium.source.notification.sink.topic.name", "testc.notifications");
     }
 }
