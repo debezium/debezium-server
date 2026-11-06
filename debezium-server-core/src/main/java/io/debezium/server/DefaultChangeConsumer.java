@@ -74,7 +74,6 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
                     extractLineageMetadata(events),
                     () -> LOGGER.warn("Current {} sink is not supported to emit OpenLineage output dataset", sink));
         }
-
     }
 
     private Consumer<DatasetMetadata.DataStore> extractLineageMetadata(CapturingEvents<BatchEvent> events) {
