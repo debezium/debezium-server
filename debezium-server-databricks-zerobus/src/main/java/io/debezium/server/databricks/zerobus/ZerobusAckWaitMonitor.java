@@ -5,9 +5,9 @@
  */
 package io.debezium.server.databricks.zerobus;
 
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -52,7 +52,8 @@ final class ZerobusAckWaitMonitor implements AutoCloseable {
      * @param table the target table whose stream is being waited on
      * @param pendingRecords the number of records handed to the stream since its last acknowledgement
      * @param warnThresholdMs the wait after which the wait is logged, repeated at the same interval;
-     *            {@code 0} or a negative value disables the logging. The JMX duration is reported regardless.
+     *            {@code 0} disables the warning, as documented for {@code flush.warn.threshold.ms}, and a negative value does the same.
+     *            The JMX duration is reported regardless.
      * @param acknowledgement the wait itself
      * @throws Exception whatever {@code acknowledgement} throws; the wait is unmarked in all cases
      */
@@ -92,11 +93,14 @@ final class ZerobusAckWaitMonitor implements AutoCloseable {
 
     private synchronized ScheduledExecutorService scheduler() {
         if (watchdog == null) {
-            watchdog = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1, runnable -> {
                 final Thread thread = new Thread(runnable, "zerobus-ack-wait-watchdog");
                 thread.setDaemon(true);
                 return thread;
             });
+            // A cancelled warning is removed from the queue at once, instead of staying there until its first fire time.
+            executor.setRemoveOnCancelPolicy(true);
+            watchdog = executor;
         }
         return watchdog;
     }
