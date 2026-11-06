@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
 import io.debezium.connector.common.DebeziumTaskState;
-import io.debezium.engine.StopEngineException;
 import io.debezium.openlineage.ConnectorContext;
 import io.debezium.openlineage.DebeziumOpenLineageEmitter;
 import io.debezium.openlineage.dataset.DatasetDataExtractor;
@@ -35,8 +34,6 @@ import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.Capturing;
 import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.api.ChangeConsumerHolder;
-import io.debezium.server.configuration.DebeziumServerConfig;
-import io.debezium.server.lifecycle.ShutdownAfterSnapshotGuard;
 import io.quarkus.runtime.Startup;
 
 @ApplicationScoped
@@ -49,27 +46,13 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
     private final boolean isOpenLineageEnabled;
-    private final ShutdownAfterSnapshotGuard shutdownAfterSnapshotGuard;
 
     @Inject
-    public DefaultChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer, Config config,
-                                 DebeziumServerConfig serverConfig) {
+    public DefaultChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer, Config config) {
         this.delegateConsumer = delegateConsumer;
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();
         this.isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, boolean.class).orElse(false);
-        if (serverConfig.shutdownAfterSnapshot()) {
-            ShutdownAfterSnapshotGuard.requireSupportedConfiguration(
-                    config.getOptionalValue(PROP_SOURCE_PREFIX + "snapshot.mode", String.class).orElse("initial"),
-                    config.getOptionalValue(PROP_SOURCE_PREFIX + "notification.enabled.channels", String.class).orElse(null),
-                    config.getOptionalValue(PROP_SOURCE_PREFIX + "tasks.max", Integer.class).orElse(1),
-                    config.getOptionalValue(PROP_SOURCE_PREFIX + "database.names", String.class).orElse(null),
-                    serverConfig.shutdownOnCompletion());
-            this.shutdownAfterSnapshotGuard = new ShutdownAfterSnapshotGuard();
-        }
-        else {
-            this.shutdownAfterSnapshotGuard = null;
-        }
     }
 
     @Capturing
@@ -90,14 +73,6 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
             dataStore.ifPresentOrElse(
                     extractLineageMetadata(events),
                     () -> LOGGER.warn("Current {} sink is not supported to emit OpenLineage output dataset", sink));
-        }
-
-        // Only after the sink handled this batch: the engine stops here and commits the offsets of the delivered records,
-        // including the one of the notification, which is the offset of the completed snapshot.
-        if (shutdownAfterSnapshotGuard != null
-                && events.records().stream().anyMatch(record -> shutdownAfterSnapshotGuard.isEndOfInitialSnapshot(record.record()))) {
-            LOGGER.info("Initial snapshot delivered to the sink, stopping the engine");
-            throw new StopEngineException("Initial snapshot delivered, stopping the engine");
         }
 
     }
