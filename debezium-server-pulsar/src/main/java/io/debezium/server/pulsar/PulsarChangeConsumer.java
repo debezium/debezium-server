@@ -42,6 +42,8 @@ import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
+import io.debezium.server.tracing.TracingUtil;
+import io.opentelemetry.context.Scope;
 
 /**
  * Implementation of the consumer that delivers the messages into a Pulsar destination.
@@ -185,16 +187,18 @@ public class PulsarChangeConsumer extends BaseChangeConsumer implements Debezium
                     .value(record.value());
 
             // We will wait for the producers to flush instead of waiting for these individually
-            message.sendAsync()
-                    .whenComplete((messageId, exception) -> {
-                        if (exception == null) {
-                            LOGGER.trace("Sent message with id: {}", messageId);
-                            record.commit();
-                        }
-                        else {
-                            LOGGER.error("Failed to send record to " + record.destination() + " destination", exception);
-                        }
-                    });
+            try (Scope ignored = TracingUtil.tracingContext(record).makeCurrent()) {
+                message.sendAsync()
+                        .whenComplete((messageId, exception) -> {
+                            if (exception == null) {
+                                LOGGER.trace("Sent message with id: {}", messageId);
+                                record.commit();
+                            }
+                            else {
+                                LOGGER.error("Failed to send record to " + record.destination() + " destination", exception);
+                            }
+                        });
+            }
         }
 
         // Flush all producers asynchronously
