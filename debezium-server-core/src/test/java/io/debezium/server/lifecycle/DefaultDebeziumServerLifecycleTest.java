@@ -65,6 +65,11 @@ public class DefaultDebeziumServerLifecycleTest {
             public boolean shutdownOnCompletion() {
                 return value;
             }
+
+            @Override
+            public boolean shutdownAfterSnapshot() {
+                return false;
+            }
         };
     }
 
