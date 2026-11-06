@@ -62,6 +62,18 @@ class ShutdownAfterSnapshotGuardTest {
     }
 
     @Test
+    void shouldAcceptTheSnapshotModeInAnyCase() {
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("INITIAL_ONLY", 1, null, true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("Initial_Only", 1, null, true);
+    }
+
+    @Test
+    void shouldIgnoreEmptyItemsInDatabaseNames() {
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, "inventory,", true);
+        ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial_only", 1, " inventory , , ", true);
+    }
+
+    @Test
     void shouldRejectModesWhichStream() {
         assertThatThrownBy(() -> ShutdownAfterSnapshotGuard.requireSupportedConfiguration("initial", 1, null, true))
                 .isInstanceOf(DebeziumException.class)
