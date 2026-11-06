@@ -9,22 +9,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
-
-import io.debezium.server.databricks.zerobus.metrics.ZerobusSinkMetrics;
 
 /**
  * Makes a long wait for Zerobus to acknowledge a batch visible while it lasts.
  * <p>
  * The sink does not commit the source offsets of a batch until Zerobus has acknowledged its records,
- * so a slow acknowledgement looks like an idle sink unless something reports it. This monitor marks the
- * wait in {@link ZerobusSinkMetrics} (exposed over JMX as {@code CurrentFlushDurationMillis}) and, once
- * the wait has lasted {@code warnThresholdMs}, logs a WARN with the target table, the number of records
- * still awaiting acknowledgement and the elapsed time. The WARN repeats at the same interval for as long
+ * so a slow acknowledgement looks like an idle sink unless something reports it. Once a wait has lasted
+ * {@code warnThresholdMs}, this monitor logs a WARN with the target table, the number of records still
+ * awaiting acknowledgement and the elapsed time. The WARN repeats at the same interval for as long
  * as the wait continues. A wait that ran past the threshold and then completed is reported at INFO with
- * its total duration.
+ * its total duration. A WARN is never logged once the wait has completed. The duration of the wait in
+ * progress is reported over JMX by the caller, at the same scope as the flush duration metrics.
  * <p>
  * The periodic reporting runs on a single daemon thread that is created on the first watched wait and
  * stopped by {@link #close()}.
@@ -37,12 +34,10 @@ final class ZerobusAckWaitMonitor implements AutoCloseable {
         void await() throws Exception;
     }
 
-    private final ZerobusSinkMetrics metrics;
     private final Logger logger;
     private ScheduledExecutorService watchdog;
 
-    ZerobusAckWaitMonitor(ZerobusSinkMetrics metrics, Logger logger) {
-        this.metrics = metrics;
+    ZerobusAckWaitMonitor(Logger logger) {
         this.logger = logger;
     }
 
@@ -51,40 +46,79 @@ final class ZerobusAckWaitMonitor implements AutoCloseable {
      *
      * @param table the target table whose stream is being waited on
      * @param pendingRecords the number of records handed to the stream since its last acknowledgement
-     * @param warnThresholdMs the wait after which the wait is logged, repeated at the same interval;
-     *            {@code 0} disables the warning, as documented for {@code flush.warn.threshold.ms}, and a negative value does the same.
-     *            The JMX duration is reported regardless.
+     * @param warnThresholdMs the wait after which the wait is logged, repeated at the same interval; {@code 0} disables
+     *            the warning
      * @param acknowledgement the wait itself
-     * @throws Exception whatever {@code acknowledgement} throws; the wait is unmarked in all cases
+     * @throws Exception whatever {@code acknowledgement} throws; the watchdog is stopped in all cases
      */
     void await(String table, int pendingRecords, long warnThresholdMs, Acknowledgement acknowledgement) throws Exception {
-        final long startNanos = System.nanoTime();
-        final AtomicBoolean warned = new AtomicBoolean();
-        metrics.ackWaitStarted();
+        final WaitWatch watch = new WaitWatch(table, pendingRecords, warnThresholdMs, logger);
         final ScheduledFuture<?> warning = warnThresholdMs > 0
-                ? scheduler().scheduleAtFixedRate(() -> logStillPending(table, pendingRecords, startNanos, warnThresholdMs, warned),
-                        warnThresholdMs, warnThresholdMs, TimeUnit.MILLISECONDS)
+                ? scheduler().scheduleAtFixedRate(watch, warnThresholdMs, warnThresholdMs, TimeUnit.MILLISECONDS)
                 : null;
+        boolean warned = false;
         try {
             acknowledgement.await();
         }
         finally {
+            // Marking the wait as finished first means a watchdog run that is already in progress either logged its
+            // WARN before this point, or sees the wait as finished and logs nothing.
+            warned = watch.finish();
             if (warning != null) {
                 warning.cancel(false);
             }
-            metrics.ackWaitEnded();
         }
-        if (warned.get()) {
+        if (warned) {
             logger.info("Zerobus acknowledged the {} records for table '{}' after {} ms",
-                    pendingRecords, table, elapsedMs(startNanos));
+                    pendingRecords, table, watch.elapsedMs());
         }
     }
 
-    private void logStillPending(String table, int pendingRecords, long startNanos, long warnThresholdMs, AtomicBoolean warned) {
-        warned.set(true);
-        logger.warn("Zerobus has not acknowledged the {} records for table '{}' after {} ms. The offsets of this batch "
-                + "are not committed until it is acknowledged (threshold: debezium.sink.zerobus.flush.warn.threshold.ms={})",
-                pendingRecords, table, elapsedMs(startNanos), warnThresholdMs);
+    /**
+     * The state of one watched wait, shared by the waiting thread and the watchdog. Both sides take the same lock, so a
+     * WARN is either logged before the wait finishes, and then followed by the INFO line, or not at all.
+     */
+    static final class WaitWatch implements Runnable {
+
+        private final String table;
+        private final int pendingRecords;
+        private final long warnThresholdMs;
+        private final Logger logger;
+        private final long startNanos = System.nanoTime();
+        private boolean finished;
+        private boolean warned;
+
+        WaitWatch(String table, int pendingRecords, long warnThresholdMs, Logger logger) {
+            this.table = table;
+            this.pendingRecords = pendingRecords;
+            this.warnThresholdMs = warnThresholdMs;
+            this.logger = logger;
+        }
+
+        @Override
+        public synchronized void run() {
+            if (finished) {
+                return;
+            }
+            warned = true;
+            logger.warn("Zerobus has not acknowledged the {} records for table '{}' after {} ms. The offsets of this batch "
+                    + "are not committed until it is acknowledged (threshold: debezium.sink.zerobus.flush.warn.threshold.ms={})",
+                    pendingRecords, table, elapsedMs(), warnThresholdMs);
+        }
+
+        /**
+         * Marks the wait as finished, so that no further WARN is logged.
+         *
+         * @return {@code true} if a WARN was logged for this wait
+         */
+        synchronized boolean finish() {
+            finished = true;
+            return warned;
+        }
+
+        long elapsedMs() {
+            return ZerobusAckWaitMonitor.elapsedMs(startNanos);
+        }
     }
 
     private static long elapsedMs(long startNanos) {
