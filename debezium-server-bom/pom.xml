@@ -80,6 +80,16 @@
                 <version>${version.lz4}</version>
             </dependency>
 
+            <!-- Debezium BOM overlay (MongoDB and MySQL drivers) must be imported before any other BOM
+                 so that its versions take precedence over those managed by Quarkus -->
+            <dependency>
+                <groupId>io.debezium</groupId>
+                <artifactId>debezium-bom-overlay</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- This needs to be defined before Quarkus to guarantee that the
                  right Infinispan dependencies are imported -->
             <dependency>
@@ -121,27 +131,9 @@
 
             <!-- Override Quarkus default driver versions -->
             <dependency>
-                <groupId>mysql</groupId>
-                <artifactId>mysql-connector-java</artifactId>
-                <version>${version.mysql.driver}</version>
-            </dependency>
-
-            <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>${version.postgresql.driver}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>org.mongodb</groupId>
-                <artifactId>mongodb-driver-core</artifactId>
-                <version>${version.mongo.driver}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>org.mongodb</groupId>
-                <artifactId>mongodb-driver-sync</artifactId>
-                <version>${version.mongo.driver}</version>
             </dependency>
 
             <dependency>
