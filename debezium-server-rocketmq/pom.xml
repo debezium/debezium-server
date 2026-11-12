@@ -32,6 +32,14 @@
                     <groupId>org.lz4</groupId>
                     <artifactId>lz4-java</artifactId>
                 </exclusion>
+                <!-- Only the RocketMQ server components (broker, proxy, controller) use this exporter; the client
+                     and tools used by Debezium do not. It brings the prometheus-metrics jars into the distribution's
+                     lib directory, where they clash with the copy bundled in the Prometheus JMX exporter agent and
+                     stop the JVM at startup when JMX_EXPORTER_PORT is set (debezium/dbz#3043). -->
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-prometheus</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
@@ -42,6 +50,11 @@
                 <exclusion>
                     <groupId>org.lz4</groupId>
                     <artifactId>lz4-java</artifactId>
+                </exclusion>
+                <!-- Same reason as for rocketmq-client above. -->
+                <exclusion>
+                    <groupId>io.opentelemetry</groupId>
+                    <artifactId>opentelemetry-exporter-prometheus</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

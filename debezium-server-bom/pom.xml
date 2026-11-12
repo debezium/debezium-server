@@ -35,6 +35,13 @@
         <version.elasticsearch.java>8.19.21</version.elasticsearch.java>
         <version.elasticsearch.rest.client>8.19.20</version.elasticsearch.rest.client>
         <version.commons.logging>1.2</version.commons.logging>
+        <!-- The Prometheus JMX exporter agent bundles its own, unrelocated copy of the prometheus-metrics
+             classes. The agent is appended to the class path, so any prometheus-metrics jar in the distribution's
+             lib directory takes precedence over that copy; if the two are not binary compatible, the JVM can fail
+             at startup when JMX_EXPORTER_PORT is set (debezium/dbz#3043). Before adding a dependency that brings
+             prometheus-metrics (for instance opentelemetry-exporter-prometheus) or raising the OpenTelemetry
+             version, check that the distribution still starts with JMX_EXPORTER_PORT set. Agent releases after
+             1.0.1 are published on GitHub only, not on Maven Central, so this version cannot simply be raised. -->
         <version.jmx.exporter>1.0.1</version.jmx.exporter>
         <version.otel.agent>2.27.0</version.otel.agent>
 
