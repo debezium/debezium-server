@@ -145,7 +145,11 @@ public class ElasticsearchChangeConsumer extends BaseChangeConsumer
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Elasticsearch.",
+                Module.version()));
     }
 
     private static Map<String, String> toStringMap(Map<String, Object> source) {

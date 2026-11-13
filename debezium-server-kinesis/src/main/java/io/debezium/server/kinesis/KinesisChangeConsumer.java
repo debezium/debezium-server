@@ -233,6 +233,10 @@ public class KinesisChangeConsumer extends BaseChangeConsumer implements Debeziu
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Amazon Kinesis.",
+                Module.version()));
     }
 }

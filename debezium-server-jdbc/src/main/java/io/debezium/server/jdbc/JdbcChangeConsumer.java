@@ -150,7 +150,11 @@ public class JdbcChangeConsumer extends BaseChangeConsumer implements DebeziumSe
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to a relational database.",
+                Module.version()));
     }
 
     private static Map<String, String> toStringMap(Map<String, Object> source) {

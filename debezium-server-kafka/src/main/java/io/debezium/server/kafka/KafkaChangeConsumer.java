@@ -165,6 +165,10 @@ public class KafkaChangeConsumer extends BaseChangeConsumer implements DebeziumS
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Apache Kafka.",
+                Module.version()));
     }
 }

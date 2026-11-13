@@ -260,6 +260,10 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Azure Event Hubs.",
+                Module.version()));
     }
 }

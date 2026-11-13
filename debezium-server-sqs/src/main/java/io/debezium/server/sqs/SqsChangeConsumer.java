@@ -157,6 +157,10 @@ public class SqsChangeConsumer extends BaseChangeConsumer implements DebeziumSer
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Amazon SQS.",
+                Module.version()));
     }
 }
