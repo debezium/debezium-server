@@ -144,7 +144,11 @@ public class RocketMqChangeConsumer extends BaseChangeConsumer implements Debezi
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Apache RocketMQ.",
+                Module.version()));
     }
 
     @Override

@@ -630,6 +630,10 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Databricks Zerobus Ingest over gRPC.",
+                Module.version()));
     }
 }
