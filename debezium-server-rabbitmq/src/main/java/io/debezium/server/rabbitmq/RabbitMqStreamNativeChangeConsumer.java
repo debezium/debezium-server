@@ -402,6 +402,10 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to RabbitMQ Streams using the native stream protocol.",
+                Module.version()));
     }
 }

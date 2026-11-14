@@ -384,6 +384,10 @@ public class HttpChangeConsumer extends BaseChangeConsumer implements DebeziumSe
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to an HTTP webhook destination.",
+                Module.version()));
     }
 }

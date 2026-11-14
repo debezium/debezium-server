@@ -329,6 +329,10 @@ public class PubSubChangeConsumer extends BaseChangeConsumer implements Debezium
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to Google Cloud Pub/Sub.",
+                Module.version()));
     }
 }

@@ -241,6 +241,10 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
 
     @Override
     public List<ComponentMetadata> getConnectorMetadata() {
-        return List.of(componentMetadataFactory.createComponentMetadata(this, Module.version()));
+        return List.of(componentMetadataFactory.createComponentMetadata(
+                this,
+                null,
+                "Delivers change events to RabbitMQ exchange using AMQP.",
+                Module.version()));
     }
 }
