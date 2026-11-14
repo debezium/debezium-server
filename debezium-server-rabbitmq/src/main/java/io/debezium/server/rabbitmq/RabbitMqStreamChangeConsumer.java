@@ -244,7 +244,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         return List.of(componentMetadataFactory.createComponentMetadata(
                 this,
                 null,
-                "Delivers change events to RabbitMQ.",
+                "Delivers change events to RabbitMQ exchange using AMQP.",
                 Module.version()));
     }
 }
