@@ -21,6 +21,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.azure.core.amqp.exception.AmqpException;
+import com.azure.identity.DefaultAzureCredential;
+import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.messaging.eventhubs.EventData;
 import com.azure.messaging.eventhubs.EventHubClientBuilder;
 import com.azure.messaging.eventhubs.EventHubProducerClient;
@@ -36,6 +38,8 @@ import io.debezium.server.BaseChangeConsumer;
 import io.debezium.server.CustomConsumerBuilder;
 import io.debezium.server.api.DebeziumServerConsumer;
 import io.debezium.server.api.DebeziumServerSink;
+import io.debezium.server.eventhubs.EventHubsChangeConsumerConfig.AuthMode;
+import io.debezium.util.Strings;
 
 /**
  * This sink adapter delivers change event messages to Azure Event Hubs
@@ -93,17 +97,29 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         }
         hashMessageFunction = Optional.ofNullable(config.getHashMessageKeyFunction()).map(HashFunction::fromString);
 
-        String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(), config.getEventHubName());
-
         try {
-            producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
+            if (config.getAuthMode() == AuthMode.DEFAULT_AZURE_CREDENTIAL) {
+                if (!Strings.isNullOrEmpty(config.getConnectionString())) {
+                    LOGGER.warn(
+                            "Configuration property 'debezium.sink.eventhubs.connectionstring' is set but will be ignored because authmode is 'default-azure-credential'.");
+                }
+                DefaultAzureCredential credential = new DefaultAzureCredentialBuilder().build();
+                producer = new EventHubClientBuilder()
+                        .credential(config.getFullyQualifiedNamespace(), config.getEventHubName(), credential)
+                        .buildProducerClient();
+            }
+            else {
+                String finalConnectionString = String.format(CONNECTION_STRING_FORMAT, config.getConnectionString(), config.getEventHubName());
+                producer = new EventHubClientBuilder().connectionString(finalConnectionString).buildProducerClient();
+            }
             batchManager = new BatchManager(producer, configuredPartitionId, configuredPartitionKey, config.getMaxBatchSize());
         }
         catch (Exception e) {
             throw new DebeziumException(e);
         }
 
-        LOGGER.info("Using default Event Hubs client for namespace '{}'", producer.getFullyQualifiedNamespace());
+        LOGGER.info("Using Event Hubs client with auth mode '{}' for namespace '{}'",
+                config.getAuthMode().getValue(), producer.getFullyQualifiedNamespace());
 
         // Retrieve available partition count for the EventHub
         partitionCount = (int) producer.getPartitionIds().stream().count();
@@ -251,6 +267,8 @@ public class EventHubsChangeConsumer extends BaseChangeConsumer
         return Field.setOf(
                 EventHubsChangeConsumerConfig.CONNECTION_STRING,
                 EventHubsChangeConsumerConfig.HUB_NAME,
+                EventHubsChangeConsumerConfig.AUTH_MODE,
+                EventHubsChangeConsumerConfig.FULLY_QUALIFIED_NAMESPACE,
                 EventHubsChangeConsumerConfig.PARTITION_ID,
                 EventHubsChangeConsumerConfig.PARTITION_KEY,
                 EventHubsChangeConsumerConfig.DYNAMIC_PARTITION_ROUTING,
