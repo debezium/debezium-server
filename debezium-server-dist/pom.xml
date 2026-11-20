@@ -76,6 +76,11 @@
             <version>${version.apicurio}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+        </dependency>
+
         <!-- Sink dependencies with property-controlled scopes -->
         <dependency>
             <groupId>io.debezium</groupId>
