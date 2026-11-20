@@ -25,6 +25,7 @@ import io.quarkus.runtime.Startup;
  * <p>
  * If the consumer explicitly declares tombstone support via {@link ChangeConsumerHolder#tombstoneSupport()},
  * that value is used. Otherwise, it falls back to the default behavior defined by
+ * {@link io.debezium.engine.DebeziumEngine.ChangeConsumer#supportsTombstoneEvents()}: tombstone events are delivered.
  *
  * @see CapturingTombstoneEvents
  * @see ChangeConsumerHolder#tombstoneSupport()
@@ -40,6 +41,6 @@ public class TombstoneSupportProducer {
         return changeConsumerHolder
                 .tombstoneSupport()
                 .map(isSupported -> (CapturingTombstoneEvents) () -> isSupported)
-                .orElseGet(() -> () -> false);
+                .orElseGet(() -> () -> true);
     }
 }
