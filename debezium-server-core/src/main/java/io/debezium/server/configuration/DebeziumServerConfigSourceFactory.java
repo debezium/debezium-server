@@ -13,6 +13,7 @@ import static io.debezium.server.configuration.DebeziumProperties.PROP_KEY_FORMA
 import static io.debezium.server.configuration.DebeziumProperties.PROP_OFFSET_STORAGE_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_PREDICATES;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_PREDICATES_PREFIX;
+import static io.debezium.server.configuration.DebeziumProperties.PROP_SHUTDOWN_AFTER_SNAPSHOT;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_PREFIX;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SINK_TYPE;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SOURCE_PREFIX;
@@ -35,6 +36,7 @@ import java.util.regex.Pattern;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 
 import io.debezium.relational.history.SchemaHistory;
+import io.debezium.server.lifecycle.SnapshotNotifications;
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
@@ -157,6 +159,8 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
 
         }
 
+        enableSnapshotNotifications(context, remapped);
+
         if (remapped.isEmpty()) {
             return Collections.emptyList();
         }
@@ -187,6 +191,30 @@ public class DebeziumServerConfigSourceFactory implements ConfigSourceFactory {
                 }
             }
         });
+    }
+
+    /**
+     * {@code debezium.shutdown.after.snapshot} stops the engine on the notification of the {@code sink} channel that ends the
+     * snapshot. The channel is an implementation detail of the option, so when the user didn't enable it, it is added to the
+     * engine configuration, keeping the other channels, with an internal topic, which {@link SnapshotNotifications} uses to
+     * keep the server's notifications from the sink.
+     */
+    private static void enableSnapshotNotifications(ConfigSourceContext context, Map<String, String> remapped) {
+        ConfigValue shutdownAfterSnapshot = context.getValue(PROP_SHUTDOWN_AFTER_SNAPSHOT);
+        if (shutdownAfterSnapshot == null || !Boolean.parseBoolean(shutdownAfterSnapshot.getValue())) {
+            return;
+        }
+
+        String channelsKey = QUARKUS_DEBEZIUM_PREFIX + SnapshotNotifications.NOTIFICATION_CHANNELS;
+        String channels = remapped.get(channelsKey);
+        if (SnapshotNotifications.hasSinkChannel(channels)) {
+            return;
+        }
+
+        remapped.put(channelsKey, channels == null || channels.isBlank()
+                ? SnapshotNotifications.SINK_CHANNEL
+                : channels + "," + SnapshotNotifications.SINK_CHANNEL);
+        remapped.put(QUARKUS_DEBEZIUM_PREFIX + SnapshotNotifications.NOTIFICATION_TOPIC, SnapshotNotifications.INTERNAL_TOPIC);
     }
 
     private static boolean hasPropertyWithPrefix(ConfigSourceContext context, Map<String, String> properties, String prefix) {

@@ -5,7 +5,9 @@
  */
 package io.debezium.server.lifecycle;
 
+import static io.debezium.server.configuration.DebeziumProperties.PROP_SHUTDOWN_AFTER_SNAPSHOT;
 import static io.debezium.server.configuration.DebeziumProperties.PROP_SOURCE_PREFIX;
+import static io.debezium.server.configuration.DebeziumProperties.QUARKUS_DEBEZIUM_PREFIX;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -40,9 +42,17 @@ public class ShutdownAfterSnapshotStrategy {
     public ShutdownAfterSnapshotStrategy(DebeziumServerConfig serverConfig, Config config) {
         this(serverConfig.shutdownAfterSnapshot(), new ShutdownAfterSnapshotGuard());
         if (enabled) {
+            if (SnapshotNotifications.from(config).enabledByServer()) {
+                LOGGER.info("'{}' is enabled and the source doesn't enable the '{}' notification channel: the server enabled it, "
+                        + "with the internal topic '{}', to know when the initial snapshot ends. These notifications are not "
+                        + "delivered to the sink. Enable the '{}' channel in '{}{}' to receive them.",
+                        PROP_SHUTDOWN_AFTER_SNAPSHOT, SnapshotNotifications.SINK_CHANNEL, SnapshotNotifications.INTERNAL_TOPIC,
+                        SnapshotNotifications.SINK_CHANNEL, PROP_SOURCE_PREFIX, SnapshotNotifications.NOTIFICATION_CHANNELS);
+            }
             ShutdownAfterSnapshotGuard.requireSupportedConfiguration(
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "snapshot.mode", String.class).orElse("initial"),
-                    config.getOptionalValue(PROP_SOURCE_PREFIX + "notification.enabled.channels", String.class).orElse(null),
+                    // The engine value: the server adds the sink channel when the user didn't enable it.
+                    config.getOptionalValue(QUARKUS_DEBEZIUM_PREFIX + SnapshotNotifications.NOTIFICATION_CHANNELS, String.class).orElse(null),
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "tasks.max", Integer.class).orElse(1),
                     config.getOptionalValue(PROP_SOURCE_PREFIX + "database.names", String.class).orElse(null),
                     serverConfig.shutdownOnCompletion());

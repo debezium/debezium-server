@@ -18,6 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import io.debezium.doc.FixFor;
+import io.debezium.server.lifecycle.SnapshotNotifications;
 import io.smallrye.config.ConfigSourceContext;
 import io.smallrye.config.ConfigSourceFactory;
 import io.smallrye.config.ConfigValue;
@@ -33,6 +34,55 @@ import io.smallrye.config.SmallRyeConfigBuilder;
  * @author Mahitha Adapa
  */
 public class DebeziumServerConfigSourceFactoryTest {
+
+    @Test
+    public void shouldEnableTheSinkNotificationChannelForShutdownAfterSnapshot() {
+        Map<String, String> result = remap(Map.of("debezium.shutdown.after.snapshot", "true"));
+
+        assertThat(result).containsEntry("quarkus.debezium.notification.enabled.channels", "sink");
+        assertThat(result).containsEntry("quarkus.debezium.notification.sink.topic.name", SnapshotNotifications.INTERNAL_TOPIC);
+    }
+
+    @Test
+    public void shouldUseTheInternalTopicWhenEnablingTheSinkChannel() {
+        Map<String, String> result = remap(Map.of(
+                "debezium.shutdown.after.snapshot", "true",
+                "debezium.source.notification.sink.topic.name", "inventory.notifications"));
+
+        assertThat(result).containsEntry("quarkus.debezium.notification.enabled.channels", "sink");
+        assertThat(result).containsEntry("quarkus.debezium.notification.sink.topic.name", SnapshotNotifications.INTERNAL_TOPIC);
+    }
+
+    @Test
+    public void shouldAddTheSinkChannelToTheConfiguredChannels() {
+        Map<String, String> result = remap(Map.of(
+                "debezium.shutdown.after.snapshot", "true",
+                "debezium.source.notification.enabled.channels", "log,jmx"));
+
+        assertThat(result).containsEntry("quarkus.debezium.notification.enabled.channels", "log,jmx,sink");
+        assertThat(result).containsEntry("quarkus.debezium.notification.sink.topic.name", SnapshotNotifications.INTERNAL_TOPIC);
+    }
+
+    @Test
+    public void shouldKeepTheSinkNotificationsConfiguredByTheUser() {
+        Map<String, String> result = remap(Map.of(
+                "debezium.shutdown.after.snapshot", "true",
+                "debezium.source.notification.enabled.channels", "log, sink",
+                "debezium.source.notification.sink.topic.name", "inventory.notifications"));
+
+        assertThat(result).containsEntry("quarkus.debezium.notification.enabled.channels", "log, sink");
+        assertThat(result).containsEntry("quarkus.debezium.notification.sink.topic.name", "inventory.notifications");
+    }
+
+    @Test
+    public void shouldNotEnableNotificationsWithoutShutdownAfterSnapshot() {
+        Map<String, String> result = remap(Map.of(
+                "debezium.shutdown.after.snapshot", "false",
+                "debezium.source.topic.prefix", "inventory"));
+
+        assertThat(result).doesNotContainKey("quarkus.debezium.notification.enabled.channels");
+        assertThat(result).doesNotContainKey("quarkus.debezium.notification.sink.topic.name");
+    }
 
     @Test
     public void shouldReuseSinkPropertiesForStorageWhenStorageNotConfigured() {
