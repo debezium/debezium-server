@@ -32,6 +32,9 @@ public class DebeziumProperties {
     public static final String PROP_PREDICATES = PROP_PREFIX + "predicates";
     public static final String PROP_TRANSFORMS = PROP_PREFIX + "transforms";
 
+    // Lifecycle properties
+    public static final String PROP_SHUTDOWN_AFTER_SNAPSHOT = PROP_PREFIX + "shutdown.after.snapshot";
+
     // Offset storage
     public static final String PROP_OFFSET_STORAGE_PREFIX = "offset.storage.";
 
