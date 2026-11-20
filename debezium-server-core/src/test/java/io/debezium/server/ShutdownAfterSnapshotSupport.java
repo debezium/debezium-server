@@ -6,7 +6,6 @@
 package io.debezium.server;
 
 import java.io.ObjectInputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -16,10 +15,16 @@ import java.util.Map;
 
 import org.eclipse.microprofile.config.ConfigProvider;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.debezium.connector.AbstractSourceInfo;
+
 /**
  * Helpers shared by the shutdown-after-snapshot tests.
  */
 final class ShutdownAfterSnapshotSupport {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private ShutdownAfterSnapshotSupport() {
     }
@@ -42,7 +47,12 @@ final class ShutdownAfterSnapshotSupport {
     }
 
     /**
-     * The file offset store keeps a Java-serialized map of partition and offset bytes.
+     * The file offset store keeps a Java-serialized map of partition and offset bytes; each offset is a JSON object.
+     * <p>
+     * While a snapshot runs, the connector stores the {@code snapshot} key in its offsets ({@code "INITIAL"} in PostgreSQL,
+     * {@code true} in other connectors). The last record of the batch is the notification that ends the snapshot, and its
+     * offset is taken once the snapshot has completed, without that key. A skipped snapshot leaves such an offset too, so the
+     * tests start from fresh offsets and also check that the whole snapshot was delivered.
      *
      * @return {@code true} if an offset is stored and none of the stored offsets belongs to a snapshot that is still in progress
      */
@@ -53,9 +63,15 @@ final class ShutdownAfterSnapshotSupport {
         }
         try (ObjectInputStream in = new ObjectInputStream(Files.newInputStream(TestConfigSource.OFFSET_STORE_PATH))) {
             final Map<byte[], byte[]> offsets = (Map<byte[], byte[]>) in.readObject();
-            return !offsets.isEmpty() && offsets.values().stream()
-                    .map(value -> new String(value, StandardCharsets.UTF_8))
-                    .noneMatch(json -> json.contains("\"snapshot\":true"));
+            if (offsets.isEmpty()) {
+                return false;
+            }
+            for (byte[] value : offsets.values()) {
+                if (OBJECT_MAPPER.readTree(value).has(AbstractSourceInfo.SNAPSHOT_KEY)) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 
