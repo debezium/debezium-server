@@ -22,6 +22,10 @@
             <artifactId>debezium-server-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.debezium</groupId>
+            <artifactId>debezium-openlineage-api</artifactId>
+        </dependency>
         <!-- Testing -->
         <dependency>
             <groupId>io.debezium</groupId>
