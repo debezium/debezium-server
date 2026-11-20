@@ -17,6 +17,14 @@ public interface DebeziumServerConfig {
     @WithDefault("true")
     boolean shutdownOnCompletion();
 
+    /**
+     * Stops the engine once an {@code initial_only} snapshot has been fully delivered to the sink. Requires
+     * {@code debezium.source.snapshot.mode=initial_only}, and the server then exits through {@code shutdown.on.completion}.
+     */
+    @WithName("shutdown.after.snapshot")
+    @WithDefault("false")
+    boolean shutdownAfterSnapshot();
+
     interface Api {
         @WithDefault("false")
         boolean enabled();
