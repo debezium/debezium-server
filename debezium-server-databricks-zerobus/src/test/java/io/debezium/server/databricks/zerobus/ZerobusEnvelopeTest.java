@@ -170,6 +170,29 @@ class ZerobusEnvelopeTest {
     }
 
     @Test
+    void closeSkipsTheStreamOfATableGroupWhoseAcknowledgementFailed() throws Exception {
+        ZerobusStreamHandle<String> customers = mockStream();
+        ZerobusStreamHandle<String> orders = mockStream();
+        when(customers.ingest(anyString())).thenReturn(10L);
+        when(orders.ingest(anyString())).thenReturn(20L);
+        doThrow(new RuntimeException("Flush timed out")).when(orders).waitForOffset(20L);
+        ZerobusChangeConsumer consumer = consumer(configWith(), Map.of(
+                "main.bronze.customers", customers,
+                "main.bronze.orders", orders),
+                Map.of());
+
+        assertThatThrownBy(() -> consumer.handle(events(
+                event("main.bronze.customers", "1", "{\"op\":\"c\"}", 0),
+                event("main.bronze.orders", "10", "{\"op\":\"u\"}", 0))))
+                .isInstanceOf(DebeziumException.class);
+        consumer.close();
+
+        // customers was acknowledged, so closing it is quick; closing orders would wait for its records again.
+        verify(customers).close();
+        verify(orders, never()).close();
+    }
+
+    @Test
     void rejectsOversizedRecordBeforeIngestionOrOffsetCommit() throws Exception {
         ZerobusStreamHandle<String> stream = mockStream();
         ZerobusChangeConsumer consumer = consumer(configWith("max.record.bytes", "80"),
