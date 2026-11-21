@@ -6,6 +6,7 @@
 package io.debezium.server.databricks.zerobus;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,6 +21,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
 import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.CapturingEvents;
@@ -172,7 +174,68 @@ class ZerobusStreamLifecycleTest {
         assertThat(metrics.getTotalErrors()).isEqualTo(1);
     }
 
+    @Test
+    void closeSkipsTheStreamsThatHoldRecordsOfABatchWhoseFlushFailed() throws Exception {
+        ZerobusStreamHandle<String> a = mockStream();
+        ZerobusStreamHandle<String> b = mockStream();
+        ZerobusStreamHandle<String> c = mockStream();
+        org.mockito.Mockito.doThrow(new RuntimeException("Flush timed out")).when(b).flush();
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
+        streams.put("main.default.a", a);
+        streams.put("main.default.b", b);
+        streams.put("main.default.c", c);
+        // No fixed table: each record goes to the table named by its destination.
+        ZerobusChangeConsumer consumer = consumerWith(streams, "table", "");
+
+        assertThatThrownBy(() -> consumer.handle(events(
+                event("main.default.a", "{\"id\":1}"),
+                event("main.default.b", "{\"id\":2}"),
+                event("main.default.c", "{\"id\":3}"))))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("main.default.b");
+        consumer.close();
+
+        // a was flushed before the failure, so closing it is quick. b failed and c was never flushed: both
+        // still hold records of the failed batch, and closing them would flush them again.
+        assertThat(streams).isEmpty();
+        verify(a).close();
+        verify(c, never()).flush();
+        verify(b, never()).close();
+        verify(c, never()).close();
+    }
+
+    @Test
+    void closeSkipsTheStreamsThatHoldRecordsOfABatchWhoseIngestionFailed() throws Exception {
+        ZerobusStreamHandle<String> a = mockStream();
+        ZerobusStreamHandle<String> b = mockStream();
+        ZerobusStreamHandle<String> idle = mockStream();
+        when(b.ingest(any(String.class))).thenThrow(new RuntimeException("Stream is closed"));
+        Map<String, ZerobusStreamHandle<String>> streams = new LinkedHashMap<>(16, 0.75f, true);
+        streams.put("main.default.a", a);
+        streams.put("main.default.b", b);
+        streams.put("main.default.idle", idle);
+        ZerobusChangeConsumer consumer = consumerWith(streams, "table", "");
+
+        assertThatThrownBy(() -> consumer.handle(events(
+                event("main.default.a", "{\"id\":1}"),
+                event("main.default.b", "{\"id\":2}"))))
+                .isInstanceOf(DebeziumException.class)
+                .hasMessageContaining("main.default.b");
+
+        // a holds a record of the failed batch and b failed; the stream that the batch didn't use stays open.
+        assertThat(streams.keySet()).containsExactly("main.default.idle");
+        consumer.close();
+        verify(idle).close();
+        verify(a, never()).flush();
+        verify(a, never()).close();
+        verify(b, never()).close();
+    }
+
     private static BatchEvent event(String value) {
+        return event("main.default.t", value);
+    }
+
+    private static BatchEvent event(String destination, String value) {
         return new BatchEvent() {
             public Object key() {
                 return null;
@@ -191,7 +254,7 @@ class ZerobusStreamLifecycleTest {
             }
 
             public String destination() {
-                return "main.default.t";
+                return destination;
             }
 
             public void commit() {

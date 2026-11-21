@@ -6,6 +6,7 @@
 package io.debezium.server.databricks.zerobus;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -145,6 +146,24 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         LOGGER.info("Zerobus gRPC sink closed");
     }
 
+    /**
+     * Drops the streams of {@code tables} that hold records of a batch that failed, without closing them.
+     * <p>
+     * The SDK flushes a stream before it closes it, and a stream whose flush timed out still reports that
+     * it is open, so closing it would wait for the whole flush timeout again. The batch is not committed,
+     * so its records are sent again after a restart, and waiting for them would only delay the shutdown.
+     * A dropped stream is not used again: if the table is written to again, a new stream is opened.
+     */
+    private void discardStreams(Map<String, ? extends ZerobusStreamHandle<?>> openStreams, Collection<String> tables) {
+        for (String table : tables) {
+            if (openStreams.remove(table) != null) {
+                metrics.streamClosed();
+                LOGGER.info("Dropped the Zerobus stream for table '{}' without closing it, because it holds records of a failed batch, "
+                        + "which are sent again after a restart", table);
+            }
+        }
+    }
+
     private void closeStreams(Map<String, ? extends ZerobusStreamHandle<?>> openStreams) {
         for (var entry : openStreams.entrySet()) {
             try {
@@ -197,6 +216,9 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
                 }
                 catch (Exception e) {
                     metrics.recordError();
+                    // The streams that already hold records of this batch, and the one that failed.
+                    discardStreams(streams, pendingPerTable.keySet());
+                    discardStreams(streams, List.of(table));
                     throw new DebeziumException("Failed to ingest record into Zerobus table '" + table + "'", e);
                 }
             }
@@ -218,13 +240,17 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
             // The wait in progress spans the whole loop, like the flush duration recorded below, so the two can be compared.
             metrics.ackWaitStarted();
             try {
+                // The tables whose records are not durable yet: the stream that fails, and the ones after it.
+                final List<String> unflushed = new ArrayList<>(pendingPerTable.keySet());
                 for (Map.Entry<String, Integer> pending : pendingPerTable.entrySet()) {
                     final String table = pending.getKey();
                     try {
                         ackWaits.await(table, pending.getValue(), config.getFlushWarnThresholdMs(), () -> streams.get(table).flush());
+                        unflushed.remove(table);
                     }
                     catch (Exception e) {
                         metrics.recordError();
+                        discardStreams(streams, unflushed);
                         throw new DebeziumException("Failed to flush Zerobus stream for table '" + table + "'", e);
                     }
                 }
@@ -345,12 +371,18 @@ public class ZerobusChangeConsumer extends BaseChangeConsumer
         }
 
         ZerobusStreamHandle<P> stream = envelopeStream(serializer, table);
-        long lastOffset = -1L;
-        for (P payload : payloads) {
-            lastOffset = stream.ingest(payload);
+        try {
+            long lastOffset = -1L;
+            for (P payload : payloads) {
+                lastOffset = stream.ingest(payload);
+            }
+            final long offsetToAwait = lastOffset;
+            ackWaits.await(table, payloads.size(), config.getFlushWarnThresholdMs(), () -> stream.waitForOffset(offsetToAwait));
         }
-        final long offsetToAwait = lastOffset;
-        ackWaits.await(table, payloads.size(), config.getFlushWarnThresholdMs(), () -> stream.waitForOffset(offsetToAwait));
+        catch (Exception e) {
+            discardStreams(envelopeStreams, List.of(table));
+            throw e;
+        }
     }
 
     private void validatePayloadSize(ZerobusEnvelope record, int payloadBytes) {
