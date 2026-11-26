@@ -34,6 +34,7 @@ import io.debezium.runtime.BatchEvent;
 import io.debezium.runtime.Capturing;
 import io.debezium.runtime.CapturingEvents;
 import io.debezium.server.api.ChangeConsumerHolder;
+import io.debezium.server.lifecycle.SnapshotNotifications;
 import io.quarkus.runtime.Startup;
 
 @ApplicationScoped
@@ -46,6 +47,7 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
     private final Config config;
     private final DatasetDataExtractor datasetDataExtractor;
     private final boolean isOpenLineageEnabled;
+    private final SnapshotNotifications snapshotNotifications;
 
     @Inject
     public DefaultChangeConsumer(ChangeConsumerHolder<CapturingEvents<BatchEvent>> delegateConsumer, Config config) {
@@ -53,6 +55,7 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
         this.config = config;
         this.datasetDataExtractor = new DatasetDataExtractor();
         this.isOpenLineageEnabled = config.getOptionalValue(PROP_SOURCE_PREFIX + OPEN_LINEAGE_INTEGRATION_ENABLED, boolean.class).orElse(false);
+        this.snapshotNotifications = SnapshotNotifications.from(config);
     }
 
     @Capturing
@@ -61,12 +64,17 @@ public class DefaultChangeConsumer extends BaseChangeConsumer {
 
         final String sink = config.getValue(PROP_SINK_TYPE, String.class);
 
+        final SnapshotNotifications.Split split = snapshotNotifications.split(events);
         try {
-            this.delegateConsumer.get().handle(events);
+            if (!split.delivered().records().isEmpty()) {
+                this.delegateConsumer.get().handle(split.delivered());
+            }
         }
         catch (Exception e) {
             throw new DebeziumException("Error while executing batch", e);
         }
+        // The server's own notifications don't reach the sink, but they are handled, so their offsets are committed.
+        split.notifications().forEach(BatchEvent::commit);
 
         if (isOpenLineageEnabled) {
             Optional<DatasetMetadata.DataStore> dataStore = getDataStore(sink);
